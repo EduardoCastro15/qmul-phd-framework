@@ -85,7 +85,7 @@ function sample = subgraph2vector(ind, A, K)
     %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
     D = K * (K - 1) / 2;    % the length of output vector
-    max_depth = 5;          % New: limit maximum fringe expansion depth
+    max_depth = 2;          % New: limit maximum fringe expansion depth
 
     % Extract a subgraph of K nodes
     links = ind;
