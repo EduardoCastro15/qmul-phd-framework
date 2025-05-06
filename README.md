@@ -5,7 +5,19 @@
 Structure your work using the **DS/ML research lifecycle**:
 
 ```
-[Problem Definition] → [Data Preparation] → [Methodology/Algorithm Setup] → [Experimentation] → [Results & Analysis] → [Interpretation] → [Publication]
+[Problem Definition] 
+        ↓
+[Data Preparation]
+        ↓
+[Methodology/Algorithm Setup]
+        ↓
+[Experimentation]
+        ↓
+[Results & Analysis]
+        ↓
+[Interpretation]
+        ↓
+[Publication]
 ```
 
 Create folders (or GitHub repos) that mirror this logic. Example:
