@@ -25,7 +25,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     htest = test;
 
     % Sample negative links
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, 2, 1, true);
+    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, 2, 1, false);
 
     % Encode subgraphs into vectors
     [train_data, train_label] = graph2vector(train_pos, train_neg, train, K, useParallel);
@@ -53,8 +53,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % Predict probabilities
     [~, scores] = classify(net, reshape(test_data', K*(K-1)/2, 1, 1, size(test_data, 1)));
     scores(:, 1) = [];
-    disp(scores);
-    disp(size(scores));
+    % disp(scores);
+    % disp(size(scores));
 
     % Compute AUC
     [~, ~, ~, auc] = perfcurve(test_label', scores', 1);
@@ -110,7 +110,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     scores_labels_table = table(scores, test_label, ...
         'VariableNames', {'Score', 'Label'});
     writetable(scores_labels_table, fullfile(results_dir, ...
-        sprintf('%s_scores_labels_evaluate_on_all_unseen-true.csv', exp_id)));
+        sprintf('%s_scores_labels_evaluate_on_all_unseen-false.csv', exp_id)));
 
     % === Save TP/FP/FN links with metadata ===
     function export_augmented_links(links, filename)
@@ -138,7 +138,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end        
 
     % Save enriched CSVs
-    export_augmented_links(TP_links, [exp_id '_TP_links_evaluate_on_all_unseen-true.csv']);
-    export_augmented_links(FP_links, [exp_id '_FP_links_evaluate_on_all_unseen-true.csv']);
-    export_augmented_links(FN_links, [exp_id '_FN_links_evaluate_on_all_unseen-true.csv']);
+    export_augmented_links(TP_links, [exp_id '_TP_links_evaluate_on_all_unseen-false.csv']);
+    export_augmented_links(FP_links, [exp_id '_FP_links_evaluate_on_all_unseen-false.csv']);
+    export_augmented_links(FN_links, [exp_id '_FN_links_evaluate_on_all_unseen-false.csv']);
 end
