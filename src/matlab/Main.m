@@ -15,7 +15,7 @@ foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_small.csv');
 foodweb_names = foodweb_list.Foodweb;
 
 %% Set up logging directories
-log_dir = 'data/result/';
+log_dir = 'data/result/prediction_scores_logs';
 terminal_log_dir = 'data/result/terminal_logs/';
 if ~exist(log_dir, 'dir'); mkdir(log_dir); end
 if ~exist(terminal_log_dir, 'dir'); mkdir(terminal_log_dir); end
@@ -33,7 +33,7 @@ end
 %% Iterate over all food webs in the list
 for f_idx = 1:length(foodweb_names)
     dataname = foodweb_names{f_idx};
-    log_file = fullfile(log_dir, strcat(dataname, '_results.csv'));
+    log_file = fullfile(log_dir, strcat(dataname, '_results_evaluate_on_all_unseen-false.csv'));
 
     % Create CSV header if the file does not exist
     if ~isfile(log_file)
@@ -46,7 +46,7 @@ for f_idx = 1:length(foodweb_names)
     end
 
     % Set up terminal log file
-    diary_file = fullfile(terminal_log_dir, strcat('terminal_log_', dataname, '.txt'));
+    diary_file = fullfile(terminal_log_dir, strcat(dataname, '_terminal_log_evaluate_on_all_unseen-false.txt'));
     diary(diary_file);
 
     %% Load data
