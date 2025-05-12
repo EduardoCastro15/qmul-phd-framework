@@ -33,7 +33,7 @@ end
 %% Iterate over all food webs in the list
 for f_idx = 1:length(foodweb_names)
     dataname = foodweb_names{f_idx};
-    log_file = fullfile(log_dir, strcat(dataname, '_results_evaluate_on_all_unseen-true.csv'));
+    log_file = fullfile(log_dir, strcat(dataname, '_results_evaluate_on_all_unseen-false.csv'));
 
     % Create CSV header if the file does not exist
     if ~isfile(log_file)
@@ -46,7 +46,7 @@ for f_idx = 1:length(foodweb_names)
     end
 
     % Set up terminal log file
-    diary_file = fullfile(terminal_log_dir, strcat(dataname, '_terminal_log_evaluate_on_all_unseen-true.txt'));
+    diary_file = fullfile(terminal_log_dir, strcat(dataname, '_terminal_log_evaluate_on_all_unseen-false.txt'));
     diary(diary_file);
 
     %% Load data
@@ -60,7 +60,7 @@ for f_idx = 1:length(foodweb_names)
         continue;
     end
 
-    load(thisdatapath, 'net', 'taxonomy', 'mass');
+    load(thisdatapath, 'net', 'taxonomy', 'mass', 'role');
     disp(['Processing dataset: ', dataname]);
 
     % Loop over values of K
@@ -75,11 +75,11 @@ for f_idx = 1:length(foodweb_names)
 
         if useParallel
             parfor ith_experiment = 1:numOfExperiment
-                results(ith_experiment) = processExperiment(ith_experiment, dataname, net, taxonomy, mass, ratioTrain, K);
+                results(ith_experiment) = processExperiment(ith_experiment, dataname, net, taxonomy, mass, role, ratioTrain, K);
             end
         else
             for ith_experiment = 1:numOfExperiment
-                results(ith_experiment) = processExperiment(ith_experiment, dataname, net, taxonomy, mass, ratioTrain, K);
+                results(ith_experiment) = processExperiment(ith_experiment, dataname, net, taxonomy, mass, role, ratioTrain, K);
             end
         end
 
@@ -106,7 +106,7 @@ disp(['Execution finished at: ', datestr(now)]);
 
 
 %% Helper Function
-function result = processExperiment(ith_experiment, dataname, net, taxonomy, mass, ratioTrain, K)
+function result = processExperiment(ith_experiment, dataname, net, taxonomy, mass, role, ratioTrain, K)
     % Usage: Train and test the network using WLNM and log the results
     % --Input--
     % - ith_experiment: experiment index, for parallel computing
@@ -128,7 +128,7 @@ function result = processExperiment(ith_experiment, dataname, net, taxonomy, mas
 
     % WLNM
     disp(['Experiment ', num2str(ith_experiment), ': Running WLNM...']);
-    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass);
+    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role);
 
     % Time formatting
     elapsed_time_str = datestr(seconds(toc(iteration_start_time)), 'HH:MM:SS');
