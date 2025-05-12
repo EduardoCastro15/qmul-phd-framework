@@ -81,4 +81,11 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, k,
         test_pos  = test_pos(1:portion, :);
         test_neg  = test_neg(1:portion, :);
     end
+
+    % === Log counts of generated links ===
+    fprintf('[sample_neg] Final link counts:\n');
+    fprintf('    Train Positive: %d\n', size(train_pos, 1));
+    fprintf('    Train Negative: %d\n', size(train_neg, 1));
+    fprintf('    Test  Positive: %d\n', size(test_pos, 1));
+    fprintf('    Test  Negative: %d\n', size(test_neg, 1));
 end
