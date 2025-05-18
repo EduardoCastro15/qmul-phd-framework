@@ -9,6 +9,7 @@ useParallel = false;         % Flag to enable or disable parallel pool
 kRange = 10;                % Define the interval of K values to execute
 numOfExperiment = 1;
 ratioTrain = 0.8;
+useDegreeStrategy = false;   % NEW: Enable or disable the degree-based strategy loop
 
 %% Load food web list from a CSV file or a predefined list
 foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_small.csv');
@@ -49,8 +50,14 @@ for f_idx = 1:length(foodweb_names)
     load(thisdatapath, 'net', 'taxonomy', 'mass', 'role');
     disp(['Processing dataset: ', dataname]);
 
-    %% Degree-based strategy loop
-    for strategy = ["high2low", "low2high"]
+    %% Strategy loop: Degree-based or default
+    if useDegreeStrategy
+        strategies = ["high2low", "low2high"];
+    else
+        strategies = ["random"];  % Single fallback strategy if degree-based loop is disabled
+    end
+
+    for strategy = strategies
         for K = kRange
             disp(['Processing with K = ', num2str(K), ' using strategy: ', strategy]);
 
