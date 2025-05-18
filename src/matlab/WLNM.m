@@ -27,8 +27,12 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % Sample negative links
     [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, role, 2, 1, false);
 
-    % === Filter links based on degree-based strategy ===
-    [train_pos, train_neg, test_pos, test_neg] = DegreeCompute(train_pos, train_neg, test_pos, test_neg, train_nodes, test_nodes);
+    % === Conditionally filter links based on degree-based strategy ===
+    if ismember(lower(strategy), ["high2low", "low2high"])
+        [train_pos, train_neg, test_pos, test_neg] = DegreeCompute(train_pos, train_neg, test_pos, test_neg, train_nodes, test_nodes);
+    else
+        disp('[WLNM] Skipping DegreeCompute: non-degree-based strategy selected.');
+    end
 
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
