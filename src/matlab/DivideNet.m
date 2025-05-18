@@ -4,11 +4,11 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     % --Input--
     %   net:        n x n binary adjacency matrix
     %   ratioTrain: fraction of links to keep for training
-    %   strategy:   'high2low' or 'low2high' (based on total degree)
+    %   strategy:   degree strategy ('high2low', 'low2high'), otherwise default split
     %
     % --Output--
     %   train, test: train/test adjacency matrices
-    %   train_nodes, test_nodes: node index sets used in WLNM filtering
+    %   train_nodes, test_nodes: only returned if degree strategy used, else []
     %
     %  Partly adapted from the codes of
     %  Lu 2011, Link prediction in complex networks: A survey.
@@ -49,9 +49,18 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
         test(test_links(k, 1), test_links(k, 2)) = 1;
     end
 
-    % === Compute degree and split nodes ===
+    % Check for strategy
+    valid_strategies = ["high2low", "low2high"];
+    if nargin < 3 || ~ismember(lower(strategy), valid_strategies)
+        % Use default logic without node partitioning
+        train_nodes = [];
+        test_nodes = [];
+        return;
+    end
+
+    % Degree-based node partitioning
     net_dense = full(net);
-    total_deg = sum(net_dense, 1)' + sum(net_dense, 2);  % total = in + out
+    total_deg = sum(net_dense, 1)' + sum(net_dense, 2);  % total degree
     [~, sorted_idx] = sort(total_deg, 'descend');
     cutoff = round(0.8 * n);
 
@@ -62,7 +71,5 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
         case 'low2high'
             train_nodes = sorted_idx(cutoff+1:end);
             test_nodes  = sorted_idx(1:cutoff);
-        otherwise
-            error('Unsupported strategy: %s', strategy);
     end
 end
