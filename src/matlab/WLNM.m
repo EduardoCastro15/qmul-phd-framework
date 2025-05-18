@@ -1,4 +1,4 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass)
+function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role, train_nodes, test_nodes, strategy)
     %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
     %  --Input--
     %  -dataname: name of the food web
@@ -20,14 +20,32 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     %
     %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
-    useParallel = false;            % Flag to enable or disable parallel pool
-    htrain = train;                 % NEW: keep directed structure
+    useParallel = false;
+    htrain = train;
     htest = test;
 
     % Sample negative links
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, 2, 1, false);
+    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, role, 2, 1, false);
 
-    % Encode subgraphs into vectors
+    % === Conditionally filter links based on degree-based strategy ===
+    if ismember(lower(strategy), ["high2low", "low2high"])
+        [train_pos, train_neg, test_pos, test_neg] = DegreeCompute(train_pos, train_neg, test_pos, test_neg, train_nodes, test_nodes);
+    else
+        disp('[WLNM] Skipping DegreeCompute: non-degree-based strategy selected.');
+    end
+
+    % Sanity check
+    if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
+        warning('[WLNM] Skipping due to empty filtered sets.');
+        auc = NaN;
+        best_threshold = NaN;
+        best_precision = NaN;
+        best_recall = NaN;
+        best_f1_score = NaN;
+        return;
+    end
+
+    % Encode subgraphs
     [train_data, train_label] = graph2vector(train_pos, train_neg, train, K, useParallel);
     [test_data, test_label] = graph2vector(test_pos, test_neg, train, K, useParallel);
 
@@ -99,18 +117,17 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     FP_links = setdiff(predicted_links, true_links, 'rows');
     FN_links = setdiff(true_links, predicted_links, 'rows');
 
-    % === Save path setup ===
-    exp_id = sprintf('%s_K_%d', dataname, K);
+    % Save files
+    exp_id = sprintf('%s_K_%d_%s', dataname, K, strategy);
     results_dir = 'data/result/confusion_matrix_csv/';
     if ~exist(results_dir, 'dir')
         mkdir(results_dir);
     end
 
     % === Save scores and labels to CSV ===
-    scores_labels_table = table(scores, test_label, ...
-        'VariableNames', {'Score', 'Label'});
+    scores_labels_table = table(scores, test_label, 'VariableNames', {'Score', 'Label'});
     writetable(scores_labels_table, fullfile(results_dir, ...
-        sprintf('%s_scores_labels_evaluate_on_all_unseen-false.csv', exp_id)));
+        sprintf('%s_scores_labels.csv', exp_id)));
 
     % === Save TP/FP/FN links with metadata ===
     function export_augmented_links(links, filename)
@@ -138,7 +155,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end        
 
     % Save enriched CSVs
-    export_augmented_links(TP_links, [exp_id '_TP_links_evaluate_on_all_unseen-false.csv']);
-    export_augmented_links(FP_links, [exp_id '_FP_links_evaluate_on_all_unseen-false.csv']);
-    export_augmented_links(FN_links, [exp_id '_FN_links_evaluate_on_all_unseen-false.csv']);
+    export_augmented_links(TP_links, [exp_id '_TP_links.csv']);
+    export_augmented_links(FP_links, [exp_id '_FP_links.csv']);
+    export_augmented_links(FN_links, [exp_id '_FN_links.csv']);
 end

@@ -1,4 +1,4 @@
-function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, k, portion, evaluate_on_all_unseen)
+function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, role, k, portion, evaluate_on_all_unseen)
     %  Usage: to sample negative links for train and test datasets.
     %         When sampling negative train links, assume all testing
     %         links are known and thus sample negative train links
@@ -45,7 +45,32 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, k,
     neg_net = (net == 0);  % all non-links
     neg_net = neg_net - diag(diag(neg_net));  % remove self-loops
     [i, j] = find(neg_net);
-    neg_links = [i, j];
+    neg_links_unfiltered = [i, j];  % save original
+    neg_links = neg_links_unfiltered;  % default to unfiltered
+
+    % === Filter neg_links based on role constraints ===
+    valid_mask = false(size(neg_links_unfiltered, 1), 1);
+
+    for idx = 1:size(neg_links_unfiltered, 1)
+        src = neg_links_unfiltered(idx, 1);
+        tgt = neg_links_unfiltered(idx, 2);
+
+        src_role = lower(string(role(src)));
+        tgt_role = lower(string(role(tgt)));
+
+        if (src_role == "consumer" && tgt_role == "consumer") || ...
+        (src_role == "resource" && tgt_role == "resource")
+            valid_mask(idx) = true;
+        end
+    end
+
+    neg_links_filtered = neg_links_unfiltered(valid_mask, :);
+
+    if ~isempty(neg_links_filtered)
+        neg_links = neg_links_filtered;
+    else
+        warning('[sample_neg] No valid role-filtered negative links found. Using all negatives.');
+    end
 
     % === Check for enough negatives ===
     total_neg_needed = k * (train_size + test_size);
@@ -53,6 +78,12 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, k,
         warning('Not enough negative links. Reducing k...');
         k = floor(size(neg_links, 1) / (train_size + test_size));
     end
+
+    if k == 0
+        warning('[sample_neg] Negative sampling failed — not enough links even after fallback. Using random sampling without role constraint.');
+        neg_links = neg_links_unfiltered;
+        k = 1;  % fallback to minimal sampling
+    end    
 
     % === Sample negatives ===
     rng(42);  % reproducibility
