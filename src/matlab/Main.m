@@ -7,7 +7,7 @@
 %% Configuration
 useParallel = false;         % Flag to enable or disable parallel pool
 kRange = 10;                % Define the interval of K values to execute
-numOfExperiment = 1;
+numOfExperiment = 10;
 ratioTrain = 0.8;
 useDegreeStrategy = false;   % NEW: Enable or disable the degree-based strategy loop
 
