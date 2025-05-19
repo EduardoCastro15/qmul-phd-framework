@@ -158,4 +158,5 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     export_augmented_links(TP_links, [exp_id '_TP_links.csv']);
     export_augmented_links(FP_links, [exp_id '_FP_links.csv']);
     export_augmented_links(FN_links, [exp_id '_FN_links.csv']);
+    export_augmented_links(train_pos, [exp_id '_train_links.csv']);
 end
