@@ -86,7 +86,7 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, ro
     end    
 
     % === Sample negatives ===
-    rng(42);  % reproducibility
+    % rng(42);  % reproducibility
     if evaluate_on_all_unseen
         test_neg = neg_links;
         perm = randperm(size(neg_links, 1));

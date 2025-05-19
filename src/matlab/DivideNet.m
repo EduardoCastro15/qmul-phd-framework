@@ -29,7 +29,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     num_test = ceil((1 - ratioTrain) * total_links);
 
     % Reproducible random shuffle
-    rng(42);  % Fixed seed for consistent experiments
+    % rng(42);  % Fixed seed for consistent experiments
     perm = randperm(total_links);
     test_links = linklist(perm(1:num_test), :);
     train_links = linklist(perm(num_test + 1:end), :);
