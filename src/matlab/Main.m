@@ -5,14 +5,21 @@
 %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
 %% Configuration
-useParallel = false;         % Flag to enable or disable parallel pool
+useParallel = true;         % Flag to enable or disable parallel pool
 kRange = 10;                % Define the interval of K values to execute
 numOfExperiment = 10;
 ratioTrain = 0.8;
 useDegreeStrategy = false;   % NEW: Enable or disable the degree-based strategy loop
 
+sweepTrainRatios = false;  % Set false for static ratioTrain
+if sweepTrainRatios
+    train_ratios = 0.60:0.05:0.80;
+else
+    train_ratios = ratioTrain;  % Single static value (default 0.8)
+end
+
 %% Load food web list from a CSV file or a predefined list
-foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_small.csv');
+foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_ecosystem.csv');
 foodweb_names = foodweb_list.Foodweb;
 
 %% Set up logging directories
@@ -28,78 +35,83 @@ if useParallel && isempty(gcp('nocreate'))
     pool_created = true;
 end
 
-%% Iterate over all food webs in the list
-for f_idx = 1:length(foodweb_names)
-    dataname = foodweb_names{f_idx};
+for ratioTrain = train_ratios
+    disp(['--- Executing train/test split: ', num2str(ratioTrain * 100), '% ---']);
 
-    % Set up terminal log file
-    diary_file = fullfile(terminal_log_dir, strcat(dataname, '_terminal_log.txt'));
-    diary(diary_file);
+    %% Iterate over all food webs in the list
+    for f_idx = 1:length(foodweb_names)
+        dataname = foodweb_names{f_idx};
 
-    %% Load .mat data
-    addpath(genpath('utils'));
-    datapath = 'data/foodwebs_mat/';
-    thisdatapath = fullfile(datapath, strcat(dataname, '.mat'));
+        % Set up terminal log file
+        diary_file = fullfile(terminal_log_dir, strcat(dataname, '_terminal_log.txt'));
+        diary(diary_file);
 
-    if ~isfile(thisdatapath)
-        disp(['File not found: ', thisdatapath]);
-        diary off;
-        continue;
-    end
+        %% Load .mat data
+        addpath(genpath('utils'));
+        datapath = 'data/foodwebs_mat/';
+        thisdatapath = fullfile(datapath, strcat(dataname, '.mat'));
 
-    load(thisdatapath, 'net', 'taxonomy', 'mass', 'role');
-    disp(['Processing dataset: ', dataname]);
+        if ~isfile(thisdatapath)
+            disp(['File not found: ', thisdatapath]);
+            diary off;
+            continue;
+        end
 
-    %% Strategy loop: Degree-based or default
-    if useDegreeStrategy
-        strategies = ["high2low", "low2high"];
-    else
-        strategies = ["random"];  % Single fallback strategy if degree-based loop is disabled
-    end
+        load(thisdatapath, 'net', 'taxonomy', 'mass', 'role');
+        disp(['Processing dataset: ', dataname]);
 
-    for strategy = strategies
-        for K = kRange
-            disp(['Processing with K = ', num2str(K), ' using strategy: ', strategy]);
+        %% Strategy loop: Degree-based or default
+        if useDegreeStrategy
+            strategies = ["high2low", "low2high"];
+        else
+            strategies = ["random"];  % Single fallback strategy if degree-based loop is disabled
+        end
 
-            log_file = fullfile(log_dir, strcat(dataname, '_results_', strategy, '.csv'));
-            if ~isfile(log_file)
-                fid = fopen(log_file, 'w');
-                fprintf(fid, 'Iteration,AUC,ElapsedTime,K,TrainRatio,BestThreshold,Precision,Recall,F1Score\n');
-                fclose(fid);
-            end
+        for strategy = strategies
+            for K = kRange
+                disp(['Processing with K = ', num2str(K), ' using strategy: ', strategy]);
 
-            results = repmat(struct('AUC', 0, 'TimeElapsed', '', 'K', K, ...
-                                    'TrainRatio', ratioTrain, 'Threshold', 0, ...
-                                    'Precision', 0, 'Recall', 0, 'F1Score', 0), ...
-                                    numOfExperiment, 1);
-
-            % Get split and nodes from DivideNet
-            [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy);
-
-            if useParallel
-                parfor ith_experiment = 1:numOfExperiment
-                    results(ith_experiment) = processExperiment(ith_experiment, dataname, taxonomy, mass, role, train, test, K, train_nodes, test_nodes, strategy);
+                log_file = fullfile(log_dir, strcat(dataname, '_results_', strategy, '.csv'));
+                % log_file = fullfile(log_dir, sprintf('%s_results_%s_ratio%.0f.csv', dataname, strategy, ratioTrain*100));
+                if ~isfile(log_file)
+                    fid = fopen(log_file, 'w');
+                    fprintf(fid, 'Iteration,AUC,ElapsedTime,K,TrainRatio,BestThreshold,Precision,Recall,F1Score\n');
+                    fclose(fid);
                 end
-            else
-                for ith_experiment = 1:numOfExperiment
-                    results(ith_experiment) = processExperiment(ith_experiment, dataname, taxonomy, mass, role, train, test, K, train_nodes, test_nodes, strategy);
-                end
-            end
 
-            % Append to CSV log file
-            for i = 1:numOfExperiment
-                fid = fopen(log_file, 'a');
-                fprintf(fid, '%d,%.4f,%s,%d,%.0f,%.2f,%.4f,%.4f,%.4f\n', ...
-                    i, results(i).AUC, results(i).TimeElapsed, results(i).K, ...
-                    results(i).TrainRatio * 100, results(i).Threshold, ...
-                    results(i).Precision, results(i).Recall, results(i).F1Score);
-                fclose(fid);
+                results = repmat(struct('AUC', 0, 'TimeElapsed', '', 'K', K, ...
+                                        'TrainRatio', ratioTrain, 'Threshold', 0, ...
+                                        'Precision', 0, 'Recall', 0, 'F1Score', 0), ...
+                                        numOfExperiment, 1);
+
+                % Get split and nodes from DivideNet
+                [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy);
+
+                if useParallel
+                    parfor ith_experiment = 1:numOfExperiment
+                        results(ith_experiment) = processExperiment(ith_experiment, dataname, taxonomy, mass, role, train, test, K, train_nodes, test_nodes, strategy, ratioTrain);
+                    end
+                else
+                    for ith_experiment = 1:numOfExperiment
+                        results(ith_experiment) = processExperiment(ith_experiment, dataname, taxonomy, mass, role, train, test, K, train_nodes, test_nodes, strategy, ratioTrain);
+                    end
+                end
+
+                % Append to CSV log file
+                for i = 1:numOfExperiment
+                    fid = fopen(log_file, 'a');
+                    fprintf(fid, '%d,%.4f,%s,%d,%.0f,%.2f,%.4f,%.4f,%.4f\n', ...
+                        i, results(i).AUC, results(i).TimeElapsed, results(i).K, ...
+                        results(i).TrainRatio * 100, results(i).Threshold, ...
+                        results(i).Precision, results(i).Recall, results(i).F1Score);
+                    fclose(fid);
+                end
             end
         end
-    end
 
-    diary off;
-    clear net;
+        diary off;
+        clear net;
+    end
 end
 
 % Close parallel pool if we opened it
@@ -111,12 +123,12 @@ disp(['Execution finished at: ', datestr(now)]);
 
 
 %% Helper Function
-function result = processExperiment(ith_experiment, dataname, taxonomy, mass, role, train, test, K, train_nodes, test_nodes, strategy)
+function result = processExperiment(ith_experiment, dataname, taxonomy, mass, role, train, test, K, train_nodes, test_nodes, strategy, ratioTrain)
     iteration_start_time = tic;
 
     % WLNM
     disp(['Experiment ', num2str(ith_experiment), ' (strategy: ', strategy, ') — Running WLNM...']);
-    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role, train_nodes, test_nodes, strategy);
+    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role, train_nodes, test_nodes, strategy, ratioTrain);
 
     % Time formatting
     elapsed_time_str = datestr(seconds(toc(iteration_start_time)), 'HH:MM:SS');
@@ -126,7 +138,7 @@ function result = processExperiment(ith_experiment, dataname, taxonomy, mass, ro
         'AUC', auc, ...
         'TimeElapsed', elapsed_time_str, ...
         'K', K, ...
-        'TrainRatio', 0.8, ...
+        'TrainRatio', ratioTrain, ...
         'Threshold', best_threshold, ...
         'Precision', best_precision, ...
         'Recall', best_recall, ...
