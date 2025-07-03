@@ -11,7 +11,7 @@ numOfExperiment = 10;
 ratioTrain = 0.8;
 useDegreeStrategy = false;   % NEW: Enable or disable the degree-based strategy loop
 
-sweepTrainRatios = false;  % Set false for static ratioTrain
+sweepTrainRatios = true;  % Set false for static ratioTrain
 if sweepTrainRatios
     train_ratios = 0.60:0.05:0.80;
 else
