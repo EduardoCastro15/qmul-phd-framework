@@ -1,4 +1,4 @@
-function [order] = canon(subgraph, classes)
+function [order, final_classes] = canon(subgraph, classes)
     %  Usage: invoke nauty to find the canonical labelling
     %  --Input--
     %  -subgraph: the adjacency matrix of the graph to find cl
@@ -8,7 +8,10 @@ function [order] = canon(subgraph, classes)
     %          e.g., original label = [1 2 3 4 5], canonical
     %          label = [3 1 2 4 5], then order = [2 3 1 4 5]
     %
-    %  *author: Muhan Zhang,  Washington University in St. Louis
+    %  Partly adapted from the codes of
+    %  Muhan Zhang, Washington University in St. Louis
+    %
+    % Author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
     K = size(subgraph, 1);
     if nargin < 2
@@ -18,12 +21,12 @@ function [order] = canon(subgraph, classes)
     % Reorder subgraph to let adjacent vertices have the same colors
     % The colors must be like [1, 2, 1, 3, 3], must not be like
     % [1, 2, 1, 4, 4]. Colors must be continuous from 1 to n.
-    [classes, order] = sort(classes);  % to sort the colors
+    [sorted_classes, order] = sort(classes);  % to sort the colors
     subgraph1 = subgraph(order, order);
 
     % Prepare the input to canonical.c
-    classes = [classes; classes(end) + 1];
-    colors_nauty = 1 - diff(classes);
+    sorted_classes = [sorted_classes; sorted_classes(end) + 1];
+    colors_nauty = 1 - diff(sorted_classes);
     num_edges = nnz(subgraph1);
     degrees = sum(subgraph1, 2);
 
@@ -46,4 +49,5 @@ function [order] = canon(subgraph, classes)
     clabels = canonical(subgraph1, num_edges, degrees, colors_nauty);
     clabels = clabels + 1;
     order = order(clabels);
+    final_classes = sorted_classes(clabels);
 end

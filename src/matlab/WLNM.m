@@ -20,12 +20,17 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     %
     %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
+    a = 2;  % how many times of negative links (w.r.t. pos links) to sample
+    portion = 1;  % if specified, only a portion of the sampled train and test links be returned
+    evaluate_on_all_unseen = false;  % evaluate on all unseen links
+    use_role_filter = true;  % preserve graph direction and filter neg_links based on role constraints
+    use_original_wlnm = false;  % use original WLNM logic for subgraph extraction
     useParallel = false;
     htrain = train;
     htest = test;
 
     % Sample negative links
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, role, 2, 1, false);
+    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
 
     % === Conditionally filter links based on degree-based strategy ===
     if ismember(lower(strategy), ["high2low", "low2high"])
@@ -46,8 +51,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end
 
     % Encode subgraphs
-    [train_data, train_label] = graph2vector(train_pos, train_neg, train, K, useParallel);
-    [test_data, test_label] = graph2vector(test_pos, test_neg, train, K, useParallel);
+    [train_data, train_label] = graph2vector(train_pos, train_neg, train, K, useParallel, dataname, use_original_wlnm);
+    [test_data, test_label] = graph2vector(test_pos, test_neg, train, K, useParallel, dataname, use_original_wlnm);
 
     % Train feedforward neural network
     layers = [imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')

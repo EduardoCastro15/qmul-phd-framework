@@ -5,13 +5,13 @@
 %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
 %% Configuration
-useParallel = true;         % Flag to enable or disable parallel pool
+useParallel = false;         % Flag to enable or disable parallel pool
 kRange = 10;                % Define the interval of K values to execute
-numOfExperiment = 10;
+numOfExperiment = 1;
 ratioTrain = 0.8;
 useDegreeStrategy = false;   % NEW: Enable or disable the degree-based strategy loop
 
-sweepTrainRatios = true;  % Set false for static ratioTrain
+sweepTrainRatios = false;  % Set false for static ratioTrain
 if sweepTrainRatios
     train_ratios = 0.60:0.05:0.80;
 else
@@ -19,7 +19,7 @@ else
 end
 
 %% Load food web list from a CSV file or a predefined list
-foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_ecosystem.csv');
+foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_1.csv');
 foodweb_names = foodweb_list.Foodweb;
 
 %% Set up logging directories
@@ -85,7 +85,7 @@ for ratioTrain = train_ratios
                                         numOfExperiment, 1);
 
                 % Get split and nodes from DivideNet
-                [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy);
+                [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy, false, true, true);
 
                 if useParallel
                     parfor ith_experiment = 1:numOfExperiment
