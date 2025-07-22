@@ -19,7 +19,7 @@ else
 end
 
 %% Load food web list from a CSV file or a predefined list
-foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_1.csv');
+foodweb_list = readtable('data/foodwebs_mat/foodweb_metrics_ecosystem.csv');
 foodweb_names = foodweb_list.Foodweb;
 
 %% Set up logging directories
