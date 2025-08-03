@@ -95,8 +95,8 @@ function sample = subgraph2vector_original(ind, A, K)
     subgraph = A(nodes, nodes);
 
     if size(subgraph,1) >= 2
-        subgraph(1, 2) = 0;
-        subgraph(2, 1) = 0;
+        subgraph(1, 2) = 0;  % remove the link
+        subgraph(2, 1) = 0;  % remove the link
     end
 
     order = g_label(subgraph);
@@ -162,8 +162,8 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
 
     % avoid encoding the true link if present
     if size(subgraph,1) >= 2
-        subgraph(1, 2) = 0;
-        subgraph(2, 1) = 0;
+        subgraph(1, 2) = 0;  % remove the link
+        subgraph(2, 1) = 0;  % remove the link
     end
 
     links_ind = sub2ind(size(A), links(:,1), links(:,2));
