@@ -1,4 +1,4 @@
-function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy, use_original_logic, check_connectivity, adaptive_connectivity)
+function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction)
     % Divide a directed network into train/test sets + node degree partitioning.
     %
     % --Input--
@@ -8,6 +8,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     %   use_original_logic: true to reproduce the WLNM paper version (undirected)
     %   check_connectivity: true to ensure u still reaches v after removal
     %   adaptive_connectivity: disables check_connectivity when n < 30
+    %   rare_fraction: fraction of rare links to include in training
     %
     % --Output--
     %   train, test: train/test adjacency matrices
@@ -22,6 +23,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     if nargin < 4, use_original_logic = false; end
     if nargin < 5, check_connectivity = false; end
     if nargin < 6, adaptive_connectivity = false; end
+    if nargin < 7, rare_fraction = 0.3; end
 
     n = size(net, 1);
     if adaptive_connectivity && n < 30
@@ -29,7 +31,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
         fprintf('[DivideNet] Skipping connectivity check (adaptive mode, n = %d).\n', n);
     end
 
-    % === Mode 1: Original WLNM logic ===
+    %% === Mode 1: Original WLNM logic ===
     if use_original_logic
         fprintf('[DivideNet] Using WLNM original logic (undirected upper-triangular).\n');
 
@@ -62,7 +64,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
         return;
     end
 
-    % === Mode 2: Modern directed logic ===
+    %% === Mode 2: Modern directed logic ===
     fprintf('[DivideNet] Using directed logic. Connectivity check: %d\n', check_connectivity);
 
     [i, j] = find(net);  % Extract all directed links (i → j)
@@ -71,13 +73,16 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     total_links = size(linklist, 1);  % Count remaining valid links
     num_test = ceil((1 - ratioTrain) * total_links);
 
-    % Reproducible random shuffle
-    % rng(42);
+    if strcmpi(strategy, 'rarelinks')
+        [train, test, train_nodes, test_nodes] = splitRareLinks(net, linklist, ratioTrain, rare_fraction, n);
+        return;
+    end
+
     perm = randperm(total_links);
     test = sparse(n, n);
     train = net;
-
     accepted = 0; attempts = 0;
+
     for idx = perm
         if accepted >= num_test
             break;
@@ -101,7 +106,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     fprintf('[DivideNet] Test links accepted: %d / %d (%.1f%%)\n', accepted, num_test, 100 * accepted / num_test);
     fprintf('[DivideNet] Attempts made: %d | Failed attempts: %d\n', attempts, attempts - accepted);
 
-    valid_strategies = ["high2low", "low2high"];  % Degree strategy (optional)
+    valid_strategies = ["high2low", "low2high", "rarelinks"];  % Degree strategy (optional)
     if nargin < 3 || ~ismember(lower(strategy), valid_strategies)
         % Use default logic without node partitioning
         train_nodes = [];
@@ -142,4 +147,51 @@ function reachable = hasPath(adj, u, v)
         neighbors = find(adj(current, :) > 0);
         queue = [queue; neighbors(~visited(neighbors))'];
     end
+end
+
+
+% Helper function: rare link splitting
+function [train, test, train_nodes, test_nodes] = splitRareLinks(net, linklist, ratioTrain, rare_fraction, n)
+
+    fprintf('[DivideNet] Using rarelinks strategy with fraction %.2f for training selection.\n', rare_fraction);
+
+    % Calculate out-degree and in-degree for each node
+    out_deg = sum(net, 2);
+    in_deg = sum(net, 1)';
+    total_deg = out_deg + in_deg;
+
+    % Sort nodes by rarity score (sum of out-degree and in-degree)
+    % [~, sorted_idx] = sort(total_deg, 'ascend');
+    rarity_score = total_deg(linklist(:,1)) + total_deg(linklist(:,2));
+    [~, rare_idx] = sort(rarity_score, 'ascend');
+
+    % Select training links based on the sorted rarity index
+    total_links = size(linklist, 1);
+    num_train_links = ceil(ratioTrain * total_links);
+    num_rare_train = min(num_train_links, ceil(num_train_links * rare_fraction));
+
+    % Ensure we have enough rare links
+    rare_train_links = linklist(rare_idx(1:num_rare_train), :);
+    remaining_idx = rare_idx(num_rare_train+1:end);
+    remaining_needed = num_train_links - num_rare_train;
+    other_train_links = linklist(remaining_idx(1:remaining_needed), :);
+
+    % Combine rare and other training links
+    train_links = [rare_train_links; other_train_links];
+    test_links = setdiff(linklist, train_links, 'rows');
+
+    % Create sparse matrices for train and test sets
+    train = sparse(n, n);
+    test = sparse(n, n);
+    for k = 1:size(train_links, 1)
+        train(train_links(k, 1), train_links(k, 2)) = 1;
+    end
+    for k = 1:size(test_links, 1)
+        test(test_links(k, 1), test_links(k, 2)) = 1;
+    end
+
+    % Ensure symmetry for undirected networks
+    train_nodes = unique(train_links(:));
+    test_nodes = unique(test_links(:));
+
 end

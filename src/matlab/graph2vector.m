@@ -113,7 +113,7 @@ end
 
 function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     % Save enclosing subgraph snapshot (optional for building block extraction)
-    save_building_blocks = true;
+    save_building_blocks = false;
 
     D = K * (K - 1) / 2;
     max_depth = 2;
@@ -136,9 +136,9 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
         new_nodes = setdiff(fringe(:), nodes, 'stable');
         nodes = [nodes; new_nodes];
 
-        if numel(nodes) > 3*K
-            fprintf('[WARN] Link (%d,%d) triggered large expansion: %d nodes\n', ind(1), ind(2), numel(nodes));
-        end
+        % if numel(nodes) > 3*K
+        %     fprintf('[WARN] Link (%d,%d) triggered large expansion: %d nodes\n', ind(1), ind(2), numel(nodes));
+        % end
         
         links = [links; fringe];
         links_dist = [links_dist; dist * ones(size(fringe, 1), 1)];
