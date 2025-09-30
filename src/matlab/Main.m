@@ -11,14 +11,14 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',        false, ...                % Enable/disable parallel pool
+        'useParallel',        true, ...                % Enable/disable parallel pool
         'kRange',             10, ...                   % Number of nodes per subgraph
         'numExperiments',     1, ...                    % Repeated experiments per food web
         'ratioTrain',         0.8, ...                  % Default training ratio
-        'sweepTrainRatios',   false, ...                % Sweep over multiple ratios or fixed
+        'sweepTrainRatios',   true, ...                % Sweep over multiple ratios or fixed
         'useDegreeStrategy',  false, ...                % Enable high2low / low2high strategy
-        'trainRatioRange',    0.60:0.05:0.80, ...       % Training ratios to test
-        'useRareFractionSweep', true, ...               % Enable rare fraction sweep
+        'trainRatioRange',    0.10:0.05:0.30, ...       % Training ratios to test
+        'useRareFractionSweep', false, ...               % Enable rare fraction sweep
         'rareFractionRange',  0.01:0.01:0.10, ...       % Fraction of rare links to include in training
         'foodwebCSV',         'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...
         'matFolder',          'data/foodwebs_mat/', ...
