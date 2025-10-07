@@ -1,5 +1,5 @@
-function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction)
-    % Divide a directed network into train/test sets + node degree partitioning.
+function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction, varargin)
+    % Divide a directed network into train/test sets + optional degree partitioning.
     %
     % --Input--
     %   net: n x n binary adjacency matrix
@@ -23,7 +23,11 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     if nargin < 4, use_original_logic = false; end
     if nargin < 5, check_connectivity = false; end
     if nargin < 6, adaptive_connectivity = false; end
-    if nargin < 7, rare_fraction = 0.3; end
+    if nargin < 7, rare_fraction = 0.0; end           % <- default OFF
+
+    % clamp
+    ratioTrain    = max(0, min(1, ratioTrain));
+    rare_fraction = max(0, min(1, rare_fraction));
 
     n = size(net, 1);
     if adaptive_connectivity && n < 30
@@ -49,11 +53,10 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
 
             if ~check_connectivity || hasPath(net, u, v)  % Check connectivity if required
                 test(u, v) = 1;
-                linklist(idx, :) = [];
             else
                 net(u, v) = 1;  % restore
-                linklist(idx, :) = [];
             end
+            linklist(idx, :) = [];
         end
 
         % Return symmetric train/test
@@ -73,11 +76,16 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     total_links = size(linklist, 1);  % Count remaining valid links
     num_test = ceil((1 - ratioTrain) * total_links);
 
-    if strcmpi(strategy, 'rarelinks')
-        [train, test, train_nodes, test_nodes] = splitRareLinks(net, linklist, ratioTrain, rare_fraction, n);
+    % ---- Rare mode (toggle) ----
+    if rare_fraction > 0 || strcmpi(strategy, 'rarelinks')  % keep 'rarelinks' for backward compat
+        [train, test, train_nodes, test_nodes] = ...
+            splitRareLinks(net, linklist, ratioTrain, rare_fraction, n, ...
+                           'check_connectivity', check_connectivity, ...
+                           varargin{:});   % <- forward rare knobs from Main
         return;
     end
 
+    % ---- Standard random removal with optional connectivity ----
     perm = randperm(total_links);
     test = sparse(n, n);
     train = net;
@@ -103,14 +111,13 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     if accepted == 0
         warning('[DivideNet] No test links were accepted. Consider disabling connectivity check or using adaptive mode.');
     end
-    fprintf('[DivideNet] Test links accepted: %d / %d (%.1f%%)\n', accepted, num_test, 100 * accepted / num_test);
+    fprintf('[DivideNet] Test links accepted: %d / %d (%.1f%%)\n', accepted, num_test, 100 * accepted / max(1,num_test));
     fprintf('[DivideNet] Attempts made: %d | Failed attempts: %d\n', attempts, attempts - accepted);
 
-    valid_strategies = ["high2low", "low2high", "rarelinks"];  % Degree strategy (optional)
-    if nargin < 3 || ~ismember(lower(strategy), valid_strategies)
-        % Use default logic without node partitioning
-        train_nodes = [];
-        test_nodes = [];
+    % ---- Optional degree-based node partitioning (orthogonal to rare mode) ----
+    valid_strategies = ["high2low", "low2high"];   % 'rarelinks' no longer needed here
+    if nargin < 3 || ~ismember(lower(string(strategy)), valid_strategies)
+        train_nodes = []; test_nodes = [];
         return;
     end
 
@@ -120,7 +127,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     [~, sorted_idx] = sort(total_deg, 'descend');
     cutoff = round(0.8 * n);
 
-    switch lower(strategy)
+    switch lower(string(strategy))
         case 'high2low'
             train_nodes = sorted_idx(1:cutoff);
             test_nodes  = sorted_idx(cutoff+1:end);
@@ -143,55 +150,159 @@ function reachable = hasPath(adj, u, v)
             reachable = true;
             return;
         end
-        visited(current) = true;
-        neighbors = find(adj(current, :) > 0);
-        queue = [queue; neighbors(~visited(neighbors))'];
+        if ~visited(current)
+            visited(current) = true;
+            neighbors = find(adj(current, :) > 0);
+            queue = [queue; neighbors(~visited(neighbors))'];
+        end
     end
 end
 
+% -- rare splitting with unified rounding --
+function [train, test, train_nodes, test_nodes] = splitRareLinks(net, linklist, ratioTrain, rare_fraction, n, varargin)
+    % Directed rare-links split with enforced TRAIN rare-quota and optional connectivity check.
+    %
+    % Name-Value params:
+    %   'check_connectivity' (default: false)
+    %   'rare_policy'        (default: 'hm')  % 'hm' (harmonic mean), 'sum', 'product', 'alpha_beta'
+    %   'alpha'              (default: 1)     % for 'alpha_beta' policy
+    %   'beta'               (default: 1)     % for 'alpha_beta' policy
+    %   'quota_basis'        (default: 'train')  % 'train' or 'total'
+    %   'min_rare_in_test'   (default: 0)     % reserve some rare edges in TEST if desired (0 = off)
 
-% Helper function: rare link splitting
-function [train, test, train_nodes, test_nodes] = splitRareLinks(net, linklist, ratioTrain, rare_fraction, n)
+    p = inputParser;
+    addParameter(p, 'check_connectivity', false);
+    addParameter(p, 'rare_policy', 'hm');       % 'hm','sum','product','alpha_beta'
+    addParameter(p, 'alpha', 1);
+    addParameter(p, 'beta', 1);
+    addParameter(p, 'quota_basis', 'train');    % 'train' or 'total'
+    addParameter(p, 'min_rare_in_test', 0);     % reserve fraction (0 = off)
+    parse(p, varargin{:});
+    opts = p.Results;
 
-    fprintf('[DivideNet] Using rarelinks strategy with fraction %.2f for training selection.\n', rare_fraction);
+    % Filter self-loops (should be none already)
+    linklist = linklist(linklist(:,1) ~= linklist(:,2), :);
 
-    % Calculate out-degree and in-degree for each node
-    out_deg = sum(net, 2);
-    in_deg = sum(net, 1)';
-    total_deg = out_deg + in_deg;
-
-    % Sort nodes by rarity score (sum of out-degree and in-degree)
-    % [~, sorted_idx] = sort(total_deg, 'ascend');
-    rarity_score = total_deg(linklist(:,1)) + total_deg(linklist(:,2));
-    [~, rare_idx] = sort(rarity_score, 'ascend');
-
-    % Select training links based on the sorted rarity index
     total_links = size(linklist, 1);
-    num_train_links = ceil(ratioTrain * total_links);
-    num_rare_train = min(num_train_links, ceil(num_train_links * rare_fraction));
+    num_test    = ceil((1 - ratioTrain) * total_links);     % <- unified with DivideNet
+    num_train   = total_links - num_test;
 
-    % Ensure we have enough rare links
-    rare_train_links = linklist(rare_idx(1:num_rare_train), :);
-    remaining_idx = rare_idx(num_rare_train+1:end);
-    remaining_needed = num_train_links - num_rare_train;
-    other_train_links = linklist(remaining_idx(1:remaining_needed), :);
+    % ---- Edge rarity scores (lower = rarer) ----
+    scores = computeEdgeRarity(net, linklist, opts.rare_policy, opts.alpha, opts.beta);
+    % Tiny jitter to break ties deterministically under rng
+    scores = scores + 1e-12 * randn(size(scores));
 
-    % Combine rare and other training links
-    train_links = [rare_train_links; other_train_links];
-    test_links = setdiff(linklist, train_links, 'rows');
+    [~, order] = sort(scores, 'ascend');
 
-    % Create sparse matrices for train and test sets
-    train = sparse(n, n);
-    test = sparse(n, n);
-    for k = 1:size(train_links, 1)
-        train(train_links(k, 1), train_links(k, 2)) = 1;
-    end
-    for k = 1:size(test_links, 1)
-        test(test_links(k, 1), test_links(k, 2)) = 1;
+    % ---- Rare quota ----
+    if strcmpi(opts.quota_basis, 'total')
+        Krare = min(num_train, ceil(rare_fraction * total_links));
+    else
+        Krare = ceil(rare_fraction * num_train);
     end
 
-    % Ensure symmetry for undirected networks
-    train_nodes = unique(train_links(:));
-    test_nodes = unique(test_links(:));
+    % NEW: guarantee that we can still fill TEST from non-rare edges
+    max_Krare = max(0, total_links - num_test);   % leave >= num_test non-rare edges
+    if Krare > max_Krare
+        fprintf('[splitRareLinks] Reducing Krare from %d to %d to satisfy TEST size %d.\n', ...
+                Krare, max_Krare, num_test);
+        Krare = max_Krare;
+    end
 
+    % Optionally keep at least some rare edges for TEST
+    Ktest_rare_min = min(num_test, floor(opts.min_rare_in_test * num_test));
+    if Ktest_rare_min > 0
+        Krare = max(0, Krare - Ktest_rare_min);
+    end
+
+    rare_rank_mask = false(total_links, 1);
+    if Krare > 0
+        rare_rank_mask(order(1:Krare)) = true;
+    end
+
+    % ---- Build TRAIN/TEST by removing only non-rare edges to TEST first ----
+    train = sparse(net);         % start from full net
+    test  = sparse(n, n);
+
+    % Candidate edges for TEST (avoid touching rare-in-train set)
+    candidates = find(~rare_rank_mask);
+    candidates = candidates(randperm(numel(candidates)));
+
+    accepted = 0;
+    attempts = 0;
+
+    for idx = candidates
+        if accepted >= num_test, break; end
+        u = linklist(idx, 1); v = linklist(idx, 2);
+        if train(u, v) == 0, continue; end  % already removed
+        attempts = attempts + 1;
+
+        train(u, v) = 0;  % tentative removal
+        if ~opts.check_connectivity || hasPath(train, u, v)
+            test(u, v) = 1;
+            accepted = accepted + 1;
+        else
+            train(u, v) = 1;  % restore
+        end
+    end
+
+    % If we couldn't fill TEST, relax connectivity and/or dip into rare edges as last resort
+    if accepted < num_test
+        fprintf('[splitRareLinks] Connectivity blocked %d removals; relaxing check.\n', num_test - accepted);
+        % still avoid rare edges, but ignore connectivity
+        for idx = candidates
+            if accepted >= num_test, break; end
+            u = linklist(idx, 1); v = linklist(idx, 2);
+            if train(u, v) == 0, continue; end
+            train(u, v) = 0;
+            test(u, v)  = 1;
+            accepted    = accepted + 1;
+        end
+        % Absolute last resort: allow rare edges to move to TEST (still keeps most of the quota)
+        if accepted < num_test
+            rare_candidates = find(rare_rank_mask);
+            rare_candidates = rare_candidates(randperm(numel(rare_candidates)));
+            for idx = rare_candidates
+                if accepted >= num_test, break; end
+                u = linklist(idx, 1); v = linklist(idx, 2);
+                if train(u, v) == 0, continue; end
+                train(u, v) = 0;
+                test(u, v)  = 1;
+                accepted    = accepted + 1;
+            end
+        end
+    end
+
+    fprintf('[splitRareLinks] TEST accepted: %d / %d (quota basis: %s, rare_fraction: %.2f)\n', ...
+            accepted, num_test, opts.quota_basis, rare_fraction);
+
+    % Node bookkeeping (optional)
+    [ti, tj] = find(train); train_nodes = unique([ti; tj]);
+    [si, sj] = find(test);  test_nodes  = unique([si; sj]);
+end
+
+function scores = computeEdgeRarity(net, linklist, policy, alpha, beta)
+    if nargin < 3 || isempty(policy), policy = 'hm'; end
+    if nargin < 4, alpha = 1; end
+    if nargin < 5, beta  = 1; end
+
+    net = sparse(net);
+    dout = full(sum(net, 2));     % column vector (n x 1)
+    din  = full(sum(net, 1))';    % column vector (n x 1)
+
+    u = linklist(:,1); v = linklist(:,2);
+    switch lower(policy)
+        case 'hm'      % harmonic mean of (dout(u)+1, din(v)+1)
+            a = dout(u) + 1; b = din(v) + 1;
+            scores = 2 ./ (1./a + 1./b);
+        case 'sum'     % total-degree sum of endpoints
+            tot = (dout + din);
+            scores = tot(u) + tot(v);
+        case 'product' % product of (dout(u)+1)*(din(v)+1)
+            scores = (dout(u)+1) .* (din(v)+1);
+        case 'alpha_beta' % weighted product
+            scores = (dout(u)+1).^alpha .* (din(v)+1).^beta;
+        otherwise
+            error('Unknown rare policy: %s', policy);
+    end
 end
