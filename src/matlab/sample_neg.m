@@ -31,6 +31,7 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, ro
     %
     % Author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
+    % === positives ===
     [i, j] = find(train);
     train_pos = [i, j];
     train_size = size(train_pos, 1);
@@ -62,6 +63,7 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, ro
             src_role = lower(string(role{src}));
             tgt_role = lower(string(role{tgt}));
 
+            % if (src_role == "resource" && tgt_role == "consumer")              
             if (src_role == "consumer" && tgt_role == "consumer") || (src_role == "resource" && tgt_role == "resource")
                 valid_mask(idx) = true;
             end
@@ -76,46 +78,88 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, ro
         end
     end
 
-    % === Check if enough negatives ===
-    total_neg_needed = a * (train_size + test_size);
-    if size(neg_links, 1) < total_neg_needed
-        warning('[sample_neg] Not enough negatives. Reducing a...');
-        a = floor(size(neg_links, 1) / (train_size + test_size));
-    end
+    % --- compute needs and cap to pool size ---
+    pool_size   = size(neg_links, 1);
+    pos_total   = train_size + test_size;
+    need_total  = a * pos_total;
 
-    if a == 0
-        warning('[sample_neg] Using fallback: unfiltered negatives with a = 1.');
+    % fallback: if pool too small AND we used role filter, disable and rebuild once
+    if pool_size < need_total && use_role_filter
+        warning('[sample_neg] Pool %d < need %d with role filter. Disabling role filter.', pool_size, need_total);
         neg_links = neg_links_unfiltered;
-        a = 1;  % fallback to minimal sampling
+        pool_size = size(neg_links, 1);
     end
 
-    % === Sample negatives ===
-    perm = randperm(size(neg_links, 1));
-    % rng(42);  % reproducibility
+    % final cap
+    need_total = min(need_total, pool_size);
+
+    if pool_size == 0 || need_total == 0
+        warning('[sample_neg] No negatives available. Returning empties.');
+        train_neg = zeros(0,2); test_neg = zeros(0,2);
+        return;
+    end
+
+    % --- sample indices safely ---
+    perm = randperm(pool_size);
+
     if evaluate_on_all_unseen
-        test_neg = neg_links;
-        train_neg = neg_links(perm(1:a * train_size), :);
-        test_neg(perm(1:a * train_size), :) = [];  % remove train negs
+        % train_neg: up to a*train_size; test_neg: remaining unseen
+        k_train = min(a * train_size, pool_size);
+        idx_train = perm(1:k_train);
+        train_neg = neg_links(idx_train, :);
+
+        mask = true(pool_size, 1);
+        mask(idx_train) = false;
+        test_neg = neg_links(mask, :);
     else
-        selected = neg_links(perm(1:a * (train_size + test_size)), :);
-        train_neg = selected(1:a * train_size, :);
-        test_neg = selected(a * train_size + 1:end, :);
+        % proportional split if need_total < a*(train_size+test_size)
+        ratio   = train_size / max(1, (train_size + test_size));
+        k_train_target = a * train_size;
+        k_test_target  = a * test_size;
+
+        % propose proportional counts then cap by targets and need_total
+        k_train = min(k_train_target, floor(need_total * ratio));
+        k_test  = min(k_test_target,  need_total - k_train);
+
+        % if rounding left a remainder, assign leftover greedily
+        leftover = need_total - (k_train + k_test);
+        if leftover > 0
+            add_train = min(leftover, max(0, k_train_target - k_train));
+            k_train = k_train + add_train;
+            k_test  = need_total - k_train;
+        end
+
+        % ensure both splits get at least 1 negative when both pos sets are non-empty
+        if train_size > 0 && test_size > 0 && need_total >= 2
+            if k_train == 0 && k_test > 1
+                k_train = 1; k_test = need_total - 1;
+            elseif k_test == 0 && k_train > 1
+                k_test = 1; k_train = need_total - 1;
+            end
+        end
+
+        idx_sel  = perm(1:need_total);
+        train_neg = neg_links(idx_sel(1:k_train), :);
+        test_neg  = neg_links(idx_sel(k_train+1:end), :);
     end
 
     % === Apply portion filtering (if needed) ===
     if portion < 1
-        train_pos = train_pos(1:ceil(portion * size(train_pos, 1)), :);
-        train_neg = train_neg(1:ceil(portion * size(train_neg, 1)), :);
-        test_pos  = test_pos(1:ceil(portion * size(test_pos, 1)), :);
-        test_neg  = test_neg(1:ceil(portion * size(test_neg, 1)), :);
+        train_pos = train_pos(1:min(size(train_pos,1), ceil(portion * size(train_pos, 1))), :);
+        train_neg = train_neg(1:min(size(train_neg,1), ceil(portion * size(train_neg, 1))), :);
+        test_pos  = test_pos(1:min(size(test_pos,1),   ceil(portion * size(test_pos, 1))), :);
+        test_neg  = test_neg(1:min(size(test_neg,1),   ceil(portion * size(test_neg, 1))), :);
     elseif portion > 1
-        train_pos = train_pos(1:portion, :);
-        train_neg = train_neg(1:portion, :);
-        test_pos  = test_pos(1:portion, :);
-        test_neg  = test_neg(1:portion, :);
+        train_pos = train_pos(1:min(size(train_pos,1), portion), :);
+        train_neg = train_neg(1:min(size(train_neg,1), portion), :);
+        test_pos  = test_pos(1:min(size(test_pos,1),  portion), :);
+        test_neg  = test_neg(1:min(size(test_neg,1),  portion), :);
     end
 
-    % --- Logging ---
+    % --- logging ---
+    fprintf('[NegPool] pool=%d need_total=%d a=%d eval_all=%d role_filter=%d | k_train=%d k_test=%d\n', ...
+        pool_size, need_total, a, evaluate_on_all_unseen, use_role_filter, size(train_neg,1), size(test_neg,1));
+
     fprintf('[sample_neg] Final link counts (use_role_filter = %d):\n', use_role_filter);
     fprintf('    Train Positive: %d\n', size(train_pos, 1));
     fprintf('    Train Negative: %d\n', size(train_neg, 1));
