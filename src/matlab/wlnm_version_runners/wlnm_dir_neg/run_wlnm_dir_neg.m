@@ -13,7 +13,7 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
 
     % Split train/test once per (food web, split ratio)
 
-    [train, test, ~, ~] = DivideNet( data.net, ratioTrain, string(config.nodeSelection), false, config.checkConnectivity, config.adaptiveConnectivity);
+    [train, test, ~, ~] = DivideNet_dir_neg(data.net, ratioTrain, string(config.nodeSelection), false, config.checkConnectivity, config.adaptiveConnectivity);
 
     % Preallocate result objects
     results = repmat(struct( ...
@@ -36,7 +36,7 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
             disp(['Experiment ', num2str(i), ' (node selection: ', char(config.nodeSelection), ') — Running WLNM...']);
 
             [auc, best_threshold, best_precision, best_recall, best_f1_score] = ...
-                WLNM(data.dataname, train, test, K, data.taxonomy, data.mass, data.role, config.nodeSelection, ratioTrain);
+                WLNM_dir_neg(data.dataname, train, test, K, data.taxonomy, data.mass, data.role, config.nodeSelection, ratioTrain);
 
             elapsed_time_str = datestr(seconds(toc(t0)), 'HH:MM:SS');
             results(i) = struct( ...
@@ -55,7 +55,7 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
             disp(['Experiment ', num2str(i), ' (node selection: ', char(config.nodeSelection), ') — Running WLNM...']);
 
             [auc, best_threshold, best_precision, best_recall, best_f1_score] = ...
-                WLNM(data.dataname, train, test, K, data.taxonomy, data.mass, data.role, config.nodeSelection, ratioTrain);
+                WLNM_dir_neg(data.dataname, train, test, K, data.taxonomy, data.mass, data.role, config.nodeSelection, ratioTrain);
 
             elapsed_time_str = datestr(seconds(toc(t0)), 'HH:MM:SS');
             results(i) = struct( ...

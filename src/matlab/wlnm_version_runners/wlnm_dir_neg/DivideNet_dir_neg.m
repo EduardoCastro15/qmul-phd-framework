@@ -1,4 +1,4 @@
-function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, nodeSelection, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction, varargin)
+function [train, test, train_nodes, test_nodes] = DivideNet_dir_neg(net, ratioTrain, nodeSelection, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction, varargin)
     % Divide a directed network into train/test sets + optional degree partitioning.
     %
     % --Input--

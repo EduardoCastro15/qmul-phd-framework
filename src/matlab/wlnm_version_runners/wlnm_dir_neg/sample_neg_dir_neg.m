@@ -1,4 +1,4 @@
-function [train_pos, train_neg, test_pos, test_neg] = sample_neg(train, test, role, a, portion, evaluate_on_all_unseen, use_role_filter)
+function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, test, role, a, portion, evaluate_on_all_unseen, use_role_filter)
     %  Usage: to sample negative links for train and test datasets.
     %         When sampling negative train links, assume all testing
     %         links are known and thus sample negative train links
