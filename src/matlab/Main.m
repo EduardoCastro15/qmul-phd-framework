@@ -11,20 +11,20 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',          false, ...                % Enable/disable parallel pool
-        'version',              'WLNM_dir_neg', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', etc.
-        'numExperiments',       1, ...                    % Repeated experiments per food web
+        'useParallel',          true, ...                % Enable/disable parallel pool
+        'version',              'WLNM_original', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', etc.
+        'numExperiments',       5, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
         'sweepTrainRatios',     false, ...                % Sweep over multiple ratios or fixed
         'ratioTrain',           0.8, ...                  % Default training ratio
         'trainRatioRange',      0.10:0.05:0.90, ...       % Training ratios to test
         'nodeSelection',        'random', ...             % Type of node selection
-        'checkConnectivity',    true, ...
-        'adaptiveConnectivity', true, ...
-        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_1.csv', ...
-        'matFolder',            'data/foodwebs_mat/', ...
-        'logDir',               'data/result/prediction_scores_logs', ...
-        'terminalLogDir',       'data/result/terminal_logs/' ...
+        'checkConnectivity',    true, ...                 % Ensure train graph connectivity
+        'adaptiveConnectivity', true, ...                 % Adapt connectivity check based on train ratio
+        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_1.csv', ... % CSV with food web names
+        'matFolder',            'data/foodwebs_mat/', ...                      % Folder with .mat files
+        'logDir',               'data/result/prediction_scores_logs', ...      % Directory for result logs
+        'terminalLogDir',       'data/result/terminal_logs/' ...               % Directory for terminal logs
     );
 
     %% === SETUP ===

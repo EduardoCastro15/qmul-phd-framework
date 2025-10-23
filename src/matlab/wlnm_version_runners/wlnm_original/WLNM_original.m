@@ -1,36 +1,27 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
-    %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
-    %  --Input--
-    %  -dataname: name of the food web
-    %  -train: a sparse matrix of training links (1: link, 0: otherwise)
-    %  -test: a sparse matrix of testing links (1: link, 0: otherwise)
-    %  -K: number of vertices in an enclosing subgraph
-    %  -taxonomy: vector of species names
-    %  -mass: vector of species masses
-    %  --Output--
-    %  -auc: the AUC score of WLNM
-    %  -best_threshold: the best threshold for classification
-    %  -best_precision: the best precision for classification
-    %  -best_recall: the best recall for classification
-    %  -best_f1_score: the best F1 score for classification
-    %
-    %  Partly adapted from the codes of
-    %  Lu 2011, Link prediction in complex networks: A survey.
-    %  Muhan Zhang, Washington University in St. Louis
-    %
-    %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
+function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_original(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
+    %WLNM_ORIGINAL Baseline WLNM with original negative sampling & encoders.
+    % Preserves:
+    %   - Augmented TP/FP/FN analysis
+    %   - Save files
+    %   - Save scores & labels to CSV
+    %   - Save TP/FP/FN links with metadata
+    %   - Save enriched CSVs
+
+    %#ok<INUSD> % role not used in original pipeline, kept for signature parity
 
     a = 2;  % how many times of negative links (w.r.t. pos links) to sample
     portion = 1;  % if specified, only a portion of the sampled train and test links be returned
     evaluate_on_all_unseen = false;  % evaluate on all unseen links
-    use_role_filter = true;  % preserve graph direction and filter neg_links based on role constraints
+    use_role_filter = false;  % preserve graph direction and filter neg_links based on role constraints
     use_original_wlnm = false;  % use original WLNM logic for subgraph extraction
     useParallel = false;
-    htrain = train;
-    htest = test;
 
-    % Sample negative links
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
+    % === Original half-matrix setup (undirected) ===
+    htrain = triu(train, 1);
+    htest  = triu(test, 1);
+
+    % === Original negative sampling ===
+    [train_pos, train_neg, test_pos, test_neg] = sample_neg_original(htrain, htest, a, portion, evaluate_on_all_unseen, use_role_filter);
 
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
@@ -43,9 +34,9 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
         return;
     end
 
-    % Encode subgraphs
-    [train_data, train_label] = graph2vector_dir_neg(train_pos, train_neg, train, K, useParallel, dataname, use_original_wlnm);
-    [test_data, test_label] = graph2vector_dir_neg(test_pos, test_neg, train, K, useParallel, dataname, use_original_wlnm);
+    % === Original graph encoders ===
+    [train_data, train_label] = graph2vector_original(train_pos, train_neg, train, K, dataname);
+    [test_data, test_label] = graph2vector_original(test_pos, test_neg, train, K, dataname);
 
     % Train feedforward neural network
     layers = [imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')
@@ -69,8 +60,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % Predict probabilities
     [~, scores] = classify(net, reshape(test_data', K*(K-1)/2, 1, 1, size(test_data, 1)));
     scores(:, 1) = [];
-    % disp(scores);
-    % disp(size(scores));
+    % scores is N×1
 
     % Compute AUC
     [~, ~, ~, auc] = perfcurve(test_label', scores', 1);

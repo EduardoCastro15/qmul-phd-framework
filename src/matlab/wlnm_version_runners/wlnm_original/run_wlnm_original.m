@@ -1,24 +1,67 @@
 function results = run_wlnm_original(data, K, ratioTrain, config)
-    % (1) Make your split (if needed)
-    [train, test, ~, ~] = DivideNet( ...
-        data.net, ratioTrain, string(config.nodeSelection), ...
-        false, config.checkConnectivity, config.adaptiveConnectivity);
+    %RUN_WLNM_ORIGINAL Runner for WLNM with original sampling.
+    %
+    % INPUTS
+    %   data:   struct with fields dataname, net, taxonomy, mass, role
+    %   K:      int (subgraph size)
+    %   ratioTrain: double in (0,1)
+    %   config: struct with fields (nodeSelection, useParallel, numExperiments, checkConnectivity, adaptiveConnectivity)
+    %
+    % OUTPUT
+    %   results: struct array with fields:
+    %       AUC, TimeElapsed, K, TrainRatio, Threshold, Precision, Recall, F1Score
 
-    % (2) Preallocate results as in the template
-    results = repmat(struct('AUC',0,'TimeElapsed','', 'K',K,'TrainRatio',ratioTrain,...
-                            'Threshold',0,'Precision',0,'Recall',0,'F1Score',0), ...
-                     config.numExperiments, 1);
+    % Split train/test once per (food web, split ratio)
 
-    % (3) Loop (parfor/for) and call your algorithm:
-    for i = 1:config.numExperiments
-        t0 = tic;
-        % [auc, thr, prec, rec, f1] = YOUR_ALGO(...);
-        elapsed_time_str = datestr(seconds(toc(t0)), 'HH:MM:SS');
-        results(i).AUC        = auc;
-        results(i).TimeElapsed= elapsed_time_str;
-        results(i).Threshold  = thr;
-        results(i).Precision  = prec;
-        results(i).Recall     = rec;
-        results(i).F1Score    = f1;
+    [train, test, ~, ~] = DivideNet_original(data.net, ratioTrain, string(config.nodeSelection), false, config.checkConnectivity, config.adaptiveConnectivity);
+
+    % Preallocate result objects
+    results = repmat(struct( ...
+        'AUC', 0, ...
+        'TimeElapsed', '', ...
+        'K', ...
+        K, ...
+        'TrainRatio', ...
+        ratioTrain, ...
+        'Threshold', 0, ...
+        'Precision', 0, ...
+        'Recall', 0, ...
+        'F1Score', 0), ...
+        config.numExperiments, ...
+        1);
+
+    % Broadcast-friendly locals (helps parfor classification)
+    dataname      = data.dataname;
+    taxonomy      = data.taxonomy;
+    mass          = data.mass;
+    role          = data.role;
+    nodeSelection = config.nodeSelection;
+
+    % Execute experiments
+    if config.useParallel
+        parfor i = 1:config.numExperiments
+            results(i) = one_experiment_original(i, dataname, train, test, K, ratioTrain, taxonomy, mass, role, nodeSelection);
+        end
+    else
+        for i = 1:config.numExperiments
+            results(i) = one_experiment_original(i, dataname, train, test, K, ratioTrain, taxonomy, mass, role, nodeSelection);
+        end
     end
+end
+
+function r = one_experiment_original(i, dataname, train, test, K, ratioTrain, taxonomy, mass, role, nodeSelection)
+    t0 = tic;
+    disp(['Experiment ', num2str(i), ' (node selection: ', char(nodeSelection), ') - Running WLNM_original...']);
+
+    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_original(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain);
+
+    r = struct( ...
+        'AUC', auc, ...
+        'TimeElapsed', datestr(seconds(toc(t0)), 'HH:MM:SS'), ...
+        'K', K, ...
+        'TrainRatio', ratioTrain, ...
+        'Threshold', best_threshold, ...
+        'Precision', best_precision, ...
+        'Recall', best_recall, ...
+        'F1Score', best_f1_score);
 end
