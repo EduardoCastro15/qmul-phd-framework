@@ -1,10 +1,10 @@
-function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, strategy, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction, varargin)
+function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, nodeSelection, use_original_logic, check_connectivity, adaptive_connectivity, rare_fraction, varargin)
     % Divide a directed network into train/test sets + optional degree partitioning.
     %
     % --Input--
     %   net: n x n binary adjacency matrix
     %   ratioTrain: fraction of links to keep for training
-    %   strategy: degree strategy ('high2low', 'low2high'), otherwise ignored
+    %   nodeSelection: degree nodeSelection ('high2low', 'low2high'), otherwise ignored
     %   use_original_logic: true to reproduce the WLNM paper version (undirected)
     %   check_connectivity: true to ensure u still reaches v after removal
     %   adaptive_connectivity: disables check_connectivity when n < 30
@@ -12,7 +12,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     %
     % --Output--
     %   train, test: train/test adjacency matrices
-    %   train_nodes, test_nodes: only returned if degree strategy used, else []
+    %   train_nodes, test_nodes: only returned if degree nodeSelection used, else []
     %
     %  Partly adapted from the codes of
     %  Lu 2011, Link prediction in complex networks: A survey.
@@ -77,7 +77,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     num_test = ceil((1 - ratioTrain) * total_links);
 
     % ---- Rare mode (toggle) ----
-    if rare_fraction > 0 || strcmpi(strategy, 'rarelinks')  % keep 'rarelinks' for backward compat
+    if rare_fraction > 0 || strcmpi(nodeSelection, 'rarelinks')  % keep 'rarelinks' for backward compat
         [train, test, train_nodes, test_nodes] = ...
             splitRareLinks(net, linklist, ratioTrain, rare_fraction, n, ...
                            'check_connectivity', check_connectivity, ...
@@ -116,7 +116,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
 
     % ---- Optional degree-based node partitioning (orthogonal to rare mode) ----
     valid_strategies = ["high2low", "low2high"];   % 'rarelinks' no longer needed here
-    if nargin < 3 || ~ismember(lower(string(strategy)), valid_strategies)
+    if nargin < 3 || ~ismember(lower(string(nodeSelection)), valid_strategies)
         train_nodes = []; test_nodes = [];
         return;
     end
@@ -127,7 +127,7 @@ function [train, test, train_nodes, test_nodes] = DivideNet(net, ratioTrain, str
     [~, sorted_idx] = sort(total_deg, 'descend');
     cutoff = round(0.8 * n);
 
-    switch lower(string(strategy))
+    switch lower(string(nodeSelection))
         case 'high2low'
             train_nodes = sorted_idx(1:cutoff);
             test_nodes  = sorted_idx(cutoff+1:end);

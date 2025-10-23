@@ -1,4 +1,4 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role, train_nodes, test_nodes, strategy, ratioTrain)
+function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
     %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
     %  --Input--
     %  -dataname: name of the food web
@@ -31,13 +31,6 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
 
     % Sample negative links
     [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
-
-    % === Conditionally filter links based on degree-based strategy ===
-    if ismember(lower(strategy), ["high2low", "low2high"])
-        [train_pos, train_neg, test_pos, test_neg] = DegreeCompute(train_pos, train_neg, test_pos, test_neg, train_nodes, test_nodes);
-    else
-        disp('[WLNM] Skipping DegreeCompute: non-degree-based strategy selected.');
-    end
 
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
@@ -107,8 +100,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
         end
     end
 
-    fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
-        best_threshold, best_precision, best_recall, best_f1_score);
+    fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', best_threshold, best_precision, best_recall, best_f1_score);
     fprintf('AUC: %.4f\n', auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
@@ -123,8 +115,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     FN_links = setdiff(true_links, predicted_links, 'rows');
 
     % Save files
-    % exp_id = sprintf('%s_K_%d_%s', dataname, K, strategy);
-    exp_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, strategy, ratioTrain * 100);
+    % exp_id = sprintf('%s_K_%d_%s', dataname, K, nodeSelection);
+    exp_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
     results_dir = 'data/result/confusion_matrix_csv/';
     if ~exist(results_dir, 'dir')
         mkdir(results_dir);
