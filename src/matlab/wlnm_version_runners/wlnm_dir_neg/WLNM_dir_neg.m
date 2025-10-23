@@ -1,4 +1,4 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
+function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
     %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
     %  --Input--
     %  -dataname: name of the food web
@@ -30,7 +30,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     htest = test;
 
     % Sample negative links
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg(htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
+    [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
 
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
@@ -44,8 +44,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end
 
     % Encode subgraphs
-    [train_data, train_label] = graph2vector(train_pos, train_neg, train, K, useParallel, dataname, use_original_wlnm);
-    [test_data, test_label] = graph2vector(test_pos, test_neg, train, K, useParallel, dataname, use_original_wlnm);
+    [train_data, train_label] = graph2vector_dir_neg(train_pos, train_neg, train, K, useParallel, dataname, use_original_wlnm);
+    [test_data, test_label] = graph2vector_dir_neg(test_pos, test_neg, train, K, useParallel, dataname, use_original_wlnm);
 
     % Train feedforward neural network
     layers = [imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')

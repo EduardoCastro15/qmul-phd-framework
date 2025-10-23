@@ -1,4 +1,4 @@
-function [data, label] = graph2vector(pos, neg, A, K, useParallel, dataname, use_original_wlnm)
+function [data, label] = graph2vector_dir_neg(pos, neg, A, K, useParallel, dataname, use_original_wlnm)
     % Usage: Encode subgraphs of links in a graph into vectors
     %  --Input--
     %  -pos: indices of positive links

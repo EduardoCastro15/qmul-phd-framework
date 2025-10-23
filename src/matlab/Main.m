@@ -11,9 +11,9 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',          true, ...                % Enable/disable parallel pool
+        'useParallel',          false, ...                % Enable/disable parallel pool
         'version',              'WLNM_dir_neg', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', etc.
-        'numExperiments',       5, ...                    % Repeated experiments per food web
+        'numExperiments',       1, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
         'sweepTrainRatios',     false, ...                % Sweep over multiple ratios or fixed
         'ratioTrain',           0.8, ...                  % Default training ratio
@@ -39,7 +39,9 @@ function Main()
 
     % Ensure algorithm code is on path (recursively)
     addpath(genpath('wlnm_version_runners'));
+    addpath(genpath('software'));
     addpath(genpath('logging'));
+    addpath(genpath('data'));
 
     % Create log directories
     if ~exist(config.logDir, 'dir'); mkdir(config.logDir); end
