@@ -55,7 +55,7 @@ function [data, label] = graph2vector_dir_neg(pos, neg, A, K, useParallel, datan
                 data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
             end
             if mod(i, floor(all_size / 10)) == 0
-                fprintf('Progress: %d%% – Elapsed: %.1fs\n', round(100 * i / all_size), toc);
+                fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc);
                 % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
             end
         end
