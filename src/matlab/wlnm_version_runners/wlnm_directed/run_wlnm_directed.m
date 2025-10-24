@@ -51,9 +51,9 @@ end
 
 function r = one_experiment_directed(i, dataname, train, test, K, ratioTrain, taxonomy, mass, role, nodeSelection)
     t0 = tic;
-    disp(['Experiment ', num2str(i), ' (node selection: ', char(nodeSelection), ') - Running WLNM_dir_neg...']);
+    disp(['Experiment ', num2str(i), ' (node selection: ', char(nodeSelection), ') - Running WLNM_directed...']);
 
-    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain);
+    [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_directed(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain);
 
     r = struct( ...
         'AUC', auc, ...
