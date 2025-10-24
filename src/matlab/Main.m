@@ -12,7 +12,7 @@ function Main()
 
     config = struct( ...
         'useParallel',          true, ...                % Enable/disable parallel pool
-        'version',              'WLNM_original', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', etc.
+        'version',              'WLNM_directed', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', etc.
         'numExperiments',       5, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
         'sweepTrainRatios',     false, ...                % Sweep over multiple ratios or fixed
