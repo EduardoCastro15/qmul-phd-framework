@@ -32,7 +32,7 @@ function [data, label] = graph2vector_original(pos, neg, A, K, dataname)
     for i = 1:all_size
         ind = all(i, :);
         is_positive = i <= pos_size;
-        data(i, :) = subgraph2vector_original_bb(ind, A, K, dataname, is_positive, i);
+        data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
 
         if mod(i, floor(all_size / 10)) == 0
             fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
@@ -45,7 +45,7 @@ end
 
 % ---- Subgraph extraction + vectorization (ORIGINAL logic) ---------------
 % Adds optional building-blocks saving with same fields/paths as dir_neg.
-function sample = subgraph2vector_original_bb(ind, A, K, dataname, is_positive, idx)
+function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     %  Usage: 1) to extract the enclosing subgraph for a link
     %            Aij (i = ind(1), j = ind(2))
     %         2) to impose a vertex ordering for the vertices

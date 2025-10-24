@@ -48,6 +48,8 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_directed(train,
         a = available_neg_links / (train_size + test_size);
     end
 
+    need_total = min(pool_size, floor(a * (train_size + test_size)));
+
     % Sample negative links
     if evaluate_on_all_unseen
         test_neg = neg_links;  % first let all unknown links be negative test links
