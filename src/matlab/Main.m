@@ -12,10 +12,10 @@ function Main()
 
     config = struct( ...
         'useParallel',          true, ...                % Enable/disable parallel pool
-        'version',              'WLNM_original', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
-        'numExperiments',       10, ...                    % Repeated experiments per food web
+        'version',              'WLNM_directed', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
+        'numExperiments',       1, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
-        'sweepTrainRatios',     false, ...                % Sweep over multiple ratios or fixed
+        'sweepTrainRatios',     true, ...                % Sweep over multiple ratios or fixed
         'ratioTrain',           0.8, ...                  % Default training ratio
         'trainRatioRange',      0.10:0.05:0.90, ...       % Training ratios to test
         'nodeSelection',        'random', ...             % Type of node selection
@@ -67,7 +67,15 @@ function Main()
 
             % Set up terminal log file
             diary_file = fullfile(config.terminalLogDir, strcat(dataname, '_terminal_log.txt'));
+
+            % === SKIP if terminal log already exists ===
+            % if isfile(diary_file)
+            %     fprintf('[RESUME] Skipping "%s" because terminal log exists: %s\n', dataname, diary_file);
+            %     continue;  % move to next food web
+            % end
+
             diary(diary_file);
+
 
             % Load .mat data
             datapath = fullfile(config.matFolder, strcat(dataname, '.mat'));
