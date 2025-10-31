@@ -19,6 +19,7 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % === Original half-matrix setup (undirected) ===
     htrain = triu(train, 1);
     htest  = triu(test, 1);
+    Aund = spones(htrain + htrain');   % binary, symmetric, sparse [OPTIMIZATION]
 
     % === Original negative sampling ===
     [train_pos, train_neg, test_pos, test_neg] = sample_neg_original(htrain, htest, a, portion, evaluate_on_all_unseen, use_role_filter);
@@ -35,8 +36,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end
 
     % === Original graph encoders ===
-    [train_data, train_label] = graph2vector_original(train_pos, train_neg, train, K, dataname);
-    [test_data, test_label] = graph2vector_original(test_pos, test_neg, train, K, dataname);
+    [train_data, train_label] = graph2vector_original(train_pos, train_neg, Aund, K, dataname);
+    [test_data, test_label] = graph2vector_original(test_pos, test_neg, Aund, K, dataname);
 
     % Train feedforward neural network
     layers = [imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')
