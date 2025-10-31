@@ -92,12 +92,37 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     adj_before = subgraph;                      % Save before editing
 
     % Calculate the link-weighted subgraph, each entry in the adjacency matrix is weighted by the inverse of its distance to the target link
-    links_ind = sub2ind(size(A), links(:, 1), links(:, 2));
-    A_copy = A / (dist + 1);  % if a link between two existing nodes < dist+1, it must be in 'links'. The only links not in 'links' are the dist+1 links between some farthest nodes in 'nodes', so here we weight them by dist+1
-    A_copy(links_ind) = 1 ./ links_dist;
-    A_copy_u = max(triu(A_copy, 1), tril(A_copy, -1)');  % for links (i, j) and (j, i), keep the smallest dist
-    A_copy = A_copy_u + A_copy_u';
-    lweight_subgraph  = A_copy(nodes, nodes);
+    % links_ind = sub2ind(size(A), links(:, 1), links(:, 2));
+    % A_copy = A / (dist + 1);  % if a link between two existing nodes < dist+1, it must be in 'links'. The only links not in 'links' are the dist+1 links between some farthest nodes in 'nodes', so here we weight them by dist+1
+    % A_copy(links_ind) = 1 ./ links_dist;
+    % A_copy_u = max(triu(A_copy, 1), tril(A_copy, -1)');  % for links (i, j) and (j, i), keep the smallest dist
+    % A_copy = A_copy_u + A_copy_u';
+    % lweight_subgraph  = A_copy(nodes, nodes);
+
+
+    % --- Fast local weighting on the K-node induced subgraph (O(K^2)) [OPTIMIZATION] ---
+    subA = A(nodes, nodes);                   % induced adjacency (sparse)
+    subA = spones(subA);                      % binary support only
+    default_w = 1 / (dist + 1);               % weight for non-frontier edges within subgraph
+    lweight_subgraph = default_w * subA;      % initialize default weights
+
+    % Map global node ids -> local [1..K]
+    loc = zeros(size(A,1), 1, 'uint32');
+    loc(nodes) = uint32(1:numel(nodes));
+
+    % Keep only links whose endpoints are inside 'nodes'
+    u = double(loc(links(:,1)));
+    v = double(loc(links(:,2)));
+    m = (u > 0) & (v > 0);
+    u = u(m); v = v(m); w = 1 ./ links_dist(m);
+
+    % For undirected effect: pick the larger weight (i.e., smaller distance)
+    S = sparse(u, v, w, numel(nodes), numel(nodes));
+    S = max(S, S');                           % keep max across directions
+
+    % Combine: max between default weights and frontier weights
+    lweight_subgraph = max(lweight_subgraph, S);
+
 
     % Calculate the graph labeling of the subgraph
     [order, classes] = g_label(subgraph);
@@ -154,18 +179,46 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     end
 end
 
-function N = neighbors(fringe, A)
-    %  Usage: find the neighbor links of all links in fringe from A
+% function N = neighbors(fringe, A)
+%     %  Usage: find the neighbor links of all links in fringe from A
     
-    N = [];
-    for no = 1: size(fringe, 1)
-        ind = fringe(no, :);
-        i = ind(1);
-        j = ind(2);
-        [~, ij] = find(A(i, :));
-        [ji, ~] = find(A(:, j));
-        N = [N; [i * ones(length(ij), 1), ij']; [ji, j * ones(length(ji), 1)]];
-        N = unique(N, 'rows', 'stable');  % eliminate repeated ones and keep in order
+%     N = [];
+%     for no = 1: size(fringe, 1)
+%         ind = fringe(no, :);
+%         i = ind(1);
+%         j = ind(2);
+%         [~, ij] = find(A(i, :));
+%         [ji, ~] = find(A(:, j));
+%         N = [N; [i * ones(length(ij), 1), ij']; [ji, j * ones(length(ji), 1)]];
+%         N = unique(N, 'rows', 'stable');  % eliminate repeated ones and keep in order
+%     end
+% end
+
+function N = neighbors(fringe, A)  % [OPTIMIZATION]
+    % Find neighbor links of all links in FRINGE from A
+    % Output N is [m x 2] (unique rows), stable order preserved as much as possible.
+
+    ii = []; jj = [];
+    m  = size(fringe, 1);
+
+    for t = 1:m
+        i = fringe(t,1);
+        j = fringe(t,2);
+
+        % Out-neighbors of i (row i) and in-neighbors of j (col j)
+        nbr_i = find(A(i,:));      % 1 x deg(i)
+        nbr_j = find(A(:,j));      % deg(j) x 1
+
+        ii = [ii; repmat(i, numel(nbr_i), 1); nbr_j(:)];
+        jj = [jj; nbr_i(:); repmat(j, numel(nbr_j), 1)];
+    end
+
+    if isempty(ii)
+        N = zeros(0,2);
+    else
+        N = [ii, jj];
+        % Deduplicate ONCE (not inside the loop)
+        N = unique(N, 'rows', 'stable');
     end
 end
 
