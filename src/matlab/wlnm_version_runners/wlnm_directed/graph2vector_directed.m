@@ -26,17 +26,24 @@ function [data, label] = graph2vector_directed(pos, neg, A, K, useParallel, data
     data = zeros(all_size, d);
 
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
-    t0   = tic;
-    step = max(1, floor(all_size/10));
+    t0 = tic;
 
-    for i = 1: all_size
-        ind = all(i, :);
-        is_positive = i <= pos_size;
-        sample = subgraph2vector(ind, A, K, dataname, is_positive, i);
-        data(i, :) = sample;
-
-        if mod(i, step) == 0 || i == all_size
-            fprintf('  Progress: %3d%%  Elapsed: %.1fs\n', round(100*i/all_size), toc(t0));
+    if useParallel && ~isempty(gcp('nocreate'))
+        parfor i = 1:all_size
+            ind = all(i, :);
+            is_positive = i <= pos_size;
+            data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+        end
+        fprintf('  Done (parallel). Elapsed: %.1fs\n', toc(t0));
+    else
+        step = max(1, floor(all_size/10));
+        for i = 1:all_size
+            ind = all(i, :);
+            is_positive = i <= pos_size;
+            data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+            if mod(i, step) == 0 || i == all_size
+                fprintf('  Progress: %3d%%  Elapsed: %.1fs\n', round(100*i/all_size), toc(t0));
+            end
         end
     end
 end
@@ -88,12 +95,36 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     end
 
     % Calculate the link-weighted subgraph without symmetrization
-    links_ind = sub2ind(size(A), links(:, 1), links(:, 2));
-    A_copy = A / (dist + 1);
-    A_copy(links_ind) = 1 ./ links_dist;
+    % links_ind = sub2ind(size(A), links(:, 1), links(:, 2));
+    % A_copy = A / (dist + 1);
+    % A_copy(links_ind) = 1 ./ links_dist;
 
     % Extract the link-weighted subgraph without symmetrizing
-    lweight_subgraph = A_copy(nodes, nodes);
+    % lweight_subgraph = A_copy(nodes, nodes);
+
+
+    % --- Fast local weighting on the K-node induced subgraph (DIRECTED, O(K^2)) [OPTIMIZATION] ---
+    subA = A(nodes, nodes);                  % induced (directed) adjacency
+    subA = spones(subA);                     % ensure binary support
+    default_w = 1 / (dist + 1);              % weight for non-frontier arcs within subgraph
+    lweight_subgraph = default_w * subA;     % initialize with default weights
+
+    % Map global ids -> local [1..K] once
+    loc = zeros(size(A,1), 1, 'uint32');
+    loc(nodes) = uint32(1:numel(nodes));
+
+    % Keep only arcs whose endpoints are inside 'nodes'
+    u = double(loc(links(:,1)));
+    v = double(loc(links(:,2)));
+    m_mask = (u > 0) & (v > 0);
+    u = u(m_mask); v = v(m_mask); w = 1 ./ links_dist(m_mask);
+
+    % Build sparse directed weights from frontier distances
+    S = sparse(u, v, w, numel(nodes), numel(nodes));
+
+    % Take the larger (i.e., closer -> larger 1/dist) of {default_w, frontier_w}
+    lweight_subgraph = max(lweight_subgraph, S);
+
 
     % Generate enclosing subgraph's vector representation
     [order, classes] = g_label(subgraph);
@@ -151,18 +182,64 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
 end
 
 
-function N = neighbors(fringe, A)
-    %  Usage: find the neighbor links of all links in fringe from A
+% function N = neighbors(fringe, A)
+%     %  Usage: find the neighbor links of all links in fringe from A
 
-    N = [];
-    for no = 1: size(fringe, 1)
-        ind = fringe(no, :);
-        i = ind(1);
-        j = ind(2);
-        [~, ij] = find(A(i, :));
-        [ji, ~] = find(A(:, j));
-        N = [N; [i * ones(length(ij), 1), ij']; [ji, j * ones(length(ji), 1)]];
-        N = unique(N, 'rows', 'stable');  % eliminate repeated ones and keep in order
+%     N = [];
+%     for no = 1: size(fringe, 1)
+%         ind = fringe(no, :);
+%         i = ind(1);
+%         j = ind(2);
+%         [~, ij] = find(A(i, :));
+%         [ji, ~] = find(A(:, j));
+%         N = [N; [i * ones(length(ij), 1), ij']; [ji, j * ones(length(ji), 1)]];
+%         N = unique(N, 'rows', 'stable');  % eliminate repeated ones and keep in order
+%     end
+% end
+
+function N = neighbors(fringe, A)  % [OPTIMIZATION]
+    % Directed neighbors for a target arc (i->j):
+    % - out-neighbors of i: (i -> k)
+    % - in-neighbors  of j: (k -> j)
+    m  = size(fringe, 1);
+    ii = []; jj = [];
+    ii_cap = 0; jj_cap = 0;
+
+    % (Optional tiny speedup) pre-size in chunks to reduce reallocations
+    chunk = 1024;
+
+    for t = 1:m
+        i = fringe(t,1);
+        j = fringe(t,2);
+
+        nbr_i = find(A(i,:));   % i -> k
+        nbr_j = find(A(:,j));   % k -> j
+
+        need = numel(nbr_i) + numel(nbr_j);
+        if need > 0
+            if ii_cap + need > numel(ii)
+                ii = [ii; zeros(max(chunk, need), 1)]; %#ok<AGROW>
+                jj = [jj; zeros(max(chunk, need), 1)]; %#ok<AGROW>
+            end
+            if ~isempty(nbr_i)
+                ii(ii_cap+(1:numel(nbr_i))) = i;
+                jj(ii_cap+(1:numel(nbr_i))) = nbr_i(:);
+                ii_cap = ii_cap + numel(nbr_i);
+            end
+            if ~isempty(nbr_j)
+                ii(ii_cap+(1:numel(nbr_j))) = nbr_j(:);
+                jj(ii_cap+(1:numel(nbr_j))) = j;
+                ii_cap = ii_cap + numel(nbr_j);
+            end
+        end
+    end
+
+    if ii_cap == 0
+        N = zeros(0,2);
+    else
+        N = [ii(1:ii_cap), jj(1:ii_cap)];
+        % <-- Deduplicate ONCE (stable)
+        N = unique(N, 'rows', 'stable');
     end
 end
 
@@ -185,7 +262,7 @@ function [order, classes] = g_label(subgraph)
     avg_dist = sqrt(dist_to_1 .* dist_to_2);  % use geometric mean as the average distance to the link
     [~, ~, avg_dist_colors] = unique(avg_dist);  % f mapping to initial colors
 
-    p_mo = 7;
+    p_mo = 6;
     % switch different graph labeling methods
     switch p_mo
     case 1
@@ -209,12 +286,21 @@ function [order, classes] = g_label(subgraph)
         order = canon(full(subgraph), ones(K, 1))';
     case 6
         % no graph labeling, directly use the predefined order
-        order = [1: 1: K];
+        % order = [1: 1: K];
+        order = 1:size(subgraph,1);
+        classes = ones(size(subgraph,1),1);
     case 7
         % palette_wl with initial colors, break ties by nauty
-        classes_init = palette_wl(subgraph, avg_dist_colors);
+        classes = palette_wl(subgraph, avg_dist);
+
+        % If all classes unique, no need for Nauty [OPTIMIZATION]
+        if numel(unique(classes)) == K
+            [~, order] = sort(classes, 'ascend');   % stable & deterministic
+            return
+        end
+
         %classes = palette_wl(subgraph);  % no initial colors
-        [order, classes] = canon(full(subgraph), classes_init);
+        [order, classes] = canon(full(subgraph), classes);
     case 8
         % random labeling
         order = randperm(K);
