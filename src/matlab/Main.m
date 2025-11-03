@@ -11,17 +11,17 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',          true, ...                % Enable/disable parallel pool
+        'useParallel',          false, ...                % Enable/disable parallel pool
         'version',              'WLNM_directed', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
         'numExperiments',       1, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
-        'sweepTrainRatios',     true, ...                % Sweep over multiple ratios or fixed
+        'sweepTrainRatios',     false, ...                % Sweep over multiple ratios or fixed
         'ratioTrain',           0.8, ...                  % Default training ratio
         'trainRatioRange',      0.10:0.05:0.90, ...       % Training ratios to test
         'nodeSelection',        'random', ...             % Type of node selection
         'checkConnectivity',    true, ...                 % Ensure train graph connectivity
         'adaptiveConnectivity', true, ...                 % Adapt connectivity check based on train ratio
-        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ... % CSV with food web names
+        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_1.csv', ... % CSV with food web names
         'matFolder',            'data/foodwebs_mat/', ...                      % Folder with .mat files
         'logDir',               'data/result/prediction_scores_logs', ...      % Directory for result logs
         'terminalLogDir',       'data/result/terminal_logs/' ...               % Directory for terminal logs
