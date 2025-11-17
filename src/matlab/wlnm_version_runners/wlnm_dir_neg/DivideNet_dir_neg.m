@@ -77,7 +77,20 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
         mB = nnz(B);                                   % total backbone links
         num_test  = ceil((1 - ratioTrain) * m);
         num_train = m - num_test;                      % exact TRAIN size
-        target_bb = min(mB, round(ratioBackbone * m)); % desired backbone-in-TRAIN (w.r.t total links)
+
+        % --- Enforce: BackboneRatio ≤ TrainRatio (as fractions of total links) ---
+        % This guarantees that the "forced backbone" part cannot exceed the train split.
+        ratioBackbone_eff = min(ratioBackbone, ratioTrain);
+        if ratioBackbone_eff < ratioBackbone
+            fprintf(['[DivideNet] Clamping BackboneRatio from %.3f to %.3f ', ...
+                    'so backbone TRAIN fraction does not exceed TrainRatio=%.3f.\n'], ...
+                    ratioBackbone, ratioBackbone_eff, ratioTrain);
+        end
+
+        % Desired number of backbone edges in TRAIN (w.r.t total links),
+        % also never exceeding the TRAIN size itself.
+        raw_target_bb = round(ratioBackbone_eff * m);
+        target_bb     = min([mB, raw_target_bb, num_train]);
 
         % 3) Split candidates
         [ib, jb] = find(B);

@@ -38,6 +38,18 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
         rb_list = 0;            % single run, no backbone
     end
 
+    % Enforce: BackboneRatio ≤ TrainRatio for this split
+    if use_backbone
+        rb_orig = rb_list;
+        rb_list = min(rb_list, ratioTrain);  % clamp each BackboneRatio to ratioTrain
+        rb_list = unique(rb_list);          % avoid duplicates after clamping
+        if any(rb_orig > ratioTrain)
+            fprintf(['[run_wlnm_dir_neg] Some BackboneRatio values exceed TrainRatio=%.2f; ', ...
+                     'using clamped values: %s -> %s\n'], ...
+                     ratioTrain, mat2str(rb_orig,3), mat2str(rb_list,3));
+        end
+    end
+
     % --- Preallocate results ---
     R = numel(rb_list) * config.numExperiments;
     results = repmat(struct('AUC',0,'TimeElapsed','', 'K',K, 'TrainRatio',ratioTrain, ...

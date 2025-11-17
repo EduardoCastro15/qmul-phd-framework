@@ -23,7 +23,7 @@ function Main()
         'adaptiveConnectivity', true, ...                 % Adapt connectivity check based on train ratio
         'sweepBackboneTrain',   true, ...                 % Enables backbone ratio sweep
         'BackboneRatio',        0.2, ...                  % Fixed backbone ratio if sweep disabled
-        'backboneRatioRange',   0.10:0.20:0.90, ...       % Backbone ratio range to sweep
+        'backboneRatioRange',   0.10:0.20:0.70, ...       % Backbone ratio range to sweep
         'backbone_q',           0.05, ...                 % PF thresholding q
         'backbone_max_q',       0.25, ...                 % PF thresholding max q
         'backbone_q_ladder',    2.0, ...                  % PF thresholding q ladder
