@@ -15,14 +15,21 @@ function Main()
         'version',              'WLNM_directed', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
         'numExperiments',       1, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
-        'sweepTrainRatios',     false, ...                % Sweep over multiple ratios or fixed
+        'sweepTrainRatios',     true, ...                % Sweep over multiple ratios or fixed
         'ratioTrain',           0.8, ...                  % Default training ratio
-        'trainRatioRange',      0.10:0.05:0.90, ...       % Training ratios to test
+        'trainRatioRange',      0.60:0.10:0.80, ...       % Training ratios to test
         'nodeSelection',        'random', ...             % Type of node selection
         'checkConnectivity',    true, ...                 % Ensure train graph connectivity
         'adaptiveConnectivity', true, ...                 % Adapt connectivity check based on train ratio
-        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_1.csv', ... % CSV with food web names
-        'matFolder',            'data/foodwebs_mat/', ...                      % Folder with .mat files
+        'sweepBackboneTrain',   true, ...                 % Enables backbone ratio sweep
+        'BackboneRatio',        0.2, ...                  % Fixed backbone ratio if sweep disabled
+        'backboneRatioRange',   0.10:0.20:0.70, ...       % Backbone ratio range to sweep
+        'backbone_q',           0.05, ...                 % PF thresholding q
+        'backbone_max_q',       0.25, ...                 % PF thresholding max q
+        'backbone_q_ladder',    2.0, ...                  % PF thresholding q ladder
+        'alpha_fallback',       [], ...                    % PF thresholding alpha fallback
+        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ... % CSV with food web names
+        'matFolder',            'data/foodwebs_mat_backbones/', ...                      % Folder with .mat files
         'logDir',               'data/result/prediction_scores_logs', ...      % Directory for result logs
         'terminalLogDir',       'data/result/terminal_logs/' ...               % Directory for terminal logs
     );
@@ -89,11 +96,11 @@ function Main()
                 continue;
             end
 
-            load(datapath, 'net', 'taxonomy', 'mass', 'role');
+            load(datapath, 'net', 'taxonomy', 'mass', 'role', 'p_values_mat');
             fprintf('[INFO] Processing dataset: %s\n', dataname);
 
             log_file = fullfile(config.logDir, sprintf('%s_results_%s.csv', dataname, string(config.nodeSelection)));
-            init_log_file(log_file);
+            init_log_file(log_file, config.sweepBackboneTrain);
 
             data = struct();                 % scalar
             data.dataname = dataname;
@@ -101,6 +108,7 @@ function Main()
             data.taxonomy  = taxonomy;
             data.mass      = mass;
             data.role      = role;
+            data.p_values_mat = p_values_mat;
 
             for K = config.kRange
                 fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));
@@ -109,7 +117,7 @@ function Main()
                 results = runner(data, K, ratioTrain, config);
 
                 % --- Append results ---
-                append_results(log_file, results);
+                append_results(log_file, results, config.sweepBackboneTrain);
             end
 
             diary off;
