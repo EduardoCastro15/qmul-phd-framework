@@ -11,8 +11,8 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',          true, ...                % Enable/disable parallel pool
-        'version',              'WLNM_dir_neg', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
+        'useParallel',          false, ...                % Enable/disable parallel pool
+        'version',              'WLNM_directed', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
         'numExperiments',       1, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
         'sweepTrainRatios',     true, ...                % Sweep over multiple ratios or fixed
