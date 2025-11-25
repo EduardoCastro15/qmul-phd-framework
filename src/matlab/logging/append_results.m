@@ -1,4 +1,4 @@
-function append_results(log_file, results, sweepBackboneTrain)
+function append_results(log_file, results, use_backbone)
     %APPEND_RESULTS Append an array of result structs to CSV.
     % Automatically handles results with BackboneRatio if present.
 
@@ -6,7 +6,7 @@ function append_results(log_file, results, sweepBackboneTrain)
         fid = fopen(log_file, 'a');
         assert(fid ~= -1, 'Cannot open %s for appending.', log_file);
 
-        if sweepBackboneTrain
+        if use_backbone
             % New extended format including BackboneRatio (percentage)
             fprintf(fid, ...
                 '%d,%.4f,%s,%d,%.0f,%.0f,%.2f,%.4f,%.4f,%.4f\n', ...

@@ -1,4 +1,3 @@
-
 function Main()
     % Main Program for WLNM-based Link Prediction
     % Adapted from:
@@ -11,8 +10,8 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',          false, ...                % Enable/disable parallel pool
-        'version',              'WLNM_directed', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
+        'useParallel',          true, ...                % Enable/disable parallel pool
+        'version',              'WLNM_dir_neg', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
         'numExperiments',       1, ...                    % Repeated experiments per food web
         'kRange',               10, ...                   % Number of nodes per subgraph
         'sweepTrainRatios',     true, ...                % Sweep over multiple ratios or fixed
@@ -21,17 +20,21 @@ function Main()
         'nodeSelection',        'random', ...             % Type of node selection
         'checkConnectivity',    true, ...                 % Ensure train graph connectivity
         'adaptiveConnectivity', true, ...                 % Adapt connectivity check based on train ratio
-        'sweepBackboneTrain',   true, ...                 % Enables backbone ratio sweep
-        'BackboneRatio',        0.2, ...                  % Fixed backbone ratio if sweep disabled
+        'use_backbone' ,        true, ...                 % Enable backbone extraction
+        'inverse_backbone',     true, ...                % Use non-backbone edges instead
+        'logBackboneStats',     true, ...                 % Enable/disable backbone stats CSV logging
+        'sweepBackboneTrain',   true, ...                % Enables backbone ratio sweep
+        'BackboneRatio',        0.10, ...                 % Fixed backbone ratio if sweep disabled
         'backboneRatioRange',   0.10:0.20:0.70, ...       % Backbone ratio range to sweep
         'backbone_q',           0.05, ...                 % PF thresholding q
         'backbone_max_q',       0.25, ...                 % PF thresholding max q
         'backbone_q_ladder',    2.0, ...                  % PF thresholding q ladder
-        'alpha_fallback',       [], ...                    % PF thresholding alpha fallback
-        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ... % CSV with food web names
-        'matFolder',            'data/foodwebs_mat_backbones/', ...                      % Folder with .mat files
-        'logDir',               'data/result/prediction_scores_logs', ...      % Directory for result logs
-        'terminalLogDir',       'data/result/terminal_logs/' ...               % Directory for terminal logs
+        'alpha_fallback',       [], ...                   % PF thresholding alpha fallback
+        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
+        'matFolder',            'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
+        'logDir',               'data/result/prediction_scores_logs', ...                           % Directory for result logs
+        'terminalLogDir',       'data/result/terminal_logs/', ...                                   % Directory for terminal logs
+        'backboneStatsFile',    'data/result/backbone_stats/backbone_overview_per_foodweb.csv' ...  % CSV for backbone stats
     );
 
     %% === SETUP ===
@@ -43,6 +46,9 @@ function Main()
 
     foodweb_list = readtable(config.foodwebCSV);
     foodweb_names = foodweb_list.Foodweb;
+
+    % Track which food webs already have backbone stats logged (for this run)
+    backbone_logged = false(numel(foodweb_names), 1);
 
     % Ensure algorithm code is on path (recursively)
     addpath(genpath('wlnm_version_runners'));
@@ -99,16 +105,42 @@ function Main()
             load(datapath, 'net', 'taxonomy', 'mass', 'role', 'p_values_mat');
             fprintf('[INFO] Processing dataset: %s\n', dataname);
 
-            log_file = fullfile(config.logDir, sprintf('%s_results_%s.csv', dataname, string(config.nodeSelection)));
-            init_log_file(log_file, config.sweepBackboneTrain);
+            % ---- Optional: compute backbone once per dataset (controlled from Main) ----
+            backbone_mask = [];
+            if config.use_backbone
+                if isempty(p_values_mat)
+                    warning('[Main] use_backbone=true but p_values_mat is empty for "%s". Falling back to standard split for this dataset.', dataname);
+                else
+                    % Build PF backbone (independent of TrainRatio and K)
+                    [B, thr, st] = backbone_regime(net, p_values_mat, ...
+                                        'q',            config.backbone_q, ...
+                                        'max_q',        config.backbone_max_q, ...
+                                        'q_ladder',     config.backbone_q_ladder, ...
+                                        'alpha_fallback', config.alpha_fallback);
 
+                    backbone_mask = B;
+
+                    % Log high-level stats only once per food web (3.2)
+                    if config.logBackboneStats && ~backbone_logged(f_idx)
+                        log_backbone_stats(config.backboneStatsFile, dataname, net, st);
+                        backbone_logged(f_idx) = true;
+                    end
+                end
+            end
+
+            % ---- Existing logging of WLNM results ----
+            log_file = fullfile(config.logDir, sprintf('%s_results_%s.csv', dataname, string(config.nodeSelection)));
+            init_log_file(log_file, config.use_backbone, config.inverse_backbone);
+
+            % Pack data struct passed to the runner
             data = struct();                 % scalar
-            data.dataname = dataname;
-            data.net       = net;
-            data.taxonomy  = taxonomy;
-            data.mass      = mass;
-            data.role      = role;
-            data.p_values_mat = p_values_mat;
+            data.dataname      = dataname;
+            data.net           = net;
+            data.taxonomy      = taxonomy;
+            data.mass          = mass;
+            data.role          = role;
+            data.p_values_mat  = p_values_mat;
+            data.backbone_mask = backbone_mask;   % NEW: precomputed backbone mask (or [])
 
             for K = config.kRange
                 fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));
@@ -117,11 +149,11 @@ function Main()
                 results = runner(data, K, ratioTrain, config);
 
                 % --- Append results ---
-                append_results(log_file, results, config.sweepBackboneTrain);
+                append_results(log_file, results, config.use_backbone);
             end
 
             diary off;
-            clear net taxonomy mass role;
+            clear net taxonomy mass role p_values_mat;
         end
     end
 
