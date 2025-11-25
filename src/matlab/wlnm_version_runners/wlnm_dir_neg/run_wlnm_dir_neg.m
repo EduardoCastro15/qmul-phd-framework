@@ -8,6 +8,7 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
     %   data.p_values_mat   : (n x n) PF p-values (sparse or double)
     %
     % Config additions (with defaults if missing):
+    %   config.use_backbone        : true/false
     %   config.sweepBackboneTrain  : true/false
     %   config.backboneRatioRange  : e.g. 0.10:0.10:0.90
     %   config.backbone_q          : 0.05
@@ -16,22 +17,40 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
     %   config.alpha_fallback      : [] or scalar in (0,1)
 
     % ---- defaults for new knobs ----
-    if ~isfield(config,'sweepBackboneTrain'), config.sweepBackboneTrain = true; end
+    if ~isfield(config,'use_backbone'),       config.use_backbone       = false;          end
+    if ~isfield(config,'inverse_backbone'),   config.inverse_backbone   = false;          end
+    if ~isfield(config,'sweepBackboneTrain'), config.sweepBackboneTrain = false;          end
     if ~isfield(config,'backboneRatioRange'), config.backboneRatioRange = 0.10:0.10:0.90; end
-    if ~isfield(config,'backbone_q'),        config.backbone_q        = 0.05; end
-    if ~isfield(config,'backbone_max_q'),    config.backbone_max_q    = 0.25; end
-    if ~isfield(config,'backbone_q_ladder'), config.backbone_q_ladder = 2.0;  end
-    if ~isfield(config,'alpha_fallback'),    config.alpha_fallback    = [];   end
+    if ~isfield(config,'backbone_q'),         config.backbone_q         = 0.05;           end
+    if ~isfield(config,'backbone_max_q'),     config.backbone_max_q     = 0.25;           end
+    if ~isfield(config,'backbone_q_ladder'),  config.backbone_q_ladder  = 2.0;            end
+    if ~isfield(config,'alpha_fallback'),     config.alpha_fallback     = [];             end
 
-    % --- Detect backbone mode automatically ---
-    use_backbone = isfield(data,'p_values_mat') && ~isempty(data.p_values_mat) && ...
-                   (config.sweepBackboneTrain || isfield(config,'ratioBackbone'));
+    % ---- Decide backbone mode based on Main + data ----
+    has_mask  = isfield(data,'backbone_mask') && ~isempty(data.backbone_mask);
+    has_pvals = isfield(data,'p_values_mat')  && ~isempty(data.p_values_mat);
 
+    use_backbone = config.use_backbone && (has_mask || has_pvals);
+    if config.use_backbone && ~use_backbone
+        warning('[run_wlnm_dir_neg] use_backbone=true but neither backbone_mask nor p_values_mat provided. Falling back to standard split.');
+    end
+
+    if config.inverse_backbone && ~use_backbone
+        warning('[run_wlnm_dir_neg] inverse_backbone=true but backbone info is missing; inverse mode will be ignored for this dataset.');
+    end
+
+    % Backbone ratio list
     if use_backbone
         if config.sweepBackboneTrain
             rb_list = config.backboneRatioRange;
         else
-            if isfield(config,'ratioBackbone'), rb_list = config.ratioBackbone; else, rb_list = 0.20; end
+            if isfield(config,'ratioBackbone')
+                rb_list = config.ratioBackbone;
+            elseif isfield(config,'BackboneRatio')
+                rb_list = config.BackboneRatio;
+            else
+                rb_list = 0.20;
+            end
         end
         rb_list = rb_list(:)';  % row vector
     else
@@ -41,8 +60,8 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
     % Enforce: BackboneRatio ≤ TrainRatio for this split
     if use_backbone
         rb_orig = rb_list;
-        rb_list = min(rb_list, ratioTrain);  % clamp each BackboneRatio to ratioTrain
-        rb_list = unique(rb_list);          % avoid duplicates after clamping
+        rb_list = min(rb_list, ratioTrain);   % clamp each BackboneRatio to ratioTrain
+        rb_list = unique(rb_list);           % avoid duplicates after clamping
         if any(rb_orig > ratioTrain)
             fprintf(['[run_wlnm_dir_neg] Some BackboneRatio values exceed TrainRatio=%.2f; ', ...
                      'using clamped values: %s -> %s\n'], ...
@@ -59,29 +78,49 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
     dataname      = data.dataname;
     net           = data.net;
     p_values_mat  = [];
-    if use_backbone, p_values_mat = data.p_values_mat; end
-    taxonomy      = data.taxonomy; 
-    mass          = data.mass; 
-    role          = data.role; 
+    backbone_mask = [];
+    if has_pvals,  p_values_mat  = data.p_values_mat;  end
+    if has_mask,   backbone_mask = data.backbone_mask; end
+    taxonomy      = data.taxonomy;
+    mass          = data.mass;
+    role          = data.role;
     nodeSelection = config.nodeSelection;
 
     row = 0;
 
     for rb = rb_list
+        % ---- Obtain train/test split (backbone or standard) ----
         if use_backbone
-            fprintf('[SweepBackbone] ratioTrain=%.2f | ratioBackbone=%.2f\n', ratioTrain, rb);
-            [train, test] = DivideNet_dir_neg(net, ratioTrain, false, false, ...
+            fprintf('[SweepBackbone] ratioTrain=%.2f | ratioBackbone=%.2f | inverse_backbone=%d\n', ...
+                    ratioTrain, rb, config.inverse_backbone);
+
+            % Build the argument list for DivideNet_dir_neg
+            args = { ...
                 'use_backbone',      true, ...
                 'ratioBackbone',     rb, ...
-                'p_values_mat',      p_values_mat, ...
-                'backbone_q',        config.backbone_q, ...
-                'backbone_max_q',    config.backbone_max_q, ...
-                'backbone_q_ladder', config.backbone_q_ladder, ...
-                'alpha_fallback',    config.alpha_fallback);
+                'inverse_backbone',  config.inverse_backbone ...
+            };
+
+            if ~isempty(backbone_mask)
+                % Backbone mask already computed in Main
+                args = [args, {'backbone_mask', backbone_mask}];
+            else
+                % Fallback: derive backbone inside DivideNet from p-values
+                args = [args, ...
+                    {'p_values_mat',   p_values_mat, ...
+                     'backbone_q',     config.backbone_q, ...
+                     'backbone_max_q', config.backbone_max_q, ...
+                     'backbone_q_ladder', config.backbone_q_ladder, ...
+                     'alpha_fallback', config.alpha_fallback}];
+            end
+
+            [train, test] = DivideNet_dir_neg(net, ratioTrain, false, false, args{:});
         else
+            % Standard random split (no backbone)
             [train, test] = DivideNet_dir_neg(net, ratioTrain, false, false);
         end
 
+        % ---- WLNM experiments (unchanged) ----
         if config.useParallel
             % preallocate for parfor
             res_block(config.numExperiments) = struct('AUC',0,'TimeElapsed','', 'K',K, ...
@@ -90,12 +129,12 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
             parfor i = 1:config.numExperiments
                 t0 = tic;
                 [auc, thr, prec, rec, f1] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain);
-                res_block(i).AUC = auc;
+                res_block(i).AUC         = auc;
                 res_block(i).TimeElapsed = datestr(seconds(toc(t0)), 'HH:MM:SS');
-                res_block(i).Threshold = thr;
-                res_block(i).Precision = prec;
-                res_block(i).Recall = rec;
-                res_block(i).F1Score = f1;
+                res_block(i).Threshold   = thr;
+                res_block(i).Precision   = prec;
+                res_block(i).Recall      = rec;
+                res_block(i).F1Score     = f1;
             end
             for i = 1:config.numExperiments
                 row = row + 1; results(row) = res_block(i);
