@@ -6,30 +6,38 @@ function Main()
     %
     % Author: Jorge Eduardo Castro Cruces
     % Queen Mary University of London
+    %
+    % NOTE (backbone semantics, 2025-11 update):
+    %   BackboneRatio / backboneRatioRange are now interpreted (in STANDARD
+    %   backbone mode, inverse_backbone = false) as:
+    %       "fraction of BACKBONE edges to place in the TRAIN set"
+    %   i.e. BackboneRatio = backboneTrainFrac in [0,1].
+    %   The realized fraction of train edges that are backbone will differ
+    %   per food web, and can be computed from split_stats.
 
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
         'useParallel',          true, ...                % Enable/disable parallel pool
-        'version',              'WLNM_dir_neg', ...       % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_directed', 'WLNM_negative, etc.
-        'numExperiments',       1, ...                    % Repeated experiments per food web
-        'kRange',               10, ...                   % Number of nodes per subgraph
+        'version',              'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', etc.
+        'numExperiments',       1, ...                   % Repeated experiments per food web
+        'kRange',               10, ...                  % Number of nodes per subgraph
         'sweepTrainRatios',     true, ...                % Sweep over multiple ratios or fixed
-        'ratioTrain',           0.8, ...                  % Default training ratio
-        'trainRatioRange',      0.60:0.10:0.80, ...       % Training ratios to test
-        'nodeSelection',        'random', ...             % Type of node selection
-        'checkConnectivity',    true, ...                 % Ensure train graph connectivity
-        'adaptiveConnectivity', true, ...                 % Adapt connectivity check based on train ratio
-        'use_backbone' ,        true, ...                 % Enable backbone extraction
-        'inverse_backbone',     true, ...                % Use non-backbone edges instead
-        'logBackboneStats',     true, ...                 % Enable/disable backbone stats CSV logging
-        'sweepBackboneTrain',   true, ...                % Enables backbone ratio sweep
-        'BackboneRatio',        0.10, ...                 % Fixed backbone ratio if sweep disabled
-        'backboneRatioRange',   0.10:0.20:0.70, ...       % Backbone ratio range to sweep
-        'backbone_q',           0.05, ...                 % PF thresholding q
-        'backbone_max_q',       0.25, ...                 % PF thresholding max q
-        'backbone_q_ladder',    2.0, ...                  % PF thresholding q ladder
-        'alpha_fallback',       [], ...                   % PF thresholding alpha fallback
+        'ratioTrain',           0.8, ...                 % Default training ratio
+        'trainRatioRange',      0.60:0.10:0.80, ...      % Training ratios to test
+        'nodeSelection',        'random', ...            % Type of node selection
+        'checkConnectivity',    true, ...                % Ensure train graph connectivity
+        'adaptiveConnectivity', true, ...                % Adapt connectivity check based on train ratio
+        'use_backbone' ,        true, ...                % Enable backbone extraction
+        'inverse_backbone',     false, ...               % Use non-backbone edges instead (keeps old semantics)
+        'logBackboneStats',     true, ...                % Enable/disable backbone stats CSV logging
+        'sweepBackboneTrain',   true, ...                % Sweep backbone *train fraction* or use fixed
+        'BackboneRatio',        0.50, ...                % Fixed backboneTrainFrac if sweep disabled
+        'backboneRatioRange',   [0.20 0.50 0.80], ...    % Fractions of backbone edges to put in TRAIN
+        'backbone_q',           0.05, ...                % PF thresholding q
+        'backbone_max_q',       0.25, ...                % PF thresholding max q
+        'backbone_q_ladder',    2.0, ...                 % PF thresholding q ladder
+        'alpha_fallback',       [], ...                  % PF thresholding alpha fallback
         'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
         'matFolder',            'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
         'logDir',               'data/result/prediction_scores_logs', ...                           % Directory for result logs
@@ -92,7 +100,6 @@ function Main()
 
             diary(diary_file);
 
-
             % Load .mat data
             datapath = fullfile(config.matFolder, strcat(dataname, '.mat'));
 
@@ -120,7 +127,7 @@ function Main()
 
                     backbone_mask = B;
 
-                    % Log high-level stats only once per food web (3.2)
+                    % Log high-level stats only once per food web
                     if config.logBackboneStats && ~backbone_logged(f_idx)
                         log_backbone_stats(config.backboneStatsFile, dataname, net, st);
                         backbone_logged(f_idx) = true;
@@ -140,7 +147,7 @@ function Main()
             data.mass          = mass;
             data.role          = role;
             data.p_values_mat  = p_values_mat;
-            data.backbone_mask = backbone_mask;   % NEW: precomputed backbone mask (or [])
+            data.backbone_mask = backbone_mask;   % precomputed backbone mask (or [])
 
             for K = config.kRange
                 fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));

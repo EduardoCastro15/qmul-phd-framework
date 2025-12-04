@@ -29,6 +29,12 @@ function compute_backbone_link_stats_all()
     %          Mean_deg_all_endpoints, Median_deg_all_endpoints,
     %          Mean_deg_backbone_endpoints, Median_deg_backbone_endpoints
     %
+    %   3) all_link_stats_long.csv
+    %        One row per edge in the full net with:
+    %          (same columns as backbone_link_stats_long.csv)
+    %          plus:
+    %          IsBackbone (logical 0/1)
+    %
     %  NOTE:
     %    - Uses backbone_regime(net, p_values_mat, ...) with PF parameters
     %      configured below (same as in Main.m).
@@ -70,8 +76,9 @@ function compute_backbone_link_stats_all()
     hasEcosystem = ismember('EcosystemType', meta.Properties.VariableNames);
 
     %% ================== ACCUMULATORS ==================
-    all_link_rows   = {};   % will store tables, then vertcat
-    summary_rows    = [];   % will be a table
+    all_link_rows   = {};   % backbone-only links (per-link table)
+    all_edge_rows   = {};   % ALL edges (full net) with IsBackbone flag
+    summary_rows    = [];   % per-foodweb summary table
 
     %% ================== MAIN LOOP ==================
     for f_idx = 1:n_foodwebs
@@ -110,9 +117,9 @@ function compute_backbone_link_stats_all()
         end
 
         [B, thr, st] = backbone_regime(net, p_values_mat, ...
-            'q',             config.backbone_q, ...
-            'max_q',         config.backbone_max_q, ...
-            'q_ladder',      config.backbone_q_ladder, ...
+            'q',              config.backbone_q, ...
+            'max_q',          config.backbone_max_q, ...
+            'q_ladder',       config.backbone_q_ladder, ...
             'alpha_fallback', config.alpha_fallback);
 
         B = sparse(B ~= 0);  % ensure logical mask
@@ -149,7 +156,57 @@ function compute_backbone_link_stats_all()
         mean_deg_bb      = mean(deg_bb_endpoints);
         median_deg_bb    = median(deg_bb_endpoints);
 
-        % ---- Per-link table for this foodweb ----
+        %% --------- ALL EDGES TABLE (FULL NET + IsBackbone) ---------
+        T_all = table;
+
+        T_all.Foodweb = repmat(string(dataname), n_edges_total, 1);
+        T_all.Source  = src_all;
+        T_all.Target  = tgt_all;
+
+        % Degrees for endpoints
+        T_all.Source_in  = indeg(src_all);
+        T_all.Source_out = outdeg(src_all);
+        T_all.Source_deg = totdeg(src_all);
+
+        T_all.Target_in  = indeg(tgt_all);
+        T_all.Target_out = outdeg(tgt_all);
+        T_all.Target_deg = totdeg(tgt_all);
+
+        % Optional metadata: mass
+        if isfield(S, 'mass') && ~isempty(S.mass)
+            mass_vec = S.mass(:); % ensure column
+            if numel(mass_vec) >= n_nodes
+                T_all.Source_mass = mass_vec(src_all);
+                T_all.Target_mass = mass_vec(tgt_all);
+            end
+        end
+
+        % Optional metadata: taxonomy
+        if isfield(S, 'taxonomy') && ~isempty(S.taxonomy)
+            tax_vec = S.taxonomy(:); % cell column
+            if numel(tax_vec) >= n_nodes
+                T_all.Source_taxonomy = string(tax_vec(src_all));
+                T_all.Target_taxonomy = string(tax_vec(tgt_all));
+            end
+        end
+
+        % Optional metadata: role
+        if isfield(S, 'role') && ~isempty(S.role)
+            role_vec = S.role(:); % cell column
+            if numel(role_vec) >= n_nodes
+                T_all.Source_role = string(role_vec(src_all));
+                T_all.Target_role = string(role_vec(tgt_all));
+            end
+        end
+
+        % Backbone flag: 1 if this edge is in B, 0 otherwise
+        is_bb_vec = full(B(sub2ind(size(B), src_all, tgt_all))) ~= 0;
+        T_all.IsBackbone = is_bb_vec;
+
+        % Accumulate ALL edges
+        all_edge_rows{end+1} = T_all; %#ok<AGROW>
+
+        %% --------- BACKBONE-ONLY PER-LINK TABLE ---------
         if n_edges_backbone > 0
             T_links = table;
 
@@ -190,12 +247,13 @@ function compute_backbone_link_stats_all()
                 end
             end
 
+            % Accumulate backbone-only rows
             all_link_rows{end+1} = T_links; %#ok<AGROW>
         else
             fprintf('[INFO] No backbone edges found for "%s" (with current PF thresholding).\n', dataname);
         end
 
-        % ---- Per-foodweb summary row ----
+        %% --------- PER-FOODWEB SUMMARY ROW ---------
         sumRow = table;
         sumRow.Foodweb              = string(dataname);
         if hasEcosystem
@@ -237,14 +295,25 @@ function compute_backbone_link_stats_all()
         link_table = table;
     end
 
-    links_csv   = fullfile(config.backboneStatsDir, 'backbone_link_stats_long.csv');
-    summary_csv = fullfile(config.backboneStatsDir, 'backbone_link_summary.csv');
+    % 2) ALL edges (full net) with backbone flag
+    if ~isempty(all_edge_rows)
+        all_edges_table = vertcat(all_edge_rows{:});
+    else
+        all_edges_table = table;
+    end
+
+    links_csv      = fullfile(config.backboneStatsDir, 'backbone_link_stats_long.csv');
+    summary_csv    = fullfile(config.backboneStatsDir, 'backbone_link_summary.csv');
+    all_edges_csv  = fullfile(config.backboneStatsDir, 'all_link_stats_long.csv');
 
     fprintf('\n[INFO] Writing per-link backbone stats to: %s\n', links_csv);
     writetable(link_table, links_csv);
 
     fprintf('[INFO] Writing per-foodweb backbone summary to: %s\n', summary_csv);
     writetable(summary_rows, summary_csv);
+
+    fprintf('[INFO] Writing ALL-link stats (full net + IsBackbone flag) to: %s\n', all_edges_csv);
+    writetable(all_edges_table, all_edges_csv);
 
     fprintf('\n[DONE] Backbone link stats computed for %d foodwebs.\n', height(summary_rows));
 end

@@ -1,4 +1,4 @@
-function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, adaptive_connectivity, varargin)
+function [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, adaptive_connectivity, varargin)
     % Divide a directed network into train/test sets with optional backbone regime (subset of TRAIN).
     %
     % Inputs
@@ -10,9 +10,13 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
     % Name-Value pairs (optional)
     %   'use_backbone'       : false | true
     %   'inverse_backbone'   : false | true
-    %                          false  → prioritize backbone edges in TRAIN (current behavior)
-    %                          true   → prioritize NON-backbone edges in TRAIN
-    %   'ratioBackbone'      : 0.2  (fraction of TOTAL links to force into TRAIN from backbone)
+    %                          false  → prioritize backbone edges in TRAIN (STANDARD)
+    %                          true   → prioritize NON-backbone edges in TRAIN (INVERSE)
+    %   'ratioBackbone'      : STANDARD mode (inverse=false):
+    %                            fraction of BACKBONE edges to put in TRAIN
+    %                          INVERSE mode (inverse=true):
+    %                            legacy semantics, approx. fraction of TOTAL
+    %                            links targeted from the primary set
     %   'backbone_mask'      : []   logical n x n (if provided, used directly)
     %   'p_values_mat'       : []   sparse/double n x n (PF p-values; requires backbone_regime.m)
     %   'backbone_q'         : 0.05 (BH start)
@@ -22,6 +26,7 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
     %
     % Outputs
     %   train, test          : adjacency matrices (positives only; no negatives here)
+    %   split_stats          : struct with detailed counts of links in each category
 
     % ---- parse options ----
     p = inputParser;
@@ -54,10 +59,10 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
         end
         fprintf('[DivideNet] STANDARD split. Connectivity check: %d\n', check_connectivity);
     else
-        fprintf('[DivideNet] BACKBONE mode ON. ratioTrain=%.3f, ratioBackbone=%.3f (subset of TRAIN)\n', ratioTrain, ratioBackbone);
+        fprintf('[DivideNet] BACKBONE mode ON. ratioTrain=%.3f, ratioBackbone=%.3f\n', ratioTrain, ratioBackbone);
     end
 
-        % ===== BACKBONE MODE (subset of TRAIN) =====
+    % ===== BACKBONE MODE (subset of TRAIN) =====
     if opt.use_backbone
         % 1) Build/obtain backbone mask B (true = backbone edge)
         if ~isempty(opt.backbone_mask)
@@ -77,17 +82,17 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
         end
         B = B & (net > 0);  % ensure mask only where edges exist
 
-        if opt.inverse_backbone
-            fprintf('[DivideNet] BACKBONE mode ON (INVERSE). ratioTrain=%.3f, ratioBackbone=%.3f (subset of TRAIN from NON-backbone edges)\n', ...
-                    ratioTrain, ratioBackbone);
-        else
-            fprintf('[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=%.3f, ratioBackbone=%.3f (subset of TRAIN from backbone edges)\n', ...
-                    ratioTrain, ratioBackbone);
-        end
-
-        % 2) Counts and targets (primary vs secondary set)
+        % 2) Counts and masks
         [i_all, j_all] = find(net);
         m  = numel(i_all);                     % total true links
+
+        if opt.inverse_backbone
+            fprintf('[DivideNet] BACKBONE mode (INVERSE). ratioTrain=%.3f, ratioBackbone=%.3f (primary = NON-backbone)\n', ...
+                    ratioTrain, ratioBackbone);
+        else
+            fprintf('[DivideNet] BACKBONE mode (STANDARD). ratioTrain=%.3f, ratioBackbone=%.3f (interpreted as backboneTrainFrac)\n', ...
+                    ratioTrain, ratioBackbone);
+        end
 
         % Decide which set is "primary" for TRAIN
         if opt.inverse_backbone
@@ -110,18 +115,50 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
         num_test  = ceil((1 - ratioTrain) * m);
         num_train = m - num_test;
 
-        % Enforce: ratioBackbone ≤ TrainRatio (as fractions of TOTAL links)
-        ratioBackbone_eff = min(ratioBackbone, ratioTrain);
-        if ratioBackbone_eff < ratioBackbone
-            fprintf(['[DivideNet] Clamping ratioBackbone from %.3f to %.3f ', ...
-                     'for %s-priority mode (TrainRatio=%.3f).\n'], ...
-                     ratioBackbone, ratioBackbone_eff, primary_label, ratioTrain);
-        end
+        % --- Determine target_primary based on mode ---
+        if ~opt.inverse_backbone
+            % STANDARD backbone mode (Option A):
+            %   ratioBackbone ≡ backboneTrainFrac = fraction of BACKBONE
+            %   edges (primary set) to place in TRAIN, but we keep at
+            %   least a small fraction for TEST.
 
-        % Desired number of PRIMARY edges in TRAIN (w.r.t total links),
-        % never exceeding TRAIN size or available primary edges.
-        raw_target_primary = round(ratioBackbone_eff * m);
-        target_primary     = min([mPrimary, raw_target_primary, num_train]);
+            backboneTrainFrac = ratioBackbone;              % in [0,1]
+            backboneTrainFrac = max(0, min(1, backboneTrainFrac));
+
+            % Minimum number of primary edges we want to keep for TEST
+            if mPrimary >= 2
+                min_primary_test = max(1, ceil(0.10 * mPrimary));   % at least 10% or >=1
+            else
+                min_primary_test = 0;                               % too few to enforce
+            end
+            max_primary_train_allowed = max(0, mPrimary - min_primary_test);
+
+            raw_target_primary = round(backboneTrainFrac * mPrimary);
+            target_primary     = min([raw_target_primary, max_primary_train_allowed, num_train]);
+
+            % If requested frac > 0 but we ended with 0 and have capacity, ensure at least one
+            if target_primary == 0 && backboneTrainFrac > 0 && mPrimary > 0 && num_train > 0
+                target_primary = min(1, max_primary_train_allowed);
+            end
+
+            fprintf('[DivideNet] STANDARD backbone: backboneTrainFrac=%.2f → target %s TRAIN edges = %d of %d\n', ...
+                    backboneTrainFrac, primary_label, target_primary, mPrimary);
+        else
+            % INVERSE mode: keep legacy semantics where ratioBackbone is a
+            % fraction of TOTAL links targeted from the primary set.
+            ratioBackbone_eff = min(ratioBackbone, ratioTrain);
+            if ratioBackbone_eff < ratioBackbone
+                fprintf(['[DivideNet] (INVERSE) Clamping ratioBackbone from %.3f to %.3f ', ...
+                         'for %s-priority mode (TrainRatio=%.3f).\n'], ...
+                         ratioBackbone, ratioBackbone_eff, primary_label, ratioTrain);
+            end
+
+            raw_target_primary = round(ratioBackbone_eff * m);
+            target_primary     = min([mPrimary, raw_target_primary, num_train]);
+
+            fprintf('[DivideNet] INVERSE backbone: effective ratioBackbone=%.2f → target %s TRAIN edges = %d of %d\n', ...
+                    ratioBackbone_eff, primary_label, target_primary, mPrimary);
+        end
 
         % 3) Select primary portion for TRAIN (up to target_primary)
         perm_p  = randperm(mPrimary);
@@ -175,6 +212,31 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
         % 6) Reporting
         n_train = nnz(train);
         n_test  = nnz(test);
+
+        % Backbone / non-backbone masks
+        backbone_mask    = B;
+        nonbackbone_mask = net & ~B;
+
+        n_bb_total  = nnz(backbone_mask);
+        n_nb_total  = nnz(nonbackbone_mask);
+
+        n_bb_train  = nnz(train & backbone_mask);
+        n_nb_train  = nnz(train & nonbackbone_mask);
+        n_bb_test   = nnz(test  & backbone_mask);
+        n_nb_test   = nnz(test  & nonbackbone_mask);
+
+        split_stats = struct( ...
+            'TotalLinks',           m, ...
+            'TrainLinks',           n_train, ...
+            'TestLinks',            n_test, ...
+            'BackboneTotal',        n_bb_total, ...
+            'NonBackboneTotal',     n_nb_total, ...
+            'BackboneTrainLinks',   n_bb_train, ...
+            'NonBackboneTrainLinks',n_nb_train, ...
+            'BackboneTestLinks',    n_bb_test, ...
+            'NonBackboneTestLinks', n_nb_test ...
+        );
+
         n_primary_in_train   = nnz(train & primary_mask);
         n_secondary_in_train = nnz(train & secondary_mask);
 
@@ -218,6 +280,22 @@ function [train, test] = DivideNet_dir_neg(net, ratioTrain, check_connectivity, 
     end
     fprintf('[DivideNet] Test links accepted: %d / %d (%.1f%%)\n', accepted, num_test, 100 * accepted / max(1,num_test));
     fprintf('[DivideNet] Attempts made: %d | Failed attempts: %d\n', attempts, attempts - accepted);
+
+    n_train = nnz(train);
+    n_test  = nnz(test);
+    m       = nnz(net);
+
+    split_stats = struct( ...
+        'TotalLinks',            m, ...
+        'TrainLinks',            n_train, ...
+        'TestLinks',             n_test, ...
+        'BackboneTotal',         0, ...
+        'NonBackboneTotal',      m, ...
+        'BackboneTrainLinks',    0, ...
+        'NonBackboneTrainLinks', n_train, ...
+        'BackboneTestLinks',     0, ...
+        'NonBackboneTestLinks',  n_test ...
+    );
 end
 
 % Helper: reachability check (STANDARD mode only)
