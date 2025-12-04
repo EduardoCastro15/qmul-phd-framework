@@ -1,8 +1,9 @@
 [INFO] Processing dataset: Duddon Pike Beck_tax_mass
 Processing with K = 10, node selection: random
-[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.10
+[run_wlnm_dir_neg] Skipping BackboneRatio values > TrainRatio=0.60; kept: [0.1 0.3 0.5] | skipped: 0.7
+[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.10 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.600, ratioBackbone=0.100 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.600, ratioBackbone=0.100 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 109 (requested 109)
 [DivideNet]  ├─ backbone in TRAIN: 56 (target 18 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
@@ -17,17 +18,17 @@ In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('WLNM_dir
     Test  Positive: 74
     Test  Negative: 148
 Encoding 327 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 1.4s
-Progress: 20% - Elapsed: 1.4s
-Progress: 29% - Elapsed: 1.5s
-Progress: 39% - Elapsed: 1.5s
-Progress: 49% - Elapsed: 1.5s
-Progress: 59% - Elapsed: 1.6s
-Progress: 69% - Elapsed: 1.6s
-Progress: 78% - Elapsed: 1.6s
-Progress: 88% - Elapsed: 1.7s
-Progress: 98% - Elapsed: 1.7s
-Done. Total time: 1.7s
+Progress: 10% - Elapsed: 0.0s
+Progress: 20% - Elapsed: 0.1s
+Progress: 29% - Elapsed: 0.1s
+Progress: 39% - Elapsed: 0.1s
+Progress: 49% - Elapsed: 0.2s
+Progress: 59% - Elapsed: 0.2s
+Progress: 69% - Elapsed: 0.2s
+Progress: 78% - Elapsed: 0.2s
+Progress: 88% - Elapsed: 0.3s
+Progress: 98% - Elapsed: 0.3s
+Done. Total time: 0.3s
 Encoding 222 subgraphs (K = 10)...
 Progress: 10% - Elapsed: 0.0s
 Progress: 20% - Elapsed: 0.0s
@@ -44,22 +45,22 @@ Done. Total time: 0.2s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       64.06% |       0.6796 |          0.1000 |
-|      25 |          50 |       00:00:00 |       97.66% |       0.0784 |          0.0810 |
-|      50 |         100 |       00:00:00 |      100.00% |       0.0061 |          0.0656 |
-|      75 |         150 |       00:00:00 |      100.00% |       0.0040 |          0.0478 |
-|     100 |         200 |       00:00:00 |      100.00% |       0.0036 |          0.0387 |
-|     125 |         250 |       00:00:00 |      100.00% |       0.0033 |          0.0282 |
-|     150 |         300 |       00:00:00 |      100.00% |       0.0032 |          0.0229 |
-|     175 |         350 |       00:00:00 |      100.00% |       0.0032 |          0.0167 |
-|     200 |         400 |       00:00:00 |      100.00% |       0.0031 |          0.0135 |
+|       1 |           1 |       00:00:00 |       36.72% |       0.7161 |          0.1000 |
+|      25 |          50 |       00:00:00 |       92.19% |       0.2557 |          0.0810 |
+|      50 |         100 |       00:00:00 |       99.22% |       0.0360 |          0.0656 |
+|      75 |         150 |       00:00:00 |       99.22% |       0.0265 |          0.0478 |
+|     100 |         200 |       00:00:00 |       99.22% |       0.0235 |          0.0387 |
+|     125 |         250 |       00:00:00 |       99.22% |       0.0230 |          0.0282 |
+|     150 |         300 |       00:00:00 |       99.22% |       0.0225 |          0.0229 |
+|     175 |         350 |       00:00:00 |       99.22% |       0.0224 |          0.0167 |
+|     200 |         400 |       00:00:00 |       99.22% |       0.0220 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.60, Precision: 0.7719, Recall: 0.5946, F1-Score: 0.6718
-AUC: 0.7329
-[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.30
+Best Threshold: 0.10, Precision: 0.7018, Recall: 0.5405, F1-Score: 0.6107
+AUC: 0.7762
+[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.30 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.600, ratioBackbone=0.300 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.600, ratioBackbone=0.300 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 109 (requested 109)
 [DivideNet]  ├─ backbone in TRAIN: 56 (target 55 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
@@ -101,82 +102,25 @@ Done. Total time: 0.2s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       61.72% |       0.6773 |          0.1000 |
-|      25 |          50 |       00:00:00 |       83.59% |       0.3029 |          0.0810 |
-|      50 |         100 |       00:00:00 |       99.22% |       0.0239 |          0.0656 |
-|      75 |         150 |       00:00:00 |       99.22% |       0.0227 |          0.0478 |
-|     100 |         200 |       00:00:00 |       99.22% |       0.0230 |          0.0387 |
-|     125 |         250 |       00:00:00 |       99.22% |       0.0225 |          0.0282 |
-|     150 |         300 |       00:00:00 |       99.22% |       0.0225 |          0.0229 |
-|     175 |         350 |       00:00:00 |       99.22% |       0.0225 |          0.0167 |
-|     200 |         400 |       00:00:00 |       99.22% |       0.0224 |          0.0135 |
+|       1 |           1 |       00:00:00 |       29.69% |       0.7313 |          0.1000 |
+|      25 |          50 |       00:00:00 |       96.88% |       0.0832 |          0.0810 |
+|      50 |         100 |       00:00:00 |       83.59% |       0.5646 |          0.0656 |
+|      75 |         150 |       00:00:00 |       99.22% |       0.0229 |          0.0478 |
+|     100 |         200 |       00:00:00 |       99.22% |       0.0210 |          0.0387 |
+|     125 |         250 |       00:00:00 |       99.22% |       0.0207 |          0.0282 |
+|     150 |         300 |       00:00:00 |       99.22% |       0.0203 |          0.0229 |
+|     175 |         350 |       00:00:00 |       99.22% |       0.0200 |          0.0167 |
+|     200 |         400 |       00:00:00 |       99.22% |       0.0198 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.10, Precision: 0.6333, Recall: 0.5135, F1-Score: 0.5672
-AUC: 0.6762
-[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.50
+Best Threshold: 0.40, Precision: 0.7333, Recall: 0.7432, F1-Score: 0.7383
+AUC: 0.8367
+[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.50 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.600, ratioBackbone=0.500 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.600, ratioBackbone=0.500 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 109 (requested 109)
-[DivideNet]  ├─ backbone in TRAIN: 92 (target 92 of 130)
-[DivideNet]  └─ non-backbone in TRAIN: 17 of 53
-[DivideNet] TEST total: 74
-Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
-> In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('sample_neg_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m', 88)" style="font-weight:bold">sample_neg_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m',88,0)">line 88</a>)
-In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('WLNM_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m', 33)" style="font-weight:bold">WLNM_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m',33,0)">line 33</a>)
-[NegPool] pool=747 need_total=366 a=2 eval_all=0 role_filter=1 | k_train=218 k_test=148
-[sample_neg] Final link counts (use_role_filter = 1):
-    Train Positive: 109
-    Train Negative: 218
-    Test  Positive: 74
-    Test  Negative: 148
-Encoding 327 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.1s
-Progress: 29% - Elapsed: 0.1s
-Progress: 39% - Elapsed: 0.1s
-Progress: 49% - Elapsed: 0.2s
-Progress: 59% - Elapsed: 0.2s
-Progress: 69% - Elapsed: 0.2s
-Progress: 78% - Elapsed: 0.2s
-Progress: 88% - Elapsed: 0.3s
-Progress: 98% - Elapsed: 0.3s
-Done. Total time: 0.3s
-Encoding 222 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.0s
-Progress: 30% - Elapsed: 0.1s
-Progress: 40% - Elapsed: 0.1s
-Progress: 50% - Elapsed: 0.1s
-Progress: 59% - Elapsed: 0.1s
-Progress: 69% - Elapsed: 0.2s
-Progress: 79% - Elapsed: 0.2s
-Progress: 89% - Elapsed: 0.2s
-Progress: 99% - Elapsed: 0.2s
-Done. Total time: 0.2s
-|========================================================================================|
-|  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
-|         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
-|========================================================================================|
-|       1 |           1 |       00:00:00 |       43.75% |       0.7341 |          0.1000 |
-|      25 |          50 |       00:00:00 |       89.06% |       0.2223 |          0.0810 |
-|      50 |         100 |       00:00:00 |       89.84% |       0.1837 |          0.0656 |
-|      75 |         150 |       00:00:00 |       89.84% |       0.1682 |          0.0478 |
-|     100 |         200 |       00:00:00 |       89.84% |       0.1669 |          0.0387 |
-|     125 |         250 |       00:00:00 |       89.84% |       0.1664 |          0.0282 |
-|     150 |         300 |       00:00:00 |       89.84% |       0.1651 |          0.0229 |
-|     175 |         350 |       00:00:00 |       89.84% |       0.1648 |          0.0167 |
-|     200 |         400 |       00:00:00 |       89.84% |       0.1640 |          0.0135 |
-|========================================================================================|
-Training finished: Max epochs completed.
-Best Threshold: 0.10, Precision: 0.6000, Recall: 0.6892, F1-Score: 0.6415
-AUC: 0.7182
-[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.70
-[DivideNet] BACKBONE mode ON. ratioTrain=0.600, ratioBackbone=0.700 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
-[DivideNet] TRAIN total: 109 (requested 109)
-[DivideNet]  ├─ backbone in TRAIN: 109 (target 128 of 130)
-[DivideNet]  └─ non-backbone in TRAIN: 0 of 53
+[DivideNet]  ├─ backbone in TRAIN: 91 (target 91 of 130)
+[DivideNet]  └─ non-backbone in TRAIN: 18 of 53
 [DivideNet] TEST total: 74
 Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
 > In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('sample_neg_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m', 88)" style="font-weight:bold">sample_neg_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m',88,0)">line 88</a>)
@@ -215,81 +159,24 @@ Done. Total time: 0.2s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       56.25% |       0.6566 |          0.1000 |
-|      25 |          50 |       00:00:00 |       91.41% |       0.2059 |          0.0810 |
-|      50 |         100 |       00:00:00 |       90.62% |       0.2366 |          0.0656 |
-|      75 |         150 |       00:00:00 |       90.62% |       0.2294 |          0.0478 |
-|     100 |         200 |       00:00:00 |       93.75% |       0.2028 |          0.0387 |
-|     125 |         250 |       00:00:00 |       94.53% |       0.1955 |          0.0282 |
-|     150 |         300 |       00:00:00 |       95.31% |       0.1501 |          0.0229 |
-|     175 |         350 |       00:00:00 |       95.31% |       0.1477 |          0.0167 |
-|     200 |         400 |       00:00:00 |       95.31% |       0.1480 |          0.0135 |
+|       1 |           1 |       00:00:00 |       36.72% |       0.7142 |          0.1000 |
+|      25 |          50 |       00:00:00 |       90.62% |       0.2558 |          0.0810 |
+|      50 |         100 |       00:00:00 |       92.97% |       0.1407 |          0.0656 |
+|      75 |         150 |       00:00:00 |       92.97% |       0.1294 |          0.0478 |
+|     100 |         200 |       00:00:00 |       92.97% |       0.1250 |          0.0387 |
+|     125 |         250 |       00:00:00 |       92.97% |       0.1208 |          0.0282 |
+|     150 |         300 |       00:00:00 |       92.97% |       0.1205 |          0.0229 |
+|     175 |         350 |       00:00:00 |       92.97% |       0.1193 |          0.0167 |
+|     200 |         400 |       00:00:00 |       92.97% |       0.1189 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.45, Precision: 0.5135, Recall: 0.2568, F1-Score: 0.3423
-AUC: 0.4963
-[SweepBackbone] ratioTrain=0.60 | ratioBackbone=0.90
-[DivideNet] BACKBONE mode ON. ratioTrain=0.600, ratioBackbone=0.900 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
-[DivideNet] TRAIN total: 109 (requested 109)
-[DivideNet]  ├─ backbone in TRAIN: 109 (target 130 of 130)
-[DivideNet]  └─ non-backbone in TRAIN: 0 of 53
-[DivideNet] TEST total: 74
-Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
-> In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('sample_neg_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m', 88)" style="font-weight:bold">sample_neg_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m',88,0)">line 88</a>)
-In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('WLNM_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m', 33)" style="font-weight:bold">WLNM_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m',33,0)">line 33</a>)
-[NegPool] pool=747 need_total=366 a=2 eval_all=0 role_filter=1 | k_train=218 k_test=148
-[sample_neg] Final link counts (use_role_filter = 1):
-    Train Positive: 109
-    Train Negative: 218
-    Test  Positive: 74
-    Test  Negative: 148
-Encoding 327 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.1s
-Progress: 29% - Elapsed: 0.1s
-Progress: 39% - Elapsed: 0.1s
-Progress: 49% - Elapsed: 0.2s
-Progress: 59% - Elapsed: 0.2s
-Progress: 69% - Elapsed: 0.2s
-Progress: 78% - Elapsed: 0.2s
-Progress: 88% - Elapsed: 0.3s
-Progress: 98% - Elapsed: 0.3s
-Done. Total time: 0.3s
-Encoding 222 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.0s
-Progress: 30% - Elapsed: 0.1s
-Progress: 40% - Elapsed: 0.1s
-Progress: 50% - Elapsed: 0.1s
-Progress: 59% - Elapsed: 0.1s
-Progress: 69% - Elapsed: 0.1s
-Progress: 79% - Elapsed: 0.2s
-Progress: 89% - Elapsed: 0.2s
-Progress: 99% - Elapsed: 0.2s
-Done. Total time: 0.2s
-|========================================================================================|
-|  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
-|         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
-|========================================================================================|
-|       1 |           1 |       00:00:00 |       39.06% |       0.6966 |          0.1000 |
-|      25 |          50 |       00:00:00 |       93.75% |       0.1742 |          0.0810 |
-|      50 |         100 |       00:00:00 |       96.88% |       0.1272 |          0.0656 |
-|      75 |         150 |       00:00:00 |       96.88% |       0.1200 |          0.0478 |
-|     100 |         200 |       00:00:00 |       96.88% |       0.1183 |          0.0387 |
-|     125 |         250 |       00:00:00 |       96.88% |       0.1170 |          0.0282 |
-|     150 |         300 |       00:00:00 |       96.88% |       0.1170 |          0.0229 |
-|     175 |         350 |       00:00:00 |       96.88% |       0.1166 |          0.0167 |
-|     200 |         400 |       00:00:00 |       96.88% |       0.1165 |          0.0135 |
-|========================================================================================|
-Training finished: Max epochs completed.
-Best Threshold: 0.15, Precision: 0.5833, Recall: 0.2838, F1-Score: 0.3818
-AUC: 0.5756
+Best Threshold: 0.45, Precision: 0.7353, Recall: 0.6757, F1-Score: 0.7042
+AUC: 0.8383
 [INFO] Processing dataset: Duddon Pike Beck_tax_mass
 Processing with K = 10, node selection: random
-[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.10
+[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.10 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.700, ratioBackbone=0.100 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.700, ratioBackbone=0.100 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 128 (requested 128)
 [DivideNet]  ├─ backbone in TRAIN: 75 (target 18 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
@@ -325,32 +212,32 @@ Progress: 58% - Elapsed: 0.1s
 Progress: 68% - Elapsed: 0.1s
 Progress: 78% - Elapsed: 0.1s
 Progress: 87% - Elapsed: 0.1s
-Progress: 97% - Elapsed: 0.1s
+Progress: 97% - Elapsed: 0.2s
 Done. Total time: 0.2s
 |========================================================================================|
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       61.72% |       0.7468 |          0.1000 |
-|      17 |          50 |       00:00:00 |       88.28% |       0.2998 |          0.0900 |
-|      34 |         100 |       00:00:00 |       88.28% |       0.2220 |          0.0729 |
-|      50 |         150 |       00:00:00 |       98.44% |       0.0720 |          0.0656 |
-|      67 |         200 |       00:00:00 |       96.88% |       0.0819 |          0.0531 |
-|      84 |         250 |       00:00:00 |       96.09% |       0.0727 |          0.0430 |
-|     100 |         300 |       00:00:00 |       98.44% |       0.0491 |          0.0387 |
-|     117 |         350 |       00:00:00 |       97.66% |       0.0564 |          0.0314 |
-|     134 |         400 |       00:00:00 |       96.09% |       0.0667 |          0.0254 |
-|     150 |         450 |       00:00:00 |       98.44% |       0.0486 |          0.0229 |
-|     167 |         500 |       00:00:00 |       97.66% |       0.0531 |          0.0185 |
-|     184 |         550 |       00:00:00 |       96.09% |       0.0653 |          0.0150 |
-|     200 |         600 |       00:00:00 |       98.44% |       0.0484 |          0.0135 |
+|       1 |           1 |       00:00:00 |       52.34% |       0.6929 |          0.1000 |
+|      17 |          50 |       00:00:00 |       86.72% |       0.3169 |          0.0900 |
+|      34 |         100 |       00:00:00 |       88.28% |       0.2377 |          0.0729 |
+|      50 |         150 |       00:00:00 |       89.84% |       0.1088 |          0.0656 |
+|      67 |         200 |       00:00:00 |       96.09% |       0.0767 |          0.0531 |
+|      84 |         250 |       00:00:00 |       95.31% |       0.0871 |          0.0430 |
+|     100 |         300 |       00:00:00 |       96.09% |       0.0876 |          0.0387 |
+|     117 |         350 |       00:00:00 |       96.09% |       0.0692 |          0.0314 |
+|     134 |         400 |       00:00:00 |       95.31% |       0.0827 |          0.0254 |
+|     150 |         450 |       00:00:00 |       96.09% |       0.0858 |          0.0229 |
+|     167 |         500 |       00:00:00 |       96.09% |       0.0687 |          0.0185 |
+|     184 |         550 |       00:00:00 |       95.31% |       0.0816 |          0.0150 |
+|     200 |         600 |       00:00:00 |       96.09% |       0.0856 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.60, Precision: 0.7833, Recall: 0.8545, F1-Score: 0.8174
-AUC: 0.9428
-[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.30
+Best Threshold: 0.45, Precision: 0.6935, Recall: 0.7818, F1-Score: 0.7350
+AUC: 0.8307
+[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.30 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.700, ratioBackbone=0.300 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.700, ratioBackbone=0.300 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 128 (requested 128)
 [DivideNet]  ├─ backbone in TRAIN: 75 (target 55 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
@@ -371,7 +258,7 @@ Progress: 30% - Elapsed: 0.1s
 Progress: 40% - Elapsed: 0.1s
 Progress: 49% - Elapsed: 0.2s
 Progress: 59% - Elapsed: 0.2s
-Progress: 69% - Elapsed: 0.3s
+Progress: 69% - Elapsed: 0.2s
 Progress: 79% - Elapsed: 0.3s
 Progress: 89% - Elapsed: 0.3s
 Progress: 99% - Elapsed: 0.4s
@@ -392,29 +279,29 @@ Done. Total time: 0.2s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       59.38% |       0.6893 |          0.1000 |
-|      17 |          50 |       00:00:00 |       96.09% |       0.1375 |          0.0900 |
-|      34 |         100 |       00:00:00 |       97.66% |       0.0572 |          0.0729 |
-|      50 |         150 |       00:00:00 |       96.09% |       0.0785 |          0.0656 |
-|      67 |         200 |       00:00:00 |       99.22% |       0.0453 |          0.0531 |
-|      84 |         250 |       00:00:00 |       97.66% |       0.0494 |          0.0430 |
-|     100 |         300 |       00:00:00 |       96.88% |       0.0642 |          0.0387 |
-|     117 |         350 |       00:00:00 |       99.22% |       0.0471 |          0.0314 |
-|     134 |         400 |       00:00:00 |       97.66% |       0.0486 |          0.0254 |
-|     150 |         450 |       00:00:00 |       96.09% |       0.0599 |          0.0229 |
-|     167 |         500 |       00:00:00 |       99.22% |       0.0432 |          0.0185 |
-|     184 |         550 |       00:00:00 |       97.66% |       0.0483 |          0.0150 |
-|     200 |         600 |       00:00:00 |       96.09% |       0.0577 |          0.0135 |
+|       1 |           1 |       00:00:00 |       71.88% |       0.6608 |          0.1000 |
+|      17 |          50 |       00:00:00 |       92.19% |       0.1816 |          0.0900 |
+|      34 |         100 |       00:00:00 |       95.31% |       0.0947 |          0.0729 |
+|      50 |         150 |       00:00:00 |       95.31% |       0.0957 |          0.0656 |
+|      67 |         200 |       00:00:00 |       96.88% |       0.0833 |          0.0531 |
+|      84 |         250 |       00:00:00 |       95.31% |       0.0878 |          0.0430 |
+|     100 |         300 |       00:00:00 |       96.09% |       0.0891 |          0.0387 |
+|     117 |         350 |       00:00:00 |       96.88% |       0.0781 |          0.0314 |
+|     134 |         400 |       00:00:00 |       95.31% |       0.0872 |          0.0254 |
+|     150 |         450 |       00:00:00 |       96.09% |       0.0875 |          0.0229 |
+|     167 |         500 |       00:00:00 |       96.88% |       0.0787 |          0.0185 |
+|     184 |         550 |       00:00:00 |       95.31% |       0.0877 |          0.0150 |
+|     200 |         600 |       00:00:00 |       96.09% |       0.0868 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.50, Precision: 0.8621, Recall: 0.9091, F1-Score: 0.8850
-AUC: 0.9218
-[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.50
+Best Threshold: 0.10, Precision: 0.7344, Recall: 0.8545, F1-Score: 0.7899
+AUC: 0.9101
+[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.50 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.700, ratioBackbone=0.500 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.700, ratioBackbone=0.500 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 128 (requested 128)
-[DivideNet]  ├─ backbone in TRAIN: 92 (target 92 of 130)
-[DivideNet]  └─ non-backbone in TRAIN: 36 of 53
+[DivideNet]  ├─ backbone in TRAIN: 91 (target 91 of 130)
+[DivideNet]  └─ non-backbone in TRAIN: 37 of 53
 [DivideNet] TEST total: 55
 Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
 > In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('sample_neg_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m', 88)" style="font-weight:bold">sample_neg_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m',88,0)">line 88</a>)
@@ -429,10 +316,10 @@ Encoding 384 subgraphs (K = 10)...
 Progress: 10% - Elapsed: 0.0s
 Progress: 20% - Elapsed: 0.1s
 Progress: 30% - Elapsed: 0.1s
-Progress: 40% - Elapsed: 0.2s
+Progress: 40% - Elapsed: 0.1s
 Progress: 49% - Elapsed: 0.2s
 Progress: 59% - Elapsed: 0.2s
-Progress: 69% - Elapsed: 0.3s
+Progress: 69% - Elapsed: 0.2s
 Progress: 79% - Elapsed: 0.3s
 Progress: 89% - Elapsed: 0.3s
 Progress: 99% - Elapsed: 0.4s
@@ -453,26 +340,26 @@ Done. Total time: 0.2s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       31.25% |       0.7495 |          0.1000 |
-|      17 |          50 |       00:00:00 |       84.38% |       0.3254 |          0.0900 |
-|      34 |         100 |       00:00:00 |       95.31% |       0.1167 |          0.0729 |
-|      50 |         150 |       00:00:00 |       93.75% |       0.1754 |          0.0656 |
-|      67 |         200 |       00:00:00 |       98.44% |       0.0488 |          0.0531 |
-|      84 |         250 |       00:00:00 |       98.44% |       0.0399 |          0.0430 |
-|     100 |         300 |       00:00:00 |       93.75% |       0.1383 |          0.0387 |
-|     117 |         350 |       00:00:00 |       99.22% |       0.0391 |          0.0314 |
-|     134 |         400 |       00:00:00 |       98.44% |       0.0380 |          0.0254 |
-|     150 |         450 |       00:00:00 |       93.75% |       0.1351 |          0.0229 |
-|     167 |         500 |       00:00:00 |       98.44% |       0.0386 |          0.0185 |
-|     184 |         550 |       00:00:00 |       98.44% |       0.0366 |          0.0150 |
-|     200 |         600 |       00:00:00 |       93.75% |       0.1318 |          0.0135 |
+|       1 |           1 |       00:00:00 |       34.38% |       0.7228 |          0.1000 |
+|      17 |          50 |       00:00:00 |       82.03% |       0.3422 |          0.0900 |
+|      34 |         100 |       00:00:00 |       93.75% |       0.1344 |          0.0729 |
+|      50 |         150 |       00:00:00 |       82.03% |       0.2842 |          0.0656 |
+|      67 |         200 |       00:00:00 |       90.62% |       0.1742 |          0.0531 |
+|      84 |         250 |       00:00:00 |       95.31% |       0.1116 |          0.0430 |
+|     100 |         300 |       00:00:00 |       94.53% |       0.1061 |          0.0387 |
+|     117 |         350 |       00:00:00 |       90.62% |       0.1587 |          0.0314 |
+|     134 |         400 |       00:00:00 |       95.31% |       0.1064 |          0.0254 |
+|     150 |         450 |       00:00:00 |       94.53% |       0.1037 |          0.0229 |
+|     167 |         500 |       00:00:00 |       90.62% |       0.1586 |          0.0185 |
+|     184 |         550 |       00:00:00 |       95.31% |       0.1039 |          0.0150 |
+|     200 |         600 |       00:00:00 |       94.53% |       0.1033 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.70, Precision: 0.8148, Recall: 0.8000, F1-Score: 0.8073
-AUC: 0.9052
-[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.70
+Best Threshold: 0.60, Precision: 0.6923, Recall: 0.6545, F1-Score: 0.6729
+AUC: 0.8180
+[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.70 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.700, ratioBackbone=0.700 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.700, ratioBackbone=0.700 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 128 (requested 128)
 [DivideNet]  ├─ backbone in TRAIN: 128 (target 128 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 0 of 53
@@ -514,89 +401,28 @@ Done. Total time: 0.2s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       37.50% |       0.7551 |          0.1000 |
-|      17 |          50 |       00:00:00 |       92.19% |       0.2113 |          0.0900 |
-|      34 |         100 |       00:00:00 |       92.97% |       0.1752 |          0.0729 |
-|      50 |         150 |       00:00:00 |       93.75% |       0.1909 |          0.0656 |
-|      67 |         200 |       00:00:00 |       92.19% |       0.2112 |          0.0531 |
-|      84 |         250 |       00:00:00 |       92.97% |       0.1655 |          0.0430 |
-|     100 |         300 |       00:00:00 |       93.75% |       0.1812 |          0.0387 |
-|     117 |         350 |       00:00:00 |       92.19% |       0.2102 |          0.0314 |
-|     134 |         400 |       00:00:00 |       92.97% |       0.1616 |          0.0254 |
-|     150 |         450 |       00:00:00 |       93.75% |       0.1787 |          0.0229 |
-|     167 |         500 |       00:00:00 |       92.19% |       0.2106 |          0.0185 |
-|     184 |         550 |       00:00:00 |       92.97% |       0.1604 |          0.0150 |
-|     200 |         600 |       00:00:00 |       93.75% |       0.1774 |          0.0135 |
+|       1 |           1 |       00:00:00 |       17.19% |       0.7081 |          0.1000 |
+|      17 |          50 |       00:00:00 |       84.38% |       0.2989 |          0.0900 |
+|      34 |         100 |       00:00:00 |       91.41% |       0.2272 |          0.0729 |
+|      50 |         150 |       00:00:00 |       93.75% |       0.1835 |          0.0656 |
+|      67 |         200 |       00:00:00 |       92.97% |       0.1958 |          0.0531 |
+|      84 |         250 |       00:00:00 |       91.41% |       0.2143 |          0.0430 |
+|     100 |         300 |       00:00:00 |       94.53% |       0.1712 |          0.0387 |
+|     117 |         350 |       00:00:00 |       92.97% |       0.1952 |          0.0314 |
+|     134 |         400 |       00:00:00 |       91.41% |       0.2105 |          0.0254 |
+|     150 |         450 |       00:00:00 |       94.53% |       0.1701 |          0.0229 |
+|     167 |         500 |       00:00:00 |       92.97% |       0.1942 |          0.0185 |
+|     184 |         550 |       00:00:00 |       91.41% |       0.2086 |          0.0150 |
+|     200 |         600 |       00:00:00 |       94.53% |       0.1695 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.50, Precision: 0.1667, Recall: 0.0364, F1-Score: 0.0597
-AUC: 0.2317
-[SweepBackbone] ratioTrain=0.70 | ratioBackbone=0.90
-[DivideNet] BACKBONE mode ON. ratioTrain=0.700, ratioBackbone=0.900 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
-[DivideNet] TRAIN total: 128 (requested 128)
-[DivideNet]  ├─ backbone in TRAIN: 128 (target 130 of 130)
-[DivideNet]  └─ non-backbone in TRAIN: 0 of 53
-[DivideNet] TEST total: 55
-Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
-> In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('sample_neg_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m', 88)" style="font-weight:bold">sample_neg_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m',88,0)">line 88</a>)
-In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('WLNM_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m', 33)" style="font-weight:bold">WLNM_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m',33,0)">line 33</a>)
-[NegPool] pool=747 need_total=366 a=2 eval_all=0 role_filter=1 | k_train=256 k_test=110
-[sample_neg] Final link counts (use_role_filter = 1):
-    Train Positive: 128
-    Train Negative: 256
-    Test  Positive: 55
-    Test  Negative: 110
-Encoding 384 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.1s
-Progress: 30% - Elapsed: 0.1s
-Progress: 40% - Elapsed: 0.1s
-Progress: 49% - Elapsed: 0.2s
-Progress: 59% - Elapsed: 0.2s
-Progress: 69% - Elapsed: 0.2s
-Progress: 79% - Elapsed: 0.3s
-Progress: 89% - Elapsed: 0.3s
-Progress: 99% - Elapsed: 0.4s
-Done. Total time: 0.4s
-Encoding 165 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 19% - Elapsed: 0.0s
-Progress: 29% - Elapsed: 0.0s
-Progress: 39% - Elapsed: 0.1s
-Progress: 48% - Elapsed: 0.1s
-Progress: 58% - Elapsed: 0.1s
-Progress: 68% - Elapsed: 0.1s
-Progress: 78% - Elapsed: 0.1s
-Progress: 87% - Elapsed: 0.1s
-Progress: 97% - Elapsed: 0.1s
-Done. Total time: 0.2s
-|========================================================================================|
-|  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
-|         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
-|========================================================================================|
-|       1 |           1 |       00:00:00 |       32.03% |       0.7417 |          0.1000 |
-|      17 |          50 |       00:00:00 |       91.41% |       0.3278 |          0.0900 |
-|      34 |         100 |       00:00:00 |       92.97% |       0.2057 |          0.0729 |
-|      50 |         150 |       00:00:00 |       94.53% |       0.1788 |          0.0656 |
-|      67 |         200 |       00:00:00 |       92.97% |       0.1916 |          0.0531 |
-|      84 |         250 |       00:00:00 |       92.97% |       0.1910 |          0.0430 |
-|     100 |         300 |       00:00:00 |       94.53% |       0.1727 |          0.0387 |
-|     117 |         350 |       00:00:00 |       92.97% |       0.1874 |          0.0314 |
-|     134 |         400 |       00:00:00 |       92.97% |       0.1851 |          0.0254 |
-|     150 |         450 |       00:00:00 |       94.53% |       0.1710 |          0.0229 |
-|     167 |         500 |       00:00:00 |       92.97% |       0.1844 |          0.0185 |
-|     184 |         550 |       00:00:00 |       92.97% |       0.1819 |          0.0150 |
-|     200 |         600 |       00:00:00 |       94.53% |       0.1702 |          0.0135 |
-|========================================================================================|
-Training finished: Max epochs completed.
-Best Threshold: 0.10, Precision: 0.1111, Recall: 0.0364, F1-Score: 0.0548
-AUC: 0.3859
+Best Threshold: 0.85, Precision: 1.0000, Recall: 0.0364, F1-Score: 0.0702
+AUC: 0.3158
 [INFO] Processing dataset: Duddon Pike Beck_tax_mass
 Processing with K = 10, node selection: random
-[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.10
+[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.10 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.800, ratioBackbone=0.100 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.800, ratioBackbone=0.100 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 146 (requested 146)
 [DivideNet]  ├─ backbone in TRAIN: 93 (target 18 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
@@ -627,7 +453,7 @@ Progress: 10% - Elapsed: 0.0s
 Progress: 20% - Elapsed: 0.0s
 Progress: 30% - Elapsed: 0.0s
 Progress: 40% - Elapsed: 0.0s
-Progress: 50% - Elapsed: 0.0s
+Progress: 50% - Elapsed: 0.1s
 Progress: 59% - Elapsed: 0.1s
 Progress: 69% - Elapsed: 0.1s
 Progress: 79% - Elapsed: 0.1s
@@ -638,26 +464,26 @@ Done. Total time: 0.1s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       26.56% |       0.7286 |          0.1000 |
-|      17 |          50 |       00:00:00 |       85.94% |       0.2633 |          0.0900 |
-|      34 |         100 |       00:00:00 |       87.50% |       0.1791 |          0.0729 |
-|      50 |         150 |       00:00:00 |       84.38% |       0.3273 |          0.0656 |
-|      67 |         200 |       00:00:00 |       91.41% |       0.1317 |          0.0531 |
-|      84 |         250 |       00:00:00 |       94.53% |       0.1223 |          0.0430 |
-|     100 |         300 |       00:00:00 |       89.84% |       0.1812 |          0.0387 |
-|     117 |         350 |       00:00:00 |       92.19% |       0.1182 |          0.0314 |
-|     134 |         400 |       00:00:00 |       96.09% |       0.1106 |          0.0254 |
-|     150 |         450 |       00:00:00 |       89.06% |       0.1779 |          0.0229 |
-|     167 |         500 |       00:00:00 |       92.19% |       0.1197 |          0.0185 |
-|     184 |         550 |       00:00:00 |       96.09% |       0.1087 |          0.0150 |
-|     200 |         600 |       00:00:00 |       89.06% |       0.1764 |          0.0135 |
+|       1 |           1 |       00:00:00 |       59.38% |       0.6790 |          0.1000 |
+|      17 |          50 |       00:00:00 |       89.06% |       0.2334 |          0.0900 |
+|      34 |         100 |       00:00:00 |       92.19% |       0.1867 |          0.0729 |
+|      50 |         150 |       00:00:00 |       93.75% |       0.1214 |          0.0656 |
+|      67 |         200 |       00:00:00 |       93.75% |       0.1363 |          0.0531 |
+|      84 |         250 |       00:00:00 |       93.75% |       0.1457 |          0.0430 |
+|     100 |         300 |       00:00:00 |       94.53% |       0.1055 |          0.0387 |
+|     117 |         350 |       00:00:00 |       93.75% |       0.1345 |          0.0314 |
+|     134 |         400 |       00:00:00 |       93.75% |       0.1425 |          0.0254 |
+|     150 |         450 |       00:00:00 |       94.53% |       0.1047 |          0.0229 |
+|     167 |         500 |       00:00:00 |       93.75% |       0.1341 |          0.0185 |
+|     184 |         550 |       00:00:00 |       93.75% |       0.1422 |          0.0150 |
+|     200 |         600 |       00:00:00 |       94.53% |       0.1046 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.25, Precision: 0.7778, Recall: 0.9459, F1-Score: 0.8537
-AUC: 0.9164
-[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.30
+Best Threshold: 0.50, Precision: 0.7674, Recall: 0.8919, F1-Score: 0.8250
+AUC: 0.8994
+[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.30 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.800, ratioBackbone=0.300 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.800, ratioBackbone=0.300 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 146 (requested 146)
 [DivideNet]  ├─ backbone in TRAIN: 93 (target 55 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
@@ -699,28 +525,28 @@ Done. Total time: 0.1s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       30.47% |       0.8052 |          0.1000 |
-|      17 |          50 |       00:00:00 |       87.50% |       0.3041 |          0.0900 |
-|      34 |         100 |       00:00:00 |       94.53% |       0.1562 |          0.0729 |
-|      50 |         150 |       00:00:00 |       96.09% |       0.1128 |          0.0656 |
-|      67 |         200 |       00:00:00 |       92.19% |       0.1718 |          0.0531 |
-|      84 |         250 |       00:00:00 |       98.44% |       0.0596 |          0.0430 |
-|     100 |         300 |       00:00:00 |       95.31% |       0.1049 |          0.0387 |
-|     117 |         350 |       00:00:00 |       94.53% |       0.1204 |          0.0314 |
-|     134 |         400 |       00:00:00 |       98.44% |       0.0588 |          0.0254 |
-|     150 |         450 |       00:00:00 |       95.31% |       0.1039 |          0.0229 |
-|     167 |         500 |       00:00:00 |       94.53% |       0.1185 |          0.0185 |
-|     184 |         550 |       00:00:00 |       98.44% |       0.0585 |          0.0150 |
-|     200 |         600 |       00:00:00 |       95.31% |       0.1014 |          0.0135 |
+|       1 |           1 |       00:00:00 |       64.06% |       0.6821 |          0.1000 |
+|      17 |          50 |       00:00:00 |       91.41% |       0.2064 |          0.0900 |
+|      34 |         100 |       00:00:00 |       89.84% |       0.1965 |          0.0729 |
+|      50 |         150 |       00:00:00 |       96.09% |       0.1223 |          0.0656 |
+|      67 |         200 |       00:00:00 |       95.31% |       0.1088 |          0.0531 |
+|      84 |         250 |       00:00:00 |       89.84% |       0.1802 |          0.0430 |
+|     100 |         300 |       00:00:00 |       96.09% |       0.0936 |          0.0387 |
+|     117 |         350 |       00:00:00 |       95.31% |       0.1060 |          0.0314 |
+|     134 |         400 |       00:00:00 |       89.84% |       0.1781 |          0.0254 |
+|     150 |         450 |       00:00:00 |       96.09% |       0.0931 |          0.0229 |
+|     167 |         500 |       00:00:00 |       95.31% |       0.1055 |          0.0185 |
+|     184 |         550 |       00:00:00 |       89.84% |       0.1774 |          0.0150 |
+|     200 |         600 |       00:00:00 |       96.09% |       0.0927 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.55, Precision: 0.7619, Recall: 0.8649, F1-Score: 0.8101
-AUC: 0.9198
-[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.50
+Best Threshold: 0.10, Precision: 0.7447, Recall: 0.9459, F1-Score: 0.8333
+AUC: 0.9229
+[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.50 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.800, ratioBackbone=0.500 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.800, ratioBackbone=0.500 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 146 (requested 146)
-[DivideNet]  ├─ backbone in TRAIN: 93 (target 92 of 130)
+[DivideNet]  ├─ backbone in TRAIN: 93 (target 91 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 53 of 53
 [DivideNet] TEST total: 37
 Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
@@ -760,26 +586,26 @@ Done. Total time: 0.1s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       53.91% |       0.6781 |          0.1000 |
-|      17 |          50 |       00:00:00 |       89.84% |       0.2360 |          0.0900 |
-|      34 |         100 |       00:00:00 |       92.19% |       0.1648 |          0.0729 |
-|      50 |         150 |       00:00:00 |       94.53% |       0.1216 |          0.0656 |
-|      67 |         200 |       00:00:00 |       96.09% |       0.0930 |          0.0531 |
-|      84 |         250 |       00:00:00 |       93.75% |       0.1311 |          0.0430 |
-|     100 |         300 |       00:00:00 |       94.53% |       0.1150 |          0.0387 |
-|     117 |         350 |       00:00:00 |       96.09% |       0.0919 |          0.0314 |
-|     134 |         400 |       00:00:00 |       93.75% |       0.1298 |          0.0254 |
-|     150 |         450 |       00:00:00 |       94.53% |       0.1144 |          0.0229 |
-|     167 |         500 |       00:00:00 |       96.09% |       0.0911 |          0.0185 |
-|     184 |         550 |       00:00:00 |       93.75% |       0.1296 |          0.0150 |
-|     200 |         600 |       00:00:00 |       94.53% |       0.1142 |          0.0135 |
+|       1 |           1 |       00:00:00 |       42.19% |       0.7214 |          0.1000 |
+|      17 |          50 |       00:00:00 |       89.06% |       0.2322 |          0.0900 |
+|      34 |         100 |       00:00:00 |       90.62% |       0.2149 |          0.0729 |
+|      50 |         150 |       00:00:00 |       90.62% |       0.2096 |          0.0656 |
+|      67 |         200 |       00:00:00 |       93.75% |       0.1374 |          0.0531 |
+|      84 |         250 |       00:00:00 |       92.19% |       0.1596 |          0.0430 |
+|     100 |         300 |       00:00:00 |       94.53% |       0.1108 |          0.0387 |
+|     117 |         350 |       00:00:00 |       93.75% |       0.1239 |          0.0314 |
+|     134 |         400 |       00:00:00 |       92.19% |       0.1545 |          0.0254 |
+|     150 |         450 |       00:00:00 |       94.53% |       0.1089 |          0.0229 |
+|     167 |         500 |       00:00:00 |       93.75% |       0.1233 |          0.0185 |
+|     184 |         550 |       00:00:00 |       92.19% |       0.1538 |          0.0150 |
+|     200 |         600 |       00:00:00 |       94.53% |       0.1085 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.65, Precision: 0.8000, Recall: 0.8649, F1-Score: 0.8312
-AUC: 0.9016
-[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.70
+Best Threshold: 0.50, Precision: 0.7234, Recall: 0.9189, F1-Score: 0.8095
+AUC: 0.8526
+[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.70 | inverse_backbone=0
 [DivideNet] BACKBONE mode ON. ratioTrain=0.800, ratioBackbone=0.700 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
+[DivideNet] BACKBONE mode ON (STANDARD). ratioTrain=0.800, ratioBackbone=0.700 (subset of TRAIN from backbone edges)
 [DivideNet] TRAIN total: 146 (requested 146)
 [DivideNet]  ├─ backbone in TRAIN: 128 (target 128 of 130)
 [DivideNet]  └─ non-backbone in TRAIN: 18 of 53
@@ -821,81 +647,20 @@ Done. Total time: 0.1s
 |  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
 |         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
 |========================================================================================|
-|       1 |           1 |       00:00:00 |       42.19% |       0.7240 |          0.1000 |
-|      17 |          50 |       00:00:00 |       91.41% |       0.2314 |          0.0900 |
-|      34 |         100 |       00:00:00 |       92.19% |       0.2002 |          0.0729 |
-|      50 |         150 |       00:00:00 |       95.31% |       0.1268 |          0.0656 |
-|      67 |         200 |       00:00:00 |       92.19% |       0.1814 |          0.0531 |
-|      84 |         250 |       00:00:00 |       94.53% |       0.1605 |          0.0430 |
-|     100 |         300 |       00:00:00 |       95.31% |       0.1135 |          0.0387 |
-|     117 |         350 |       00:00:00 |       92.97% |       0.1622 |          0.0314 |
-|     134 |         400 |       00:00:00 |       94.53% |       0.1539 |          0.0254 |
-|     150 |         450 |       00:00:00 |       95.31% |       0.1058 |          0.0229 |
-|     167 |         500 |       00:00:00 |       92.97% |       0.1563 |          0.0185 |
-|     184 |         550 |       00:00:00 |       94.53% |       0.1518 |          0.0150 |
-|     200 |         600 |       00:00:00 |       95.31% |       0.1051 |          0.0135 |
+|       1 |           1 |       00:00:00 |       71.88% |       0.6316 |          0.1000 |
+|      17 |          50 |       00:00:00 |       90.62% |       0.2238 |          0.0900 |
+|      34 |         100 |       00:00:00 |       89.84% |       0.2048 |          0.0729 |
+|      50 |         150 |       00:00:00 |       92.19% |       0.2195 |          0.0656 |
+|      67 |         200 |       00:00:00 |       94.53% |       0.1380 |          0.0531 |
+|      84 |         250 |       00:00:00 |       91.41% |       0.1820 |          0.0430 |
+|     100 |         300 |       00:00:00 |       93.75% |       0.1745 |          0.0387 |
+|     117 |         350 |       00:00:00 |       94.53% |       0.1326 |          0.0314 |
+|     134 |         400 |       00:00:00 |       91.41% |       0.1771 |          0.0254 |
+|     150 |         450 |       00:00:00 |       93.75% |       0.1715 |          0.0229 |
+|     167 |         500 |       00:00:00 |       94.53% |       0.1291 |          0.0185 |
+|     184 |         550 |       00:00:00 |       91.41% |       0.1743 |          0.0150 |
+|     200 |         600 |       00:00:00 |       93.75% |       0.1695 |          0.0135 |
 |========================================================================================|
 Training finished: Max epochs completed.
-Best Threshold: 0.10, Precision: 0.6296, Recall: 0.4595, F1-Score: 0.5312
-AUC: 0.7250
-[SweepBackbone] ratioTrain=0.80 | ratioBackbone=0.90
-[DivideNet] BACKBONE mode ON. ratioTrain=0.800, ratioBackbone=0.900 (subset of TRAIN)
-[Backbone] kept 130/183 edges (71.0%), method=quantile, thr=0.521739
-[DivideNet] TRAIN total: 146 (requested 146)
-[DivideNet]  ├─ backbone in TRAIN: 130 (target 130 of 130)
-[DivideNet]  └─ non-backbone in TRAIN: 16 of 53
-[DivideNet] TEST total: 37
-Warning: [sample_neg] Pool 162 < need 366 with role filter. Disabling role filter.
-> In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('sample_neg_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m', 88)" style="font-weight:bold">sample_neg_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/sample_neg_dir_neg.m',88,0)">line 88</a>)
-In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('WLNM_dir_neg', '/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m', 33)" style="font-weight:bold">WLNM_dir_neg</a> (<a href="matlab: opentoline('/Users/jorge/Developer/qmul-phd-framework/src/matlab/wlnm_version_runners/wlnm_dir_neg/WLNM_dir_neg.m',33,0)">line 33</a>)
-[NegPool] pool=747 need_total=366 a=2 eval_all=0 role_filter=1 | k_train=292 k_test=74
-[sample_neg] Final link counts (use_role_filter = 1):
-    Train Positive: 146
-    Train Negative: 292
-    Test  Positive: 37
-    Test  Negative: 74
-Encoding 438 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.1s
-Progress: 29% - Elapsed: 0.1s
-Progress: 39% - Elapsed: 0.2s
-Progress: 49% - Elapsed: 0.2s
-Progress: 59% - Elapsed: 0.2s
-Progress: 69% - Elapsed: 0.3s
-Progress: 79% - Elapsed: 0.3s
-Progress: 88% - Elapsed: 0.4s
-Progress: 98% - Elapsed: 0.4s
-Done. Total time: 0.4s
-Encoding 111 subgraphs (K = 10)...
-Progress: 10% - Elapsed: 0.0s
-Progress: 20% - Elapsed: 0.0s
-Progress: 30% - Elapsed: 0.0s
-Progress: 40% - Elapsed: 0.0s
-Progress: 50% - Elapsed: 0.1s
-Progress: 59% - Elapsed: 0.1s
-Progress: 69% - Elapsed: 0.1s
-Progress: 79% - Elapsed: 0.1s
-Progress: 89% - Elapsed: 0.1s
-Progress: 99% - Elapsed: 0.1s
-Done. Total time: 0.1s
-|========================================================================================|
-|  Epoch  |  Iteration  |  Time Elapsed  |  Mini-batch  |  Mini-batch  |  Base Learning  |
-|         |             |   (hh:mm:ss)   |   Accuracy   |     Loss     |      Rate       |
-|========================================================================================|
-|       1 |           1 |       00:00:00 |       31.25% |       0.7068 |          0.1000 |
-|      17 |          50 |       00:00:00 |       85.94% |       0.3212 |          0.0900 |
-|      34 |         100 |       00:00:00 |       92.19% |       0.1928 |          0.0729 |
-|      50 |         150 |       00:00:00 |       90.62% |       0.2292 |          0.0656 |
-|      67 |         200 |       00:00:00 |       95.31% |       0.1309 |          0.0531 |
-|      84 |         250 |       00:00:00 |       94.53% |       0.1477 |          0.0430 |
-|     100 |         300 |       00:00:00 |       91.41% |       0.1950 |          0.0387 |
-|     117 |         350 |       00:00:00 |       95.31% |       0.1249 |          0.0314 |
-|     134 |         400 |       00:00:00 |       94.53% |       0.1399 |          0.0254 |
-|     150 |         450 |       00:00:00 |       91.41% |       0.1914 |          0.0229 |
-|     167 |         500 |       00:00:00 |       95.31% |       0.1239 |          0.0185 |
-|     184 |         550 |       00:00:00 |       94.53% |       0.1367 |          0.0150 |
-|     200 |         600 |       00:00:00 |       91.41% |       0.1902 |          0.0135 |
-|========================================================================================|
-Training finished: Max epochs completed.
-Best Threshold: 0.15, Precision: 0.6071, Recall: 0.4595, F1-Score: 0.5231
-AUC: 0.6822
+Best Threshold: 0.15, Precision: 0.6538, Recall: 0.4595, F1-Score: 0.5397
+AUC: 0.6821
