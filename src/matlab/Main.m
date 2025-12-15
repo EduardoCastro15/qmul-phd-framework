@@ -29,11 +29,11 @@ function Main()
         'checkConnectivity',    true, ...                % Ensure train graph connectivity
         'adaptiveConnectivity', true, ...                % Adapt connectivity check based on train ratio
         'use_backbone' ,        true, ...                % Enable backbone extraction
-        'inverse_backbone',     false, ...               % Use non-backbone edges instead (keeps old semantics)
+        'inverse_backbone',     true, ...               % Use non-backbone edges instead (keeps old semantics)
         'logBackboneStats',     true, ...                % Enable/disable backbone stats CSV logging
         'sweepBackboneTrain',   true, ...                % Sweep backbone *train fraction* or use fixed
         'BackboneRatio',        0.50, ...                % Fixed backboneTrainFrac if sweep disabled
-        'backboneRatioRange',   [0.20 0.50 0.80], ...    % Fractions of backbone edges to put in TRAIN
+        'backboneRatioRange',   [0.40 0.60 0.80], ...    % Fractions of backbone edges to put in TRAIN
         'backbone_q',           0.05, ...                % PF thresholding q
         'backbone_max_q',       0.25, ...                % PF thresholding max q
         'backbone_q_ladder',    2.0, ...                 % PF thresholding q ladder
