@@ -13,10 +13,9 @@ function [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, check_c
     %                          false  → prioritize backbone edges in TRAIN (STANDARD)
     %                          true   → prioritize NON-backbone edges in TRAIN (INVERSE)
     %   'ratioBackbone'      : STANDARD mode (inverse=false):
-    %                            fraction of BACKBONE edges to put in TRAIN
+    %                            fraction of BACKBONE (primary) edges to put in TRAIN
     %                          INVERSE mode (inverse=true):
-    %                            legacy semantics, approx. fraction of TOTAL
-    %                            links targeted from the primary set
+    %                            fraction of NON-backbone (primary) edges to put in TRAIN
     %   'backbone_mask'      : []   logical n x n (if provided, used directly)
     %   'p_values_mat'       : []   sparse/double n x n (PF p-values; requires backbone_regime.m)
     %   'backbone_q'         : 0.05 (BH start)
@@ -115,9 +114,9 @@ function [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, check_c
         num_test  = ceil((1 - ratioTrain) * m);
         num_train = m - num_test;
 
-        % --- Determine target_primary based on mode ---
+        % --- Determine target_primary based on mode (SYMMETRIC behavior) ---
         if ~opt.inverse_backbone
-            % STANDARD backbone mode (Option A):
+            % STANDARD backbone mode:
             %   ratioBackbone ≡ backboneTrainFrac = fraction of BACKBONE
             %   edges (primary set) to place in TRAIN, but we keep at
             %   least a small fraction for TEST.
@@ -144,20 +143,31 @@ function [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, check_c
             fprintf('[DivideNet] STANDARD backbone: backboneTrainFrac=%.2f → target %s TRAIN edges = %d of %d\n', ...
                     backboneTrainFrac, primary_label, target_primary, mPrimary);
         else
-            % INVERSE mode: keep legacy semantics where ratioBackbone is a
-            % fraction of TOTAL links targeted from the primary set.
-            ratioBackbone_eff = min(ratioBackbone, ratioTrain);
-            if ratioBackbone_eff < ratioBackbone
-                fprintf(['[DivideNet] (INVERSE) Clamping ratioBackbone from %.3f to %.3f ', ...
-                         'for %s-priority mode (TrainRatio=%.3f).\n'], ...
-                         ratioBackbone, ratioBackbone_eff, primary_label, ratioTrain);
+            % INVERSE backbone mode (SYMMETRIC):
+            %   ratioBackbone ≡ nonbackboneTrainFrac = fraction of NON-backbone
+            %   edges (primary set) to place in TRAIN, while keeping at least
+            %   a small fraction for TEST (mirrors STANDARD behavior).
+            nonbackboneTrainFrac = ratioBackbone;              % in [0,1]
+            nonbackboneTrainFrac = max(0, min(1, nonbackboneTrainFrac));
+
+            % Minimum number of primary edges (non-backbone) to keep for TEST
+            if mPrimary >= 2
+                min_primary_test = max(1, ceil(0.10 * mPrimary));   % at least 10% or >=1
+            else
+                min_primary_test = 0;                               % too few to enforce
+            end
+            max_primary_train_allowed = max(0, mPrimary - min_primary_test);
+
+            raw_target_primary = round(nonbackboneTrainFrac * mPrimary);
+            target_primary     = min([raw_target_primary, max_primary_train_allowed, num_train]);
+
+            % If requested frac > 0 but we ended with 0 and have capacity, ensure at least one
+            if target_primary == 0 && nonbackboneTrainFrac > 0 && mPrimary > 0 && num_train > 0
+                target_primary = min(1, max_primary_train_allowed);
             end
 
-            raw_target_primary = round(ratioBackbone_eff * m);
-            target_primary     = min([mPrimary, raw_target_primary, num_train]);
-
-            fprintf('[DivideNet] INVERSE backbone: effective ratioBackbone=%.2f → target %s TRAIN edges = %d of %d\n', ...
-                    ratioBackbone_eff, primary_label, target_primary, mPrimary);
+            fprintf('[DivideNet] INVERSE backbone: nonbackboneTrainFrac=%.2f → target %s TRAIN edges = %d of %d\n', ...
+                    nonbackboneTrainFrac, primary_label, target_primary, mPrimary);
         end
 
         % 3) Select primary portion for TRAIN (up to target_primary)
