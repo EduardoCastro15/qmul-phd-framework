@@ -1,166 +1,182 @@
 # qmul-phd-framework
 
-## ✅ 1. **Define a Research Workflow Structure**
+This repository contains the **research framework, data, code, and documentation** supporting my PhD work at **Queen Mary University of London**, focused on:
 
-Structure your work using the **DS/ML research lifecycle**:
+> **Link prediction in ecological food webs**, with emphasis on
+> Weisfeiler–Lehman–based methods (WLNM), backbone extraction, and the ecological interpretation of reduced network representations.
 
-```
-[Problem Definition] 
-        ↓
-[Data Preparation]
-        ↓
-[Methodology/Algorithm Setup]
-        ↓
-[Experimentation]
-        ↓
-[Results & Analysis]
-        ↓
-[Interpretation]
-        ↓
-[Publication]
-```
+The repository is designed to support **reproducible experiments**, **systematic analysis**, and **publication-ready outputs**.
 
-Create folders (or GitHub repos) that mirror this logic. Example:
+---
+
+## Research Workflow
+
+The project follows a standard data science / machine learning research lifecycle:
 
 ```
-phd-wlnm-analysis/
-├── data/
-│   ├── raw/
-│   └── processed/
-├── experiments/
-│   ├── small_webs/
-│   └── large_webs/
-├── figures/
-├── notebooks/
-├── results/
-│   ├── metrics/
-│   └── logs/
-├── src/
-│   └── matlab/
-├── docs/
-│   ├── progress_logs.md
-│   └── report_slides.pptx
-├── paper/
-│   └── draft.tex
+Problem Definition
+        ↓
+Data Preparation
+        ↓
+Methodology & Algorithm Design
+        ↓
+Experimentation
+        ↓
+Results & Analysis
+        ↓
+Ecological Interpretation
+        ↓
+Manuscript Preparation
+```
+
+The folder structure mirrors this workflow to keep research, experiments, and documentation clearly separated.
+
+---
+
+## Repository Structure (High-level)
+
+```
+.
+├── data/           # Raw and processed datasets (food webs, metadata)
+├── src/            # Core algorithmic implementations (MATLAB)
+├── results/        # Experiment outputs (CSV, logs)
+├── notebooks/      # Analysis and visualization notebooks (Python)
+├── docs/           # Documentation, papers, slides, figures
+├── paper/          # Manuscript drafts and publication material
 └── README.md
 ```
 
 ---
 
-## ✅ 2. **Log and Visualize Progress the Academic Way**
+## Data (`/data`)
 
-### Option 1: **Jupyter Notebooks** (Python-centric)
+* **`raw/`**
 
-Use Jupyter Notebooks to:
+  * Original datasets (e.g. Hengill food webs, large food-web collections)
+* **`processed/`**
 
-* Import experiment results (CSV)
-* Generate ROC, PR, confusion matrix plots
-* Log observations and TODOs inline using Markdown
-* Export figures directly to `figures/`
-* Save as HTML or PDF to share with your supervisor
+  * Cleaned and derived datasets:
 
-> If your core code is in MATLAB, you can still generate CSVs from MATLAB and analyze them in Python/Jupyter. This is **a powerful hybrid strategy**.
+    * Food-web metadata (size, ecosystem, trophic properties)
+    * Stratified and size-based subsets
+    * CSV and MAT representations used in experiments
 
-### Option 2: **LaTeX/Overleaf** (Paper-ready)
-
-Use Overleaf or LaTeX locally to:
-
-* Write a structured document (even if informal at first): `Introduction`, `Methods`, `Results`, `Discussion`
-* Insert high-quality figures from `figures/`
-* Add tables with AUC, precision, recall, TP/FP/FN counts
-* This doubles as your **paper draft** and your **weekly research log**
-
-### Option 3: **PowerPoint Research Log** (For meetings)
-
-Use a 5-slide template for weekly meetings:
-
-1. **What I did this week**
-2. **How I did it (key code/graph/results)**
-3. **What I learned**
-4. **Challenges or open questions**
-5. **Next steps**
-
-Store this in `/docs/report_slides.pptx`, updating slides as needed weekly.
+All data transformations are scripted and reproducible.
 
 ---
 
-## ✅ 3. **Track Experiments Like a Researcher**
+## Core Algorithms (`/src`)
 
-Use a clear convention:
+### MATLAB (`/src/matlab`)
 
-### A. CSV Logging Format:
+This folder contains the **core WLNM pipeline**, including:
 
-Each row = 1 experiment:
+* Directed WLNM implementations
+* Negative sampling strategies
+* Backbone-based training regimes
+* Subgraph expansion and encoding
+* Logging and experiment runners
+
+MATLAB is used **only for core graph computation** and algorithm execution.
+
+---
+
+## Experiments and Results
+
+### Results (`/results`)
+
+* CSV files with per-experiment metrics:
+
+  * AUC, Precision, Recall, F1
+  * TP / FP / FN counts
+  * Runtime and configuration metadata
+* Logs generated during large-scale sweeps
+
+Each row corresponds to a **single experimental configuration**.
+
+### Notebooks (`/notebooks`, `/docs/useful_notebooks`)
+
+Python notebooks are used for:
+
+* Aggregating experiment outputs
+* Statistical analysis across food webs
+* Visualization (ROC, PR curves, boxplots, scatter plots)
+* Ecosystem-level and temperature-driven comparisons
+
+This allows a clean separation between **computation (MATLAB)** and **analysis/visualisation (Python)**.
+
+---
+
+## Documentation (`/docs`)
+
+The `docs/` folder contains:
+
+* **Methodology documentation**
+
+  * Draft and evolving descriptions of the WLNM pipeline
+  * Supplementary material for publication
+* **Figures and plots**
+
+  * Publication-ready visualizations
+* **Slides**
+
+  * Weekly or milestone research updates
+* **Reference papers**
+
+  * Key literature related to food webs, link prediction, and network backbones
+* **Progress notebooks and logs**
+
+  * Internal research tracking (not all content is versioned for size reasons)
+
+---
+
+## Manuscript Preparation (`/paper`)
+
+This folder is used for:
+
+* Paper drafts (LaTeX / Word)
+* Figure integration
+* Tables generated from experiment CSVs
+
+The goal is to maintain a **direct link between experiments and manuscript figures**.
+
+---
+
+## Experimental Logging Conventions
+
+Experiments are logged in CSV format for reproducibility.
+Example schema:
 
 ```csv
-foodweb_name,n_links,K,max_depth,auc,precision,recall,tp,fp,fn,time
-Chesapeake,16041,3,5,0.81,0.72,0.76,120,35,37,02:15
+ExpID,AUC,TimeElapsed,K,TrainRatio,BackboneRatio,Threshold,Precision,Recall,F1Score,TotalLinks,TrainLinks,TestLinks,BackboneTotal,NonBackboneTotal,BackboneTrainLinks,NonBackboneTrainLinks,BackboneTestLinks,NonBackboneTestLinks
+1,0.8925,00:00:08,10,60,20,0.10,0.6970,0.9122,0.7902,1593,955,638,278,1315,56,899,222,416
 ```
 
-### B. Markdown Logs (`progress_logs.md`)
-
-```md
-### [2025-05-05] WLNM Tests on Chesapeake
-
-- Params: K=3, max_depth=5
-- TP: 120, FP: 35, FN: 37
-- AUC: 0.81
-- Observation: AUC improved with higher K, but runtime increased to 2+ hours.
-- Issue: Mass ordering seems to lower recall.
-- Next: Compare with Katz similarity baseline.
-```
+Markdown notes are used alongside results to capture observations, issues, and next steps.
 
 ---
 
-## ✅ 4. **GitHub + Overleaf for Publication**
+## Tooling Summary
 
-* Use **GitHub** to version control your code *and* results.
-
-  * Push your `/results`, `/notebooks`, and `/paper` folders.
-  * Add Jupyter or Markdown README for each experiment.
-
-* Use **Overleaf** to write your paper in LaTeX.
-
-  * Link to plots and tables generated from CSV/Notebook.
-  * Use the log file and PowerPoint as your draft base.
+| Task                        | Tooling                                     |
+| --------------------------- | ------------------------------------------- |
+| Core algorithms             | MATLAB                                      |
+| Data handling & aggregation | CSV + Python (`pandas`)                     |
+| Analysis & visualisation    | Python (`matplotlib`, `seaborn`, `sklearn`) |
+| Documentation & drafting    | Markdown, Word, LaTeX (Overleaf)            |
+| Version control             | Git & GitHub                                |
 
 ---
 
-## ✅ 5. **Use MATLAB Only for Core Graph Computation**
+## Notes on Reproducibility
 
-All post-processing (ROC, PR, visual plots, metrics aggregation) should move to **Python** (or even R), because:
-
-* It's easier to script, plot, and automate with `pandas`, `matplotlib`, `scikit-learn`
-* It integrates with Jupyter, Overleaf, GitHub, etc.
-
-You can write a simple bridge like:
-
-```matlab
-csvwrite('results/Chesapeake_K3_depth5.csv', [auc, recall, precision, tp, fp, fn])
-```
-
-Then read it in Python:
-
-```python
-import pandas as pd
-df = pd.read_csv('results/Chesapeake_K3_depth5.csv')
-```
+* All experiments are parameterized and logged.
+* Figures are generated from CSV outputs rather than manual editing.
+* Large intermediate artifacts (e.g. raw notebooks, logs) are intentionally excluded from version control where appropriate.
 
 ---
 
-## ✅ Final Academic Advice
+## Status
 
-> Your **goal** is not just to “run code” but to “build a reproducible, interpretable, and publication-ready pipeline.”
-
-### Summary of Tools I Recommend:
-
-| Task             | Tool                                 |
-| ---------------- | ------------------------------------ |
-| Core WLNM code   | MATLAB                               |
-| Data logging     | CSV + Markdown                       |
-| Analysis & plots | Python (pandas, matplotlib, sklearn) |
-| Reporting        | Jupyter Notebooks + LaTeX (Overleaf) |
-| Meetings         | PowerPoint log or exported Notebook  |
-| Version Control  | GitHub                               |
-
----
+This repository is **actively developed** as part of an ongoing PhD project.
+Structure and content may evolve as experiments and manuscripts progress.
