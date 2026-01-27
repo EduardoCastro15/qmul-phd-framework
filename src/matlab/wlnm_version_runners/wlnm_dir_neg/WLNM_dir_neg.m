@@ -1,4 +1,4 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
+function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, varargin)
     %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
     %  --Input--
     %  -dataname: name of the food web
@@ -19,6 +19,12 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     %  Muhan Zhang, Washington University in St. Louis
     %
     %  *author: Jorge Eduardo Castro Cruces, Queen Mary University of London
+
+    p = inputParser;
+    addParameter(p, 'cv_tag', '');
+    addParameter(p, 'save_confusion', true);
+    parse(p, varargin{:});
+    opt = p.Results;
 
     a = 2;  % how many times of negative links (w.r.t. pos links) to sample
     portion = 1;  % if specified, only a portion of the sampled train and test links be returned
@@ -115,23 +121,30 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     FN_links = setdiff(true_links, predicted_links, 'rows');
 
     % Save files
-    % exp_id = sprintf('%s_K_%d_%s', dataname, K, nodeSelection);
-    exp_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
+    base_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
+    if ~isempty(opt.cv_tag)
+        exp_id = sprintf('%s_%s', base_id, opt.cv_tag);
+    else
+        exp_id = base_id;
+    end
     results_dir = 'data/result/confusion_matrix_csv/';
     if ~exist(results_dir, 'dir')
         mkdir(results_dir);
     end
 
-    % === Save scores and labels to CSV ===
-    scores_labels_table = table(scores, test_label, 'VariableNames', {'Score', 'Label'});
-    writetable(scores_labels_table, fullfile(results_dir, ...
-        sprintf('%s_scores_labels.csv', exp_id)));
+    if opt.save_confusion
+        % === Save scores and labels to CSV ===
+        scores_labels_table = table(scores, test_label, 'VariableNames', {'Score', 'Label'});
+        writetable(scores_labels_table, fullfile(results_dir, ...
+            sprintf('%s_scores_labels.csv', exp_id)));
 
-    % Save enriched CSVs
-    export_augmented_links(TP_links, [exp_id '_TP_links.csv'], taxonomy, mass, results_dir);
-    export_augmented_links(FP_links, [exp_id '_FP_links.csv'], taxonomy, mass, results_dir);
-    export_augmented_links(FN_links, [exp_id '_FN_links.csv'], taxonomy, mass, results_dir);
-    export_augmented_links(train_pos, [exp_id '_train_links.csv'], taxonomy, mass, results_dir);
+        % Save enriched CSVs
+        export_augmented_links(TP_links, [exp_id '_TP_links.csv'], taxonomy, mass, results_dir);
+        export_augmented_links(FP_links, [exp_id '_FP_links.csv'], taxonomy, mass, results_dir);
+        export_augmented_links(FN_links, [exp_id '_FN_links.csv'], taxonomy, mass, results_dir);
+        export_augmented_links(train_pos, [exp_id '_train_links.csv'], taxonomy, mass, results_dir);
+    end
+
 end
 
 % === Save TP/FP/FN links with metadata ===

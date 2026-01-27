@@ -9,6 +9,7 @@ function registry = get_version_registry()
     registry('wlnm_directed') = @run_wlnm_directed;
     registry('wlnm_negative') = @run_wlnm_negative;
     registry('wlnm_dir_neg')  = @run_wlnm_dir_neg;
+    registry('wlnm_dir_neg_kfold') = @run_wlnm_dir_neg_kfold;
 
     % Examples to add later:
     % registry('cn_baseline')      = @run_cn_baseline;
