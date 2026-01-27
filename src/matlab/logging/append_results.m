@@ -1,18 +1,30 @@
 function append_results(log_file, results, use_backbone)
-    %APPEND_RESULTS Append an array of result structs to CSV.
-    % First column (ExpID/Iteration) is sequential across the whole file.
+%APPEND_RESULTS Append an array of result structs to CSV.
+% First column (ExpID/Iteration) is sequential across the whole file.
+%
+% This writer is consistent with init_log_file():
+% - use_backbone=true  -> backbone header (no CV fields)
+% - use_backbone=false -> non-backbone header with CV fields at the end
+%
+% Non-backbone header order:
+% Iteration,AUC,ElapsedTime,K,TrainRatio,BestThreshold,Precision,Recall,F1Score,
+% TotalLinks,TrainLinks,TestLinks,BackboneTotal,NonBackboneTotal,
+% BackboneTrainLinks,NonBackboneTrainLinks,BackboneTestLinks,NonBackboneTestLinks,
+% CvK,FoldID,NumFolds,ExperimentID,Seed
+
+    if nargin < 3
+        use_backbone = false;
+    end
 
     % ---- Find last used ID in this log_file (if any) ----
+    lastID = 0;
     if isfile(log_file)
         fid_read = fopen(log_file, 'r');
         assert(fid_read ~= -1, 'Cannot open %s for reading.', log_file);
 
-        lastID = 0;
-
         % Skip header line
-        headerLine = fgetl(fid_read); %#ok<NASGU>
+        fgetl(fid_read);
 
-        % Walk through lines and keep last numeric ID from first column
         line = fgetl(fid_read);
         while ischar(line)
             if ~isempty(line)
@@ -31,20 +43,22 @@ function append_results(log_file, results, use_backbone)
         end
 
         fclose(fid_read);
-    else
-        lastID = 0;
     end
 
     % ---- Append new rows with sequential IDs ----
+    fid = fopen(log_file, 'a');
+    assert(fid ~= -1, 'Cannot open %s for appending.', log_file);
+    c = onCleanup(@() fclose(fid));
+
     for i = 1:numel(results)
+        cvk = 0;
+        if isfield(results(i), 'CvK'); cvk = results(i).CvK; end
         expID = lastID + i;
 
-        fid = fopen(log_file, 'a');
-        assert(fid ~= -1, 'Cannot open %s for appending.', log_file);
-
         if use_backbone
+            % Backbone mode (no CV fields)
             fprintf(fid, ...
-                ['%d,%.4f,%s,%d,%.0f,%.0f,%.2f,%.4f,%.4f,%.4f,' ...
+                ['%d,%.4f,%s,%d,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,' ...
                  '%d,%d,%d,%d,%d,%d,%d,%d,%d\n'], ...
                 expID, ...
                 results(i).AUC, ...
@@ -65,10 +79,19 @@ function append_results(log_file, results, use_backbone)
                 results(i).NonBackboneTrainLinks, ...
                 results(i).BackboneTestLinks, ...
                 results(i).NonBackboneTestLinks);
+
         else
+            % Non-backbone mode (CV fields at end)
+            foldID = 0; numFolds = 0; expRun = 0; seed = 0;
+            if isfield(results(i), 'FoldID');       foldID   = results(i).FoldID; end
+            if isfield(results(i), 'NumFolds');     numFolds = results(i).NumFolds; end
+            if isfield(results(i), 'ExperimentID'); expRun   = results(i).ExperimentID; end
+            if isfield(results(i), 'Seed');         seed     = results(i).Seed; end
+
             fprintf(fid, ...
-                ['%d,%.4f,%s,%d,%.0f,%.2f,%.4f,%.4f,%.4f,' ...
-                 '%d,%d,%d,%d,%d,%d,%d,%d,%d\n'], ...
+                ['%d,%.4f,%s,%d,%.2f,%.4f,%.4f,%.4f,%.4f,' ...
+                 '%d,%d,%d,%d,%d,%d,%d,%d,%d,' ...
+                 '%d,%d,%d,%d,%d\n'], ...
                 expID, ...
                 results(i).AUC, ...
                 results(i).TimeElapsed, ...
@@ -86,9 +109,12 @@ function append_results(log_file, results, use_backbone)
                 results(i).BackboneTrainLinks, ...
                 results(i).NonBackboneTrainLinks, ...
                 results(i).BackboneTestLinks, ...
-                results(i).NonBackboneTestLinks);
+                results(i).NonBackboneTestLinks, ...
+                cvk, ...
+                foldID, ...
+                numFolds, ...
+                expRun, ...
+                seed);
         end
-
-        fclose(fid);
     end
 end
