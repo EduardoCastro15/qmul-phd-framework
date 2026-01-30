@@ -38,13 +38,13 @@ function Main()
         'backbone_max_q',       0.25, ...                % PF thresholding max q
         'backbone_q_ladder',    2.0, ...                 % PF thresholding q ladder
         'alpha_fallback',       [], ...                  % PF thresholding alpha fallback
-        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
+        'foodwebCSV',           'data/foodwebs_mat/foodweb_metrics_ecosystem_cvk10.csv', ...              % CSV with food web names
         'matFolder',            'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
         'logDir',               'data/result/prediction_scores_logs', ...                           % Directory for result logs
         'terminalLogDir',       'data/result/terminal_logs/', ...                                   % Directory for terminal logs
         'backboneStatsFile',    'data/result/backbone_stats/backbone_overview_per_foodweb.csv', ... % CSV for backbone stats
         'cvEnabled',            true, ...                % enable cross-validation mode
-        'cvKList',              [3 5 10], ...            % list of K values for K-fold CV
+        'cvKList',              [10], ...            % list of K values for K-fold CV
         'cvK',                  3, ...                   % e.g. 5-fold -> 80/20 per fold
         'cvSeed',               12345, ...               % fold assignment seed
         'cvStratifyBackbone',   false, ...                % stratify folds by backbone/nonbackbone if mask exists
