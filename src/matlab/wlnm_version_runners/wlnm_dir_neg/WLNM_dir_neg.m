@@ -23,12 +23,14 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     p = inputParser;
     addParameter(p, 'cv_tag', '');
     addParameter(p, 'save_confusion', true);
+    addParameter(p, 'backbone_mask', []);        % n×n sparse logical
+    addParameter(p, 'export_backbone', true);    % toggle if needed
     parse(p, varargin{:});
     opt = p.Results;
 
     a = 2;  % how many times of negative links (w.r.t. pos links) to sample
     portion = 1;  % if specified, only a portion of the sampled train and test links be returned
-    evaluate_on_all_unseen = false;  % evaluate on all unseen links
+    evaluate_on_all_unseen = true;  % evaluate on all unseen links
     use_role_filter = true;  % preserve graph direction and filter neg_links based on role constraints
     use_original_wlnm = false;  % use original WLNM logic for subgraph extraction
     useParallel = false;
@@ -143,6 +145,23 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
         export_augmented_links(FP_links, [exp_id '_FP_links.csv'], taxonomy, mass, results_dir);
         export_augmented_links(FN_links, [exp_id '_FN_links.csv'], taxonomy, mass, results_dir);
         export_augmented_links(train_pos, [exp_id '_train_links.csv'], taxonomy, mass, results_dir);
+
+        if opt.export_backbone && ~isempty(opt.backbone_mask)
+            % Ensure sparse logical
+            Bmask = opt.backbone_mask;
+            if ~issparse(Bmask)
+                Bmask = sparse(Bmask);
+            end
+            Bmask = logical(Bmask);
+
+            % Extract directed backbone edges (row -> col)
+            [bi, bj] = find(Bmask);
+            backbone_links = [bi, bj];
+
+            % Export as augmented links (Prey/Predator + masses)
+            export_augmented_links(backbone_links, [exp_id '_backbone_links.csv'], taxonomy, mass, results_dir);
+        end
+
     end
 
 end

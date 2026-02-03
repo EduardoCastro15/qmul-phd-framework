@@ -26,14 +26,15 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
     %   targeted from the primary set).
 
     % ---- defaults for backbone knobs ----
-    if ~isfield(config,'use_backbone'),       config.use_backbone       = false;          end
-    if ~isfield(config,'inverse_backbone'),   config.inverse_backbone   = false;          end
-    if ~isfield(config,'sweepBackboneTrain'), config.sweepBackboneTrain = false;          end
+    if ~isfield(config,'useParallel'),        config.useParallel        = false;            end
+    if ~isfield(config,'use_backbone'),       config.use_backbone       = false;            end
+    if ~isfield(config,'inverse_backbone'),   config.inverse_backbone   = false;            end
+    if ~isfield(config,'sweepBackboneTrain'), config.sweepBackboneTrain = false;            end
     if ~isfield(config,'backboneRatioRange'), config.backboneRatioRange = [0.20 0.50 0.80]; end
-    if ~isfield(config,'backbone_q'),         config.backbone_q         = 0.05;           end
-    if ~isfield(config,'backbone_max_q'),     config.backbone_max_q     = 0.25;           end
-    if ~isfield(config,'backbone_q_ladder'),  config.backbone_q_ladder  = 2.0;            end
-    if ~isfield(config,'alpha_fallback'),     config.alpha_fallback     = [];             end
+    if ~isfield(config,'backbone_q'),         config.backbone_q         = 0.05;             end
+    if ~isfield(config,'backbone_max_q'),     config.backbone_max_q     = 0.25;             end
+    if ~isfield(config,'backbone_q_ladder'),  config.backbone_q_ladder  = 2.0;              end
+    if ~isfield(config,'alpha_fallback'),     config.alpha_fallback     = [];               end
 
     % ---- Decide backbone mode based on Main + data ----
     has_mask  = isfield(data,'backbone_mask') && ~isempty(data.backbone_mask);
@@ -90,39 +91,55 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
     role          = data.role;
     nodeSelection = config.nodeSelection;
 
+    % --- Confusion/backbone export control ---
+    if isfield(config,'cvSaveConfusion')
+        save_confusion_flag = logical(config.cvSaveConfusion);
+    elseif isfield(config,'save_confusion')
+        save_confusion_flag = logical(config.save_confusion);
+    else
+        save_confusion_flag = true;
+    end
+
     row = 0;
 
     for rb = rb_list
+        % ------------------------------------------------------------
+        % Backbone mask: obtain once per rb (for export + optional split)
+        % ------------------------------------------------------------
+        bb_mask = [];
+
+        % Prefer precomputed mask from Main
+        if ~isempty(backbone_mask)
+            bb_mask = backbone_mask;
+
+        % Otherwise, if p-values exist, compute backbone once here
+        elseif has_pvals
+            [bb_mask, ~, ~] = backbone_regime(net, p_values_mat, ...
+                'q',              config.backbone_q, ...
+                'max_q',          config.backbone_max_q, ...
+                'q_ladder',       config.backbone_q_ladder, ...
+                'alpha_fallback', config.alpha_fallback);
+        end
+
+        % If we are in backbone split mode but still no mask, warn once
+        if use_backbone && isempty(bb_mask)
+            warning('[run_wlnm_dir_neg] backbone split requested but bb_mask is empty. Falling back to standard split.');
+        end
+
         % ---- Obtain train/test split (backbone or standard) ----
-        if use_backbone
+        if use_backbone && ~isempty(bb_mask)
             fprintf('[SweepBackbone] ratioTrain=%.2f | BackboneRatio=%.2f | inverse_backbone=%d\n', ...
                     ratioTrain, rb, config.inverse_backbone);
 
-            % Build the argument list for DivideNet_dir_neg.
-            % In STANDARD mode (inverse_backbone=false), rb is interpreted
-            % as backboneTrainFrac inside DivideNet_dir_neg.
             args = { ...
                 'use_backbone',      true, ...
                 'ratioBackbone',     rb, ...
-                'inverse_backbone',  config.inverse_backbone ...
+                'inverse_backbone',  config.inverse_backbone, ...
+                'backbone_mask',     bb_mask ...
             };
-
-            if ~isempty(backbone_mask)
-                % Backbone mask already computed in Main
-                args = [args, {'backbone_mask', backbone_mask}];
-            else
-                % Fallback: derive backbone inside DivideNet from p-values
-                args = [args, ...
-                    {'p_values_mat',   p_values_mat, ...
-                     'backbone_q',     config.backbone_q, ...
-                     'backbone_max_q', config.backbone_max_q, ...
-                     'backbone_q_ladder', config.backbone_q_ladder, ...
-                     'alpha_fallback', config.alpha_fallback}];
-            end
 
             [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, false, false, args{:});
         else
-            % Standard random split (no backbone)
             [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, false, false);
         end
 
@@ -144,29 +161,64 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
                 'NonBackboneTestLinks',  split_stats.NonBackboneTestLinks ...
             );
 
-            parfor i = 1:config.numExperiments
+            % ---- Run ONE serial experiment if we need to export confusion/backbone ----
+            start_idx = 1;
+            if save_confusion_flag
                 t0 = tic;
                 [auc, thr, prec, rec, f1] = WLNM_dir_neg( ...
-                    dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain);
+                    dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
+                    'save_confusion', true, ...
+                    'backbone_mask', bb_mask, ...
+                    'export_backbone', true ...
+                );
 
-                % Only overwrite the metric fields inside parfor
-                res_block(i).AUC         = auc;
-                res_block(i).TimeElapsed = datestr(seconds(toc(t0)), 'HH:MM:SS');
-                res_block(i).Threshold   = thr;
-                res_block(i).Precision   = prec;
-                res_block(i).Recall      = rec;
-                res_block(i).F1Score     = f1;
+                res_block(1).AUC         = auc;
+                res_block(1).TimeElapsed = datestr(seconds(toc(t0)), 'HH:MM:SS');
+                res_block(1).Threshold   = thr;
+                res_block(1).Precision   = prec;
+                res_block(1).Recall      = rec;
+                res_block(1).F1Score     = f1;
+
+                start_idx = 2; % remaining runs go to parfor without file output
             end
 
-            % Copy into results (structures now match)
+            % ---- Remaining experiments in parallel, with NO file exports ----
+            if start_idx <= config.numExperiments
+                parfor i = start_idx:config.numExperiments
+                    t0 = tic;
+                    [auc, thr, prec, rec, f1] = WLNM_dir_neg( ...
+                        dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
+                        'save_confusion', false, ...
+                        'backbone_mask', bb_mask, ...
+                        'export_backbone', false ...
+                    );
+
+                    res_block(i).AUC         = auc;
+                    res_block(i).TimeElapsed = datestr(seconds(toc(t0)), 'HH:MM:SS');
+                    res_block(i).Threshold   = thr;
+                    res_block(i).Precision   = prec;
+                    res_block(i).Recall      = rec;
+                    res_block(i).F1Score     = f1;
+                end
+            end
+
+            % Copy into results
             for i = 1:config.numExperiments
                 row = row + 1;
                 results(row) = res_block(i);
             end
         else
             for i = 1:config.numExperiments
+                do_export = save_confusion_flag && (i == 1);
+
                 t0 = tic;
-                [auc, thr, prec, rec, f1] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain);
+                [auc, thr, prec, rec, f1] = WLNM_dir_neg( ...
+                    dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
+                    'save_confusion', do_export, ...
+                    'backbone_mask', bb_mask, ...
+                    'export_backbone', do_export ...
+                );
+
                 row = row + 1;
 
                 results(row) = struct( ...
