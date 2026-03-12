@@ -1,4 +1,4 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, varargin)
+function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_dir_neg(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, varargin)
     %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
     %  --Input--
     %  -dataname: name of the food web
@@ -8,7 +8,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     %  -taxonomy: vector of species names
     %  -mass: vector of species masses
     %  --Output--
-    %  -auc: the AUC score of WLNM
+    %  -roc_auc: the ROC AUC score of WLNM
+    %  -pr_auc: the PR AUC score of WLNM
     %  -best_threshold: the best threshold for classification
     %  -best_precision: the best precision for classification
     %  -best_recall: the best recall for classification
@@ -43,7 +44,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
         warning('[WLNM] Skipping due to empty filtered sets.');
-        auc = NaN;
+        roc_auc = NaN;
+        pr_auc = NaN;
         best_threshold = NaN;
         best_precision = NaN;
         best_recall = NaN;
@@ -77,11 +79,20 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % Predict probabilities
     [~, scores] = classify(net, reshape(test_data', K*(K-1)/2, 1, 1, size(test_data, 1)));
     scores(:, 1) = [];
-    % disp(scores);
-    % disp(size(scores));
 
-    % Compute AUC
-    [~, ~, ~, auc] = perfcurve(test_label', scores', 1);
+    % [~, scores] = classify(net, Xtest);
+
+    % % explicitly choose the column for positive class = 1
+    % scores_pos = scores(:, 2);   % only if you verified class 1 is column 2
+
+    % [~, ~, ~, roc_auc] = perfcurve(test_label', scores_pos, 1);
+    % [~, ~, ~, pr_auc]  = perfcurve(test_label', scores_pos, 1, 'XCrit', 'reca', 'YCrit', 'prec');
+
+    % Compute ROC-AUC
+    [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
+
+    % Compute PR-AUC
+    [~, ~, ~, pr_auc] = perfcurve(test_label', scores', 1, 'XCrit', 'reca', 'YCrit', 'prec');
 
     % Optimize classification threshold
     thresholds = 0.1:0.05:0.9;
@@ -109,7 +120,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end
 
     fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', best_threshold, best_precision, best_recall, best_f1_score);
-    fprintf('AUC: %.4f\n', auc);
+    fprintf('ROC-AUC: %.4f\n', roc_auc);
+    fprintf('PR-AUC: %.4f\n', pr_auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
     binary_predictions = scores' > best_threshold;

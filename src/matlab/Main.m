@@ -20,7 +20,7 @@ function Main()
     config = struct( ...
         'useParallel',          true, ...                % Enable/disable parallel pool
         'version',              'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
-        'numExperiments',       1, ...                   % Repeated experiments per food web
+        'numExperiments',       10, ...                   % Repeated experiments per food web
         'kRange',               10, ...                  % Number of nodes per subgraph
         'sweepTrainRatios',     false, ...               % Sweep over multiple ratios or fixed
         'ratioTrain',           0.6, ...                 % Default training ratio
@@ -28,7 +28,7 @@ function Main()
         'nodeSelection',        'random', ...            % Type of node selection
         'checkConnectivity',    true, ...                % Ensure train graph connectivity
         'adaptiveConnectivity', true, ...                % Adapt connectivity check based on train ratio
-        'use_backbone' ,        true, ...               % Enable backbone extraction
+        'use_backbone' ,        false, ...               % Enable backbone extraction
         'inverse_backbone',     false, ...               % Use non-backbone edges instead (keeps old semantics)
         'logBackboneStats',     false, ...               % Enable/disable backbone stats CSV logging
         'sweepBackboneTrain',   false, ...               % Sweep backbone *train fraction* or use fixed

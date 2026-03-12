@@ -1,4 +1,4 @@
-function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_directed(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
+function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_directed(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
     %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
     %  --Input--
     %  -train: a sparse matrix of training links (1: link, 0: otherwise)
@@ -6,7 +6,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     %  -K: number of vertices in an enclosing subgraph
     %  -ith_experiment: exp index, for parallel computing
     %  --Output--
-    %  -auc: the AUC score of WLNM
+    %  -roc_auc: the ROC-AUC score of WLNM
+    %  -pr_auc: the PR-AUC score of WLNM
     %
     %  *author: Muhan Zhang, Washington University in St. Louis
     %%
@@ -28,7 +29,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
         warning('[WLNM] Skipping due to empty filtered sets.');
-        auc = NaN;
+        roc_auc = NaN;
+        pr_auc = NaN;
         best_threshold = NaN;
         best_precision = NaN;
         best_recall = NaN;
@@ -113,8 +115,11 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
             delete(sprintf('tempdata/test_log_scores_%d.asc', ith_experiment));
     end
 
-    % Compute AUC
-    [~, ~, ~, auc] = perfcurve(test_label', scores', 1);
+    % Compute ROC-AUC
+    [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
+
+    % Compute PR-AUC
+    [~, ~, ~, pr_auc] = perfcurve(test_label', scores', 1, 'XCrit', 'reca', 'YCrit', 'prec');
 
     % Optimize classification threshold
     thresholds = 0.1:0.05:0.9;
@@ -142,7 +147,8 @@ function [auc, best_threshold, best_precision, best_recall, best_f1_score] = WLN
     end
 
     fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', best_threshold, best_precision, best_recall, best_f1_score);
-    fprintf('AUC: %.4f\n', auc);
+    fprintf('ROC-AUC: %.4f\n', roc_auc);
+    fprintf('PR-AUC: %.4f\n', pr_auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
     binary_predictions = scores' > best_threshold;
