@@ -1,147 +1,178 @@
 function append_results(log_file, results, use_backbone)
 %APPEND_RESULTS Append an array of result structs to CSV.
-% First column (ExpID/Iteration) is sequential across the whole file.
 %
-% This writer is consistent with init_log_file():
-% - use_backbone=true  -> backbone header (no CV fields)
-% - use_backbone=false -> non-backbone header with CV fields at the end
+% The first column is sequential across the whole file:
+%   - backbone mode -> ExpID
+%   - non-backbone  -> Iteration
 %
-% Non-backbone header order:
-% Iteration,ROC_AUC,PR_AUC,ElapsedTime,K,TrainRatio,BestThreshold,Precision,Recall,F1Score,
-% TotalLinks,TrainLinks,TestLinks,BackboneTotal,NonBackboneTotal,
-% BackboneTrainLinks,NonBackboneTrainLinks,BackboneTestLinks,NonBackboneTestLinks,
-% CvK,FoldID,NumFolds,ExperimentID,Seed
+% This version is header-driven and avoids fragile cell concatenation.
 
     if nargin < 3
         use_backbone = false;
     end
 
-    % ---- Find last used ID in this log_file (if any) ----
+    assert(isfile(log_file), ...
+        'append_results:MissingLogFile', ...
+        'Log file does not exist: %s. Call init_log_file() first.', log_file);
+
+    % ------------------------------------------------------------
+    % Read header and find last used sequential ID
+    % ------------------------------------------------------------
+    fid_read = fopen(log_file, 'r');
+    assert(fid_read ~= -1, 'Cannot open %s for reading.', log_file);
+    c_read = onCleanup(@() fclose(fid_read));
+
+    header_line = fgetl(fid_read);
+    assert(ischar(header_line), 'Log file %s is empty or unreadable.', log_file);
+
+    header = strsplit(strtrim(header_line), ',');
+    ncols  = numel(header);
+
     lastID = 0;
-    if isfile(log_file)
-        fid_read = fopen(log_file, 'r');
-        assert(fid_read ~= -1, 'Cannot open %s for reading.', log_file);
-
-        % Skip header line
-        fgetl(fid_read);
-
-        line = fgetl(fid_read);
-        while ischar(line)
-            if ~isempty(line)
-                commaPos = find(line == ',', 1, 'first');
-                if ~isempty(commaPos)
-                    token = line(1:commaPos-1);
-                else
-                    token = line;
-                end
-                val = str2double(strtrim(token));
-                if ~isnan(val)
-                    lastID = val;
-                end
+    line = fgetl(fid_read);
+    while ischar(line)
+        if ~isempty(strtrim(line))
+            commaPos = find(line == ',', 1, 'first');
+            if ~isempty(commaPos)
+                token = line(1:commaPos-1);
+            else
+                token = line;
             end
-            line = fgetl(fid_read);
+            val = str2double(strtrim(token));
+            if ~isnan(val)
+                lastID = val;
+            end
         end
-
-        fclose(fid_read);
+        line = fgetl(fid_read);
     end
 
-    % ---- Append new rows with sequential IDs ----
+    % ------------------------------------------------------------
+    % Append rows
+    % ------------------------------------------------------------
     fid = fopen(log_file, 'a');
     assert(fid ~= -1, 'Cannot open %s for appending.', log_file);
     c = onCleanup(@() fclose(fid));
 
     for i = 1:numel(results)
-        cvk = 0;
-        if isfield(results(i), 'CvK'); cvk = results(i).CvK; end
         expID = lastID + i;
+        row = result_to_row(results(i), expID, header, ncols, use_backbone);
+        write_csv_row(fid, row);
+    end
+end
 
-        if use_backbone
-            % Backbone mode (no CV fields)
-            backboneRatio         = getfield_or(results(i), 'BackboneRatio', 0);
-            totalLinks            = getfield_or(results(i), 'TotalLinks', 0);
-            trainLinks            = getfield_or(results(i), 'TrainLinks', 0);
-            testLinks             = getfield_or(results(i), 'TestLinks', 0);
-            backboneTotal         = getfield_or(results(i), 'BackboneTotal', 0);
-            nonBackboneTotal      = getfield_or(results(i), 'NonBackboneTotal', 0);
-            backboneTrainLinks    = getfield_or(results(i), 'BackboneTrainLinks', 0);
-            nonBackboneTrainLinks = getfield_or(results(i), 'NonBackboneTrainLinks', 0);
-            backboneTestLinks     = getfield_or(results(i), 'BackboneTestLinks', 0);
-            nonBackboneTestLinks  = getfield_or(results(i), 'NonBackboneTestLinks', 0);
+% ============================================================
+% Build one 1 x N cell row exactly matching the header
+% ============================================================
+function row = result_to_row(r, expID, header, ncols, use_backbone)
 
-            fprintf(fid, ...
-                ['%d,%.4f,%.4f,%s,%d,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,' ...
-                '%d,%d,%d,%d,%d,%d,%d,%d,%d\n'], ...
-                expID, ...
-                results(i).ROC_AUC, ...
-                results(i).PR_AUC, ...
-                results(i).TimeElapsed, ...
-                results(i).K, ...
-                results(i).TrainRatio * 100, ...
-                backboneRatio * 100, ...
-                results(i).Threshold, ...
-                results(i).Precision, ...
-                results(i).Recall, ...
-                results(i).F1Score, ...
-                totalLinks, ...
-                trainLinks, ...
-                testLinks, ...
-                backboneTotal, ...
-                nonBackboneTotal, ...
-                backboneTrainLinks, ...
-                nonBackboneTrainLinks, ...
-                backboneTestLinks, ...
-                nonBackboneTestLinks);
+    row = cell(1, ncols);
 
-        else
-            % Non-backbone mode (CV fields at end)
-            foldID = 0; numFolds = 0; expRun = 0; seed = 0;
-            if isfield(results(i), 'FoldID');       foldID   = results(i).FoldID; end
-            if isfield(results(i), 'NumFolds');     numFolds = results(i).NumFolds; end
-            if isfield(results(i), 'ExperimentID'); expRun   = results(i).ExperimentID; end
-            if isfield(results(i), 'Seed');         seed     = results(i).Seed; end
+    for j = 1:ncols
+        col = header{j};
 
-            totalLinks            = getfield_or(results(i), 'TotalLinks', 0);
-            trainLinks            = getfield_or(results(i), 'TrainLinks', 0);
-            testLinks             = getfield_or(results(i), 'TestLinks', 0);
-            backboneTotal         = getfield_or(results(i), 'BackboneTotal', 0);
-            nonBackboneTotal      = getfield_or(results(i), 'NonBackboneTotal', 0);
-            backboneTrainLinks    = getfield_or(results(i), 'BackboneTrainLinks', 0);
-            nonBackboneTrainLinks = getfield_or(results(i), 'NonBackboneTrainLinks', 0);
-            backboneTestLinks     = getfield_or(results(i), 'BackboneTestLinks', 0);
-            nonBackboneTestLinks  = getfield_or(results(i), 'NonBackboneTestLinks', 0);
+        switch col
+            case {'ExpID', 'Iteration'}
+                row{j} = expID;
 
-            fprintf(fid, ...
-                ['%d,%.4f,%.4f,%s,%d,%.2f,%.4f,%.4f,%.4f,%.4f,' ...
-                '%d,%d,%d,%d,%d,%d,%d,%d,%d,' ...
-                '%d,%d,%d,%d,%d\n'], ...
-                expID, ...
-                results(i).ROC_AUC, ...
-                results(i).PR_AUC, ...
-                results(i).TimeElapsed, ...
-                results(i).K, ...
-                results(i).TrainRatio * 100, ...
-                results(i).Threshold, ...
-                results(i).Precision, ...
-                results(i).Recall, ...
-                results(i).F1Score, ...
-                totalLinks, ...
-                trainLinks, ...
-                testLinks, ...
-                backboneTotal, ...
-                nonBackboneTotal, ...
-                backboneTrainLinks, ...
-                nonBackboneTrainLinks, ...
-                backboneTestLinks, ...
-                nonBackboneTestLinks, ...
-                cvk, ...
-                foldID, ...
-                numFolds, ...
-                expRun, ...
-                seed);
+            case 'TimeElapsed'
+                row{j} = getfield_or(r, 'TimeElapsed', '');
+
+            case 'ElapsedTime'
+                row{j} = getfield_or(r, 'TimeElapsed', '');
+
+            case 'TrainRatio'
+                row{j} = 100 * getfield_or(r, 'TrainRatio', NaN);
+
+            case 'BackboneRatio'
+                row{j} = 100 * getfield_or(r, 'BackboneRatio', NaN);
+
+            case 'NonBackboneRatio'
+                row{j} = 100 * getfield_or(r, 'BackboneRatio', NaN);
+
+            case 'BestThreshold'
+                row{j} = getfield_or(r, 'Threshold', NaN);
+
+            case 'Threshold'
+                row{j} = getfield_or(r, 'Threshold', NaN);
+
+            otherwise
+                row{j} = getfield_or(r, col, default_for_column(col, use_backbone));
         end
     end
 end
 
+% ============================================================
+% Default values for missing fields
+% ============================================================
+function v = default_for_column(col, use_backbone)
+
+    switch col
+        case {'CvK', 'FoldID', 'NumFolds', 'ExperimentID', 'Seed'}
+            if use_backbone
+                v = [];
+            else
+                v = 0;
+            end
+
+        case {'TimeElapsed', 'ElapsedTime'}
+            v = '';
+
+        otherwise
+            v = NaN;
+    end
+end
+
+% ============================================================
+% Write one CSV row
+% ============================================================
+function write_csv_row(fid, row)
+    txt = cell(1, numel(row));
+    for j = 1:numel(row)
+        txt{j} = csv_value_to_string(row{j});
+    end
+    fprintf(fid, '%s\n', strjoin(txt, ','));
+end
+
+% ============================================================
+% Convert scalar value to CSV-safe string
+% ============================================================
+function s = csv_value_to_string(v)
+
+    if isempty(v)
+        s = '';
+
+    elseif isstring(v) || ischar(v)
+        s = char(string(v));
+
+    elseif isnumeric(v) || islogical(v)
+        if ~isscalar(v)
+            error('csv_value_to_string:NonScalarNumeric', ...
+                'Only scalar numeric values can be written to the results CSV.');
+        end
+
+        if isnan(v)
+            s = 'NaN';
+        elseif isinf(v)
+            if v > 0
+                s = 'Inf';
+            else
+                s = '-Inf';
+            end
+        elseif abs(v - round(v)) < 1e-12
+            s = sprintf('%d', round(v));
+        else
+            s = sprintf('%.4f', v);
+        end
+
+    else
+        error('csv_value_to_string:UnsupportedType', ...
+            'Unsupported value type in CSV writer: %s', class(v));
+    end
+end
+
+% ============================================================
+% Safe struct field access
+% ============================================================
 function v = getfield_or(s, fieldName, defaultValue)
     if isfield(s, fieldName) && ~isempty(s.(fieldName))
         v = s.(fieldName);
