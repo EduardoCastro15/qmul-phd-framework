@@ -1,30 +1,23 @@
-function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_score] = WLNM_directed(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
-    %  Usage: the main program for Weisfeiler-Lehman Neural Machine (WLNM)
-    %  --Input--
-    %  -train: a sparse matrix of training links (1: link, 0: otherwise)
-    %  -test: a sparse matrix of testing links (1: link, 0: otherwise)
-    %  -K: number of vertices in an enclosing subgraph
-    %  -ith_experiment: exp index, for parallel computing
-    %  --Output--
-    %  -roc_auc: the ROC-AUC score of WLNM
-    %  -pr_auc: the PR-AUC score of WLNM
-    %
-    %  *author: Muhan Zhang, Washington University in St. Louis
-    %%
+function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_score, aux] = ...
+    WLNM_directed(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
+    %WLNM_DIRECTED Directed WLNM preserving graph direction.
 
-    a = 2;  % how many times of negative links (w.r.t. pos links) to sample
-    portion = 1;  % if specified, only a portion of the sampled train and test links be returned
-    evaluate_on_all_unseen = false;  % evaluate on all unseen links
-    use_role_filter = false;  % preserve graph direction and filter neg_links based on role constraints
-    use_original_wlnm = false;  % use original WLNM logic for subgraph extraction
+    aux = struct();
+
+    a = 2;
+    portion = 1;
+    evaluate_on_all_unseen = false;
+    use_role_filter = false;
+    use_original_wlnm = false;
     useParallel = false;
 
-    % Remove triu function: Use the entire adjacency matrix for directed graphs
-    htrain = train;  % Use the full adjacency matrix
-    htest = test;
+    % Full directed adjacency
+    htrain = train;
+    htest  = test;
 
     % sample negative links for train and test sets
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg_directed(htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
+    [train_pos, train_neg, test_pos, test_neg] = sample_neg_directed( ...
+        htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter);
 
     % Sanity check
     if isempty(train_pos) || isempty(train_neg) || isempty(test_pos) || isempty(test_neg)
@@ -39,49 +32,48 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     end
 
     % Convert graphs to feature vectors
-    [train_data, train_label] = graph2vector_directed(train_pos, train_neg, train, K, useParallel, dataname, use_original_wlnm);
-    [test_data, test_label] = graph2vector_directed(test_pos, test_neg, train, K, useParallel, dataname, use_original_wlnm);
+    [train_data, train_label] = graph2vector_directed( ...
+        train_pos, train_neg, train, K, useParallel, dataname, use_original_wlnm);
+    [test_data, test_label] = graph2vector_directed( ...
+        test_pos, test_neg, train, K, useParallel, dataname, use_original_wlnm);
 
     % train a model
     model = 3;
     switch model
-        case 1  % logistic regression
-            addpath('software/liblinear-2.1/matlab');  % need to install liblinear
+        case 1
+            addpath('software/liblinear-2.1/matlab');
             train_data = sparse(train_data);
             test_data = sparse(test_data);
             [~, optim_c] = evalc('liblinear_train(train_label, train_data, ''-s 0 -C -q'');');
             model = liblinear_train(train_label, train_data, sprintf('-s 0 -c %d -q', optim_c(1)));
-            [~, acc, scores] = liblinear_predict(test_label, test_data, model, '-b 1 -q');
-            acc
+            [~, ~, scores] = liblinear_predict(test_label, test_data, model, '-b 1 -q');
             l1 = find(model.Label == 1);
             scores = scores(:, l1);
-        case 2 % train a feedforward neural network in Torch
-            addpath('software/liblinear-2.1/matlab');  % need to install liblinear
+
+        case 2
+            addpath('software/liblinear-2.1/matlab');
             train_data = sparse(train_data);
             test_data = sparse(test_data);
             if exist('tempdata') ~= 7
                 !mkdir tempdata
             end
-            % libsvmwrite(sprintf('tempdata/traindata_%d', ith_experiment), train_label, train_data);
-            % libsvmwrite(sprintf('tempdata/testdata_%d', ith_experiment), test_label, test_data);  % prepare data
-            % Convert sparse matrix to full matrix before writing
             train_data_full = full(train_data);
             test_data_full = full(test_data);
-            % Write to CSV files
             writematrix([train_label, train_data_full], sprintf('tempdata/traindata_%d.csv', ith_experiment));
             writematrix([test_label, test_data_full], sprintf('tempdata/testdata_%d.csv', ith_experiment));
-    
+
             cmd = sprintf('th nDNN.lua -inputdim %d -ith_experiment %d', K * (K - 1) / 2, ith_experiment);
-            [status, cmdout] = system(cmd, '-echo');  % Capture the status and output of the command
+            [status, cmdout] = system(cmd, '-echo');
             if status ~= 0
                 error('External command failed: %s', cmdout);
             end
-    
+
             scores = load(sprintf('tempdata/test_log_scores_%d.asc', ith_experiment));
-            delete(sprintf('tempdata/traindata_%d', ith_experiment));  % to delete temporal train and test data
+            delete(sprintf('tempdata/traindata_%d', ith_experiment));
             delete(sprintf('tempdata/testdata_%d', ith_experiment));
             delete(sprintf('tempdata/test_log_scores_%d.asc', ith_experiment));
-        case 3 % train a feedforward neural network in MATLAB
+
+        case 3
             layers = [imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')
                 fullyConnectedLayer(32)
                 reluLayer
@@ -92,25 +84,29 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
                 fullyConnectedLayer(2)
                 softmaxLayer
                 classificationLayer];
-            opts = trainingOptions('sgdm', 'InitialLearnRate', 0.1, 'MaxEpochs', 200, 'MiniBatchSize', 128, ...
-                'LearnRateSchedule','piecewise', 'LearnRateDropFactor', 0.9, 'L2Regularization', 0, ...
+            opts = trainingOptions('sgdm', 'InitialLearnRate', 0.1, 'MaxEpochs', 200, ...
+                'MiniBatchSize', 128, 'LearnRateSchedule','piecewise', ...
+                'LearnRateDropFactor', 0.9, 'L2Regularization', 0, ...
                 'ExecutionEnvironment', 'cpu');
-            net = trainNetwork(reshape(train_data', K*(K-1)/2, 1, 1, size(train_data, 1)), categorical(train_label), layers, opts);
+            net = trainNetwork( ...
+                reshape(train_data', K*(K-1)/2, 1, 1, size(train_data, 1)), ...
+                categorical(train_label), layers, opts);
             [~, scores] = classify(net, reshape(test_data', K*(K-1)/2, 1, 1, size(test_data, 1)));
             scores(:, 1) = [];
-        case 4 % train a neural network with sklearn
-            addpath('software/liblinear-2.1/matlab');  % need to install liblinear
+
+        case 4
+            addpath('software/liblinear-2.1/matlab');
             train_data = sparse(train_data);
             test_data = sparse(test_data);
             if exist('tempdata') ~= 7
                 !mkdir tempdata
             end
             libsvmwrite(sprintf('tempdata/traindata_%d', ith_experiment), train_label, train_data);
-            libsvmwrite(sprintf('tempdata/testdata_%d', ith_experiment), test_label, test_data);  % prepare data
+            libsvmwrite(sprintf('tempdata/testdata_%d', ith_experiment), test_label, test_data);
             cmd = sprintf('python3 nDNN.py %d %d', K * (K - 1) / 2, ith_experiment);
             system(cmd, '-echo');
             scores = load(sprintf('tempdata/test_log_scores_%d.asc', ith_experiment));
-            delete(sprintf('tempdata/traindata_%d', ith_experiment));  % to delete temporal train and test data
+            delete(sprintf('tempdata/traindata_%d', ith_experiment));
             delete(sprintf('tempdata/testdata_%d', ith_experiment));
             delete(sprintf('tempdata/test_log_scores_%d.asc', ith_experiment));
     end
@@ -146,7 +142,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         end
     end
 
-    fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', best_threshold, best_precision, best_recall, best_f1_score);
+    fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
+        best_threshold, best_precision, best_recall, best_f1_score);
     fprintf('ROC-AUC: %.4f\n', roc_auc);
     fprintf('PR-AUC: %.4f\n', pr_auc);
 
@@ -154,15 +151,47 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     binary_predictions = scores' > best_threshold;
     test_pairs = [test_pos; test_neg];
 
-    predicted_links = test_pairs(binary_predictions == 1, :);  % predicted as existing
-    true_links      = test_pairs(test_label == 1, :);          % actual positives
+    predicted_links = test_pairs(binary_predictions == 1, :);
+    true_links      = test_pairs(test_label == 1, :);
 
     TP_links = intersect(predicted_links, true_links, 'rows');
     FP_links = setdiff(predicted_links, true_links, 'rows');
     FN_links = setdiff(true_links, predicted_links, 'rows');
 
+    % ------------------------------------------------------------
+    % Build empirical full web and pseudo full web (directed)
+    % ------------------------------------------------------------
+    n = size(train, 1);
+
+    empirical_full = spones(train + test);
+    empirical_full = empirical_full - spdiags(diag(empirical_full), 0, n, n);
+    empirical_full = spones(empirical_full);
+
+    if isempty(predicted_links)
+        predicted_sparse = sparse(n, n);
+    else
+        predicted_sparse = sparse(predicted_links(:,1), predicted_links(:,2), 1, n, n);
+    end
+
+    pseudo_full = spones(train + predicted_sparse);
+    pseudo_full = pseudo_full - spdiags(diag(pseudo_full), 0, n, n);
+    pseudo_full = spones(pseudo_full);
+
+    % ------------------------------------------------------------
+    % Ecological / structural metrics
+    % ------------------------------------------------------------
+    emp_metrics    = compute_foodweb_metrics(empirical_full);
+    pseudo_metrics = compute_foodweb_metrics(pseudo_full);
+    cmp_metrics    = compare_empirical_pseudo_webs(empirical_full, pseudo_full);
+
+    aux.empirical_metrics      = emp_metrics;
+    aux.pseudo_metrics         = pseudo_metrics;
+    aux.comparison_metrics     = cmp_metrics;
+    aux.NumPredictedNovelLinks = size(predicted_links, 1);
+    aux.NumTrueNovelLinks      = size(true_links, 1);
+    aux.EvaluateOnAllUnseen    = evaluate_on_all_unseen;
+
     % Save files
-    % exp_id = sprintf('%s_K_%d_%s', dataname, K, nodeSelection);
     exp_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
     results_dir = 'data/result/confusion_matrix_csv/';
     if ~exist(results_dir, 'dir')
@@ -186,12 +215,10 @@ function export_augmented_links(links, filename, taxonomy, mass, results_dir)
     if isempty(links)
         T = cell2table(cell(0,4), 'VariableNames', {'Prey', 'Predator', 'PreyMass', 'PredatorMass'});
     else
-        % Ensure links are 2 columns
         if size(links, 2) ~= 2
             links = reshape(links, [], 2);
         end
 
-        % Explicitly reshape all to column vectors
         prey_names = reshape(taxonomy(links(:,1)), [], 1);
         predator_names = reshape(taxonomy(links(:,2)), [], 1);
         prey_mass = reshape(mass(links(:,1)), [], 1);
@@ -199,8 +226,7 @@ function export_augmented_links(links, filename, taxonomy, mass, results_dir)
 
         T = table(prey_names, predator_names, prey_mass, predator_mass, ...
             'VariableNames', {'Prey', 'Predator', 'PreyMass', 'PredatorMass'});
-        
-        % Optional: sort by predator mass
+
         T = sortrows(T, 'PredatorMass');
     end
     writetable(T, fullfile(results_dir, filename));
