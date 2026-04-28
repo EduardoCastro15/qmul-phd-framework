@@ -14,24 +14,25 @@ function Main()
     %   i.e. BackboneRatio = backboneTrainFrac in [0,1].
     %   The realized fraction of train edges that are backbone will differ
     %   per food web, and can be computed from split_stats.
+    % matlab -batch "Main"
 
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',            true, ...                % Enable/disable parallel pool
+        'useParallel',            false, ...                % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
         'numExperiments',         10, ...                   % Repeated experiments per food web
         'kRange',                 10, ...                  % Number of nodes per subgraph
-        'sweepTrainRatios',       false, ...               % Sweep over multiple ratios or fixed
-        'ratioTrain',             0.6, ...                 % Default training ratio
-        'trainRatioRange',        0.60:0.10:0.80, ...      % Training ratios to test
+        'sweepTrainRatios',       true, ...               % Sweep over multiple ratios or fixed
+        'ratioTrain',             0.70, ...                 % Default training ratio
+        'trainRatioRange',        0.80:0.10:0.90, ...      % Training ratios to test
         'nodeSelection',          'random', ...            % Type of node selection
         'checkConnectivity',      true, ...                % Ensure train graph connectivity
         'adaptiveConnectivity',   true, ...                % Adapt connectivity check based on train ratio
         'use_backbone' ,          false, ...               % Enable backbone extraction
         'inverse_backbone',       false, ...               % Use non-backbone edges instead (keeps old semantics)
         'logBackboneStats',       false, ...               % Enable/disable backbone stats CSV logging
-        'evaluate_on_all_unseen', true, ...              % explicit evaluation regime
+        'evaluate_on_all_unseen', false, ...              % explicit evaluation regime
         'exportBackboneCSV',      false, ...               % only export backbone links if explicitly requested
         'sweepBackboneTrain',     false, ...               % Sweep backbone *train fraction* or use fixed
         'BackboneRatio',          0.50, ...                % Fixed backboneTrainFrac if sweep disabled
@@ -45,12 +46,12 @@ function Main()
         'logDir',                 'data/result/prediction_scores_logs', ...                           % Directory for result logs
         'terminalLogDir',         'data/result/terminal_logs/', ...                                   % Directory for terminal logs
         'backboneStatsFile',      'data/result/backbone_stats/backbone_overview_per_foodweb.csv', ... % CSV for backbone stats
-        'cvEnabled',              false, ...               % enable cross-validation mode
-        'cvKList',                [3], ...                 % list of K values for K-fold CV
+        'cvEnabled',              false, ...                % enable cross-validation mode
+        'cvKList',                [], ...          % list of K values for K-fold CV
         'cvK',                    3, ...                   % e.g. 5-fold -> 80/20 per fold
         'cvSeed',                 12345, ...               % fold assignment seed
         'cvStratifyBackbone',     false, ...               % stratify folds by backbone/nonbackbone if mask exists
-        'cvSaveConfusion',        true ...                 % avoid generating huge CSVs during CV
+        'cvSaveConfusion',        true ...                 % save confusion matrices for each food web and fold (in terminal log dir)
     );
 
     %% === SETUP ===
