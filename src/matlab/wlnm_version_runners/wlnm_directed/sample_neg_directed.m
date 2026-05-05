@@ -56,14 +56,17 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_directed(train,
     
         % Randomly select train neg from all unknown links
         perm = randperm(size(neg_links, 1));
-        train_neg = neg_links(perm(1: a * train_size), :);
-        test_neg(perm(1: a * train_size), :) = [];  % remove train negative links from test negative links
+        k_train = min(floor(a * train_size), size(neg_links, 1));
+        train_neg = neg_links(perm(1:k_train), :);
+        test_neg(perm(1:k_train), :) = [];  % remove train negative links from test negative links
     else
         nlinks = size(neg_links, 1);
         ind = randperm(nlinks);
-        if a * (train_size + test_size) <= nlinks
-            train_ind = ind(1: a * train_size);
-            test_ind = ind(a * train_size + 1: a * train_size + a * test_size);
+        k_train_target = floor(a * train_size);
+        k_test_target = floor(a * test_size);
+        if k_train_target + k_test_target <= nlinks
+            train_ind = ind(1:k_train_target);
+            test_ind = ind(k_train_target + 1:k_train_target + k_test_target);
         else
             % Divide proportionally if negative links are insufficient
             ratio = train_size / (train_size + test_size);

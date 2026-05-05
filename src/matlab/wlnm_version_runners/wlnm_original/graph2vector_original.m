@@ -29,12 +29,13 @@ function [data, label] = graph2vector_original(pos, neg, A, K, dataname)
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
     t0 = tic;
 
+    step = max(1, floor(all_size / 10));
     for i = 1:all_size
         ind = all(i, :);
         is_positive = i <= pos_size;
         data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
 
-        if mod(i, floor(all_size / 10)) == 0
+        if mod(i, step) == 0 || i == all_size
             fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
             % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
         end
@@ -113,7 +114,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     % Keep only links whose endpoints are inside 'nodes'
     u = double(loc(links(:,1)));
     v = double(loc(links(:,2)));
-    m = (u > 0) & (v > 0);
+    m = (u > 0) & (v > 0) & (links_dist > 0);
     u = u(m); v = v(m); w = 1 ./ links_dist(m);
 
     % For undirected effect: pick the larger weight (i.e., smaller distance)

@@ -109,12 +109,12 @@ function v = default_for_column(col, use_backbone)
     switch col
         case {'CvK', 'FoldID', 'NumFolds', 'ExperimentID', 'Seed'}
             if use_backbone
-                v = [];
+                v = 0;
             else
                 v = 0;
             end
 
-        case {'TimeElapsed', 'ElapsedTime'}
+        case {'TimeElapsed', 'ElapsedTime', 'Version', 'ThresholdMode'}
             v = '';
 
         otherwise

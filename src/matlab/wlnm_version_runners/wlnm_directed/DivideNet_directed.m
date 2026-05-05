@@ -11,10 +11,11 @@ function [train, test, train_nodes, test_nodes] = DivideNet_directed(net, ratioT
     %  This function has been updated to support directed graphs without enforcing symmetry.
 
     % Remove self-loops (if any)
+    num_self_loops = nnz(diag(net));
     net = net - diag(diag(net));
-    
-    % Debugging: Check if self-loops were correctly removed
-    disp(['Debug: Number of self-loops removed: ', num2str(sum(diag(net) ~= 0))]);
+    if num_self_loops > 0
+        fprintf('[DivideNet_directed] Removed %d self-loops.\n', num_self_loops);
+    end
     
     % Calculate the number of edges for the test set
     num_testlinks = ceil((1-ratioTrain) * nnz(net));
@@ -30,12 +31,12 @@ function [train, test, train_nodes, test_nodes] = DivideNet_directed(net, ratioT
     
     % Randomly select edges to add to the test set until the desired count is reached
     while (nnz(test) < num_testlinks)
-        if length(linklist) <= 2
+        if size(linklist, 1) <= 2
             break;
         end
     
         % Randomly choose an edge from the link list
-        index_link = ceil(rand(1) * length(linklist));
+        index_link = randi(size(linklist, 1));
     
         % Identify the nodes connected by the selected edge
         uid1 = linklist(index_link, 1);

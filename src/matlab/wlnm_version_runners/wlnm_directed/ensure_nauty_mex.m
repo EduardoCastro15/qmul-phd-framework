@@ -7,13 +7,14 @@ function ensure_nauty_mex()
         return
     end
 
-    root = fileparts(mfilename('fullpath'));
+    runner_dir = fileparts(mfilename('fullpath'));
+    root = fileparts(fileparts(runner_dir));
     wd   = pwd;
     try
-        cd(fullfile(root,'software','nauty26r7'));
-        copyfile(fullfile('..','..','canonical.c'), '.','f');
+        cd(fullfile(root, 'software', 'nauty26r7'));
+        copyfile(fullfile('..', 'canonical.c'), '.', 'f');
         mex -silent canonical.c nauty.c nautil.c naugraph.c schreier.c naurng.c nausparse.c
-        movefile(['canonical.' mexext], fullfile(root,'software'),'f');
+        movefile(['canonical.' mexext], fullfile(root, 'software'), 'f');
     catch ME
         cd(wd); rethrow(ME);
     end

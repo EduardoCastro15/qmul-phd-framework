@@ -73,8 +73,10 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_negative(train,
 
     % Sample negative links for train and test
     perm = randperm(size(neg_links, 1));
-    train_neg = neg_links(perm(1:a * train_size), :);
-    test_neg = neg_links(perm(a * train_size + 1:a * (train_size + test_size)), :);
+    k_train = floor(a * train_size);
+    k_test = floor(a * test_size);
+    train_neg = neg_links(perm(1:k_train), :);
+    test_neg = neg_links(perm(k_train + 1:k_train + k_test), :);
 
     % Sample a portion of links if specified
     if portion < 1

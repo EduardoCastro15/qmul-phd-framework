@@ -21,11 +21,13 @@ function Main()
     config = struct( ...
         'useParallel',            false, ...                % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
-        'numExperiments',         10, ...                   % Repeated experiments per food web
+        'numExperiments',         1, ...                   % Repeated experiments per food web
+        'baseSeed',               12345, ...                % Base seed for repeated holdout experiments
+        'resampleSplitsEachExperiment', true, ...           % Resample train/test split for each repeated experiment
         'kRange',                 10, ...                  % Number of nodes per subgraph
-        'sweepTrainRatios',       true, ...               % Sweep over multiple ratios or fixed
-        'ratioTrain',             0.70, ...                 % Default training ratio
-        'trainRatioRange',        0.80:0.10:0.90, ...      % Training ratios to test
+        'sweepTrainRatios',       false, ...               % Sweep over multiple ratios or fixed
+        'ratioTrain',             0.60, ...                 % Default training ratio
+        'trainRatioRange',        0.10:0.10:0.90, ...      % Training ratios to test
         'nodeSelection',          'random', ...            % Type of node selection
         'checkConnectivity',      true, ...                % Ensure train graph connectivity
         'adaptiveConnectivity',   true, ...                % Adapt connectivity check based on train ratio
@@ -41,10 +43,17 @@ function Main()
         'backbone_max_q',         0.25, ...                % PF thresholding max q
         'backbone_q_ladder',      2.0, ...                 % PF thresholding q ladder
         'alpha_fallback',         [], ...                  % PF thresholding alpha fallback
-        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
+        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_1.csv', ...              % CSV with food web names
         'matFolder',              'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
         'logDir',                 'data/result/prediction_scores_logs', ...                           % Directory for result logs
         'terminalLogDir',         'data/result/terminal_logs/', ...                                   % Directory for terminal logs
+        'artifactDir',            'data/result/confusion_matrix_csv/', ...                            % Directory for auxiliary TP/FP/FN CSVs
+        'exportAuxiliaryCSVs',     true, ...                                                          % Export per-run score/link CSVs
+        'thresholdMode',          'fixed', ...                                                        % 'fixed' or legacy 'test_f1'
+        'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
+        'runDeltaTTests',         true, ...                                                           % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
+        'deltaTTestAlpha',        0.05, ...                                                           % Significance level for delta t-tests
+        'deltaTTestFile',         'data/result/statistical_tests/wlnm_dir_neg_delta_ttests.csv', ...   % Summary CSV for delta t-tests
         'backboneStatsFile',      'data/result/backbone_stats/backbone_overview_per_foodweb.csv', ... % CSV for backbone stats
         'cvEnabled',              false, ...                % enable cross-validation mode
         'cvKList',                [], ...          % list of K values for K-fold CV
@@ -104,6 +113,10 @@ function Main()
     %% === RESOLVE RUNNER FOR REQUESTED VERSION ===
     registry = get_version_registry();                         % containers.Map
     runner   = resolve_runner(registry, config.version);       % function handle
+    version_key = char(lower(string(config.version)));
+    collect_delta_ttests = strcmp(version_key, 'wlnm_dir_neg') && ...
+        get_main_config_bool(config, 'runDeltaTTests', true);
+    delta_ttest_rows = struct([]);
 
     %% === MAIN EXECUTION LOOP ===
     if config.cvEnabled
@@ -117,7 +130,9 @@ function Main()
             for f_idx = 1:numel(foodweb_names)
                 dataname = foodweb_names{f_idx};
 
-                diary_file = fullfile(config.terminalLogDir, strcat(dataname, '_terminal_log.txt'));
+                version_key = char(lower(string(config.version)));
+                diary_file = fullfile(config.terminalLogDir, sprintf('%s_%s_cvK%d_terminal_log.txt', ...
+                    dataname, version_key, cvK));
                 diary(diary_file);
 
                 datapath = fullfile(config.matFolder, strcat(dataname, '.mat'));
@@ -132,8 +147,9 @@ function Main()
 
                 backbone_mask = []; % CV run in non-backbone mode for now
 
-                % Log file includes cvK so files don’t mix different fold regimes
-                log_file = fullfile(config.logDir, sprintf('%s_results_%s_%s.csv', dataname, string(config.nodeSelection), lower(string(config.version))));
+                % Log file includes cvK so files do not mix different fold regimes.
+                log_file = fullfile(config.logDir, sprintf('%s_results_%s_%s_cvK%d.csv', ...
+                    dataname, string(config.nodeSelection), version_key, cvK));
 
                 init_log_file(log_file, config.use_backbone, config.inverse_backbone);
 
@@ -150,6 +166,10 @@ function Main()
                     fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));
 
                     results = runner(data, K, ratioTrain_cv, config); % ratioTrain is ignored by CV runner
+                    if collect_delta_ttests
+                        results = attach_foodweb_to_results(results, dataname);
+                        delta_ttest_rows = append_result_rows(delta_ttest_rows, results);
+                    end
 
                     append_results(log_file, results, config.use_backbone);
                 end
@@ -166,7 +186,9 @@ function Main()
                 dataname = foodweb_names{f_idx};
 
                 % Set up terminal log file
-                diary_file = fullfile(config.terminalLogDir, strcat(dataname, '_terminal_log.txt'));
+                version_key = char(lower(string(config.version)));
+                diary_file = fullfile(config.terminalLogDir, sprintf('%s_%s_terminal_log.txt', ...
+                    dataname, version_key));
 
                 % === SKIP if terminal log already exists ===
                 % if isfile(diary_file)
@@ -212,7 +234,8 @@ function Main()
                 end
 
                 % ---- Existing logging of WLNM results ----
-                log_file = fullfile(config.logDir, sprintf('%s_results_%s_%s.csv', dataname, string(config.nodeSelection), lower(string(config.version))));
+                log_file = fullfile(config.logDir, sprintf('%s_results_%s_%s.csv', ...
+                    dataname, string(config.nodeSelection), version_key));
 
                 init_log_file(log_file, config.use_backbone, config.inverse_backbone);
 
@@ -231,6 +254,10 @@ function Main()
 
                     % --- Delegate to the selected version runner ---
                     results = runner(data, K, ratioTrain, config);
+                    if collect_delta_ttests
+                        results = attach_foodweb_to_results(results, dataname);
+                        delta_ttest_rows = append_result_rows(delta_ttest_rows, results);
+                    end
 
                     % --- Append results ---
                     append_results(log_file, results, config.use_backbone);
@@ -242,10 +269,43 @@ function Main()
         end
     end
 
+    if collect_delta_ttests
+        write_delta_ttest_summary(config.deltaTTestFile, delta_ttest_rows, ...
+            'alpha', config.deltaTTestAlpha, ...
+            'version', config.version);
+    end
+
     % Close parallel pool if open
     if config.useParallel && pool_created
         delete(gcp('nocreate'));
     end
 
     fprintf('Execution finished at: %s\n', datestr(now));
+end
+
+function value = get_main_config_bool(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = logical(config.(field));
+    else
+        value = logical(default_value);
+    end
+end
+
+function results = attach_foodweb_to_results(results, dataname)
+    for i = 1:numel(results)
+        results(i).Foodweb = char(string(dataname));
+    end
+end
+
+function rows = append_result_rows(rows, new_rows)
+    if isempty(new_rows)
+        return;
+    end
+
+    new_rows = new_rows(:);
+    if isempty(rows)
+        rows = new_rows;
+    else
+        rows = [rows(:); new_rows];
+    end
 end

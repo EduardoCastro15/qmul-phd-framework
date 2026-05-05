@@ -11,6 +11,8 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
         'backboneRatioRange', ...
         'numExperiments', ...
         'nodeSelection', ...
+        'checkConnectivity', ...
+        'adaptiveConnectivity', ...
         'cvSaveConfusion', ...
         'evaluate_on_all_unseen', ...
         'exportBackboneCSV' ...
@@ -50,10 +52,6 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
         rb_list = 0;
     end
 
-    % ---- Preallocate results ----
-    R = numel(rb_list) * config.numExperiments;
-    results = repmat(make_result_template(K, ratioTrain, 0, empty_split_stats()), R, 1);
-
     % ---- Locals ----
     dataname      = data.dataname;
     net           = data.net;
@@ -67,9 +65,19 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
         backbone_mask = data.backbone_mask;
     end
 
-    % ---- Confusion / export control ----
-    save_confusion_flag = logical(config.cvSaveConfusion);
+    % ---- Repetition / export control ----
+    resample_splits = get_config_bool(config, 'resampleSplitsEachExperiment', true);
+    base_seed = get_config_number(config, 'baseSeed', 12345);
+    save_confusion_flag = get_config_bool(config, 'exportAuxiliaryCSVs', logical(config.cvSaveConfusion));
     export_backbone_flag = logical(config.exportBackboneCSV);
+    artifact_dir = get_config_text(config, 'artifactDir', 'data/result/confusion_matrix_csv/');
+    threshold_mode = get_config_text(config, 'thresholdMode', 'fixed');
+    fixed_threshold = get_config_number(config, 'fixedThreshold', 0.5);
+    version = get_config_text(config, 'version', 'WLNM_dir_neg');
+
+    % ---- Preallocate results ----
+    R = numel(rb_list) * config.numExperiments;
+    results = repmat(make_result_template(K, ratioTrain, 0, empty_split_stats(), config, 0, 0), R, 1);
 
     row = 0;
 
@@ -83,63 +91,39 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
             bb_mask = [];
         end
 
-        % ------------------------------------------------------------
-        % Obtain train/test split
-        % ------------------------------------------------------------
-        if use_backbone
-            fprintf('[SweepBackbone] ratioTrain=%.2f | BackboneRatio=%.2f | inverse_backbone=%d\n', ...
-                ratioTrain, rb, config.inverse_backbone);
-
-            args = { ...
-                'use_backbone',      true, ...
-                'ratioBackbone',     rb, ...
-                'inverse_backbone',  config.inverse_backbone, ...
-                'backbone_mask',     bb_mask ...
-            };
-
-            [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, false, false, args{:});
-        else
-            [train, test, split_stats] = DivideNet_dir_neg(net, ratioTrain, false, false);
+        shared_train = [];
+        shared_test = [];
+        shared_split_stats = [];
+        if ~resample_splits
+            split_seed = make_experiment_seed(base_seed, dataname, K, ratioTrain, rb, 0);
+            rng(split_seed, 'twister');
+            [shared_train, shared_test, shared_split_stats] = get_split( ...
+                net, ratioTrain, rb, use_backbone, bb_mask, config);
         end
 
         % ------------------------------------------------------------
         % WLNM experiments
         % ------------------------------------------------------------
         if config.useParallel
-            res_block = repmat(make_result_template(K, ratioTrain, rb, split_stats), config.numExperiments, 1);
+            res_block = repmat(make_result_template(K, ratioTrain, rb, empty_split_stats(), config, 0, 0), config.numExperiments, 1);
 
             start_idx = 1;
             if save_confusion_flag
-                t0 = tic;
-                [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
-                    dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
-                    'save_confusion', true, ...
-                    'backbone_mask', bb_mask, ...
-                    'export_backbone', (use_backbone && export_backbone_flag), ...
-                    'evaluate_on_all_unseen', config.evaluate_on_all_unseen);
-
-                res_block(1) = populate_result_row( ...
-                    res_block(1), roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
-
+                res_block(1) = one_experiment_dir_neg( ...
+                    1, base_seed, dataname, net, K, ratioTrain, rb, ...
+                    use_backbone, bb_mask, config, taxonomy, mass, role, nodeSelection, ...
+                    shared_train, shared_test, shared_split_stats, ...
+                    true, export_backbone_flag, artifact_dir, threshold_mode, fixed_threshold, version);
                 start_idx = 2;
             end
 
             if start_idx <= config.numExperiments
                 parfor i = start_idx:config.numExperiments
-                    t0 = tic;
-
-                    [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
-                        dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
-                        'save_confusion', false, ...
-                        'backbone_mask', bb_mask, ...
-                        'export_backbone', false, ...
-                        'evaluate_on_all_unseen', config.evaluate_on_all_unseen);
-
-                    local_res = make_result_template(K, ratioTrain, rb, split_stats);
-                    local_res = populate_result_row( ...
-                        local_res, roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
-
-                    res_block(i) = local_res;
+                    res_block(i) = one_experiment_dir_neg( ...
+                        i, base_seed, dataname, net, K, ratioTrain, rb, ...
+                        use_backbone, bb_mask, config, taxonomy, mass, role, nodeSelection, ...
+                        shared_train, shared_test, shared_split_stats, ...
+                        false, false, artifact_dir, threshold_mode, fixed_threshold, version);
                 end
             end
 
@@ -151,32 +135,93 @@ function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
         else
             for i = 1:config.numExperiments
                 do_export = save_confusion_flag && (i == 1);
-
-                t0 = tic;
-                [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
-                    dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
-                    'save_confusion', do_export, ...
-                    'backbone_mask', bb_mask, ...
-                    'export_backbone', (do_export && use_backbone && export_backbone_flag), ...
-                    'evaluate_on_all_unseen', config.evaluate_on_all_unseen);
-
                 row = row + 1;
-
-                results(row) = make_result_template(K, ratioTrain, rb, split_stats);
-                results(row) = populate_result_row( ...
-                    results(row), roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
+                results(row) = one_experiment_dir_neg( ...
+                    i, base_seed, dataname, net, K, ratioTrain, rb, ...
+                    use_backbone, bb_mask, config, taxonomy, mass, role, nodeSelection, ...
+                    shared_train, shared_test, shared_split_stats, ...
+                    do_export, export_backbone_flag, artifact_dir, threshold_mode, fixed_threshold, version);
             end
         end
+    end
+end
+
+function r = one_experiment_dir_neg(expID, base_seed, dataname, net, K, ratioTrain, rb, ...
+        use_backbone, bb_mask, config, taxonomy, mass, role, nodeSelection, ...
+        shared_train, shared_test, shared_split_stats, save_confusion, export_backbone_flag, ...
+        artifact_dir, threshold_mode, fixed_threshold, version)
+
+    seed = make_experiment_seed(base_seed, dataname, K, ratioTrain, rb, expID);
+    rng(seed, 'twister');
+
+    if isempty(shared_train)
+        [train, test, split_stats] = get_split(net, ratioTrain, rb, use_backbone, bb_mask, config);
+    else
+        train = shared_train;
+        test = shared_test;
+        split_stats = shared_split_stats;
+    end
+
+    artifact_tag = make_artifact_tag(version, expID, seed, rb, config.inverse_backbone);
+
+    t0 = tic;
+    [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
+        dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
+        'save_confusion', save_confusion, ...
+        'backbone_mask', bb_mask, ...
+        'export_backbone', (save_confusion && use_backbone && export_backbone_flag), ...
+        'evaluate_on_all_unseen', config.evaluate_on_all_unseen, ...
+        'artifact_tag', artifact_tag, ...
+        'artifact_dir', artifact_dir, ...
+        'threshold_mode', threshold_mode, ...
+        'fixed_threshold', fixed_threshold);
+
+    r = make_result_template(K, ratioTrain, rb, split_stats, config, expID, seed);
+    r = populate_result_row(r, roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
+end
+
+function [train, test, split_stats] = get_split(net, ratioTrain, rb, use_backbone, bb_mask, config)
+    if use_backbone
+        fprintf('[SweepBackbone] ratioTrain=%.2f | BackboneRatio=%.2f | inverse_backbone=%d\n', ...
+            ratioTrain, rb, config.inverse_backbone);
+
+        args = { ...
+            'use_backbone',      true, ...
+            'ratioBackbone',     rb, ...
+            'inverse_backbone',  config.inverse_backbone, ...
+            'backbone_mask',     bb_mask ...
+        };
+
+        [train, test, split_stats] = DivideNet_dir_neg( ...
+            net, ratioTrain, config.checkConnectivity, config.adaptiveConnectivity, args{:});
+    else
+        [train, test, split_stats] = DivideNet_dir_neg( ...
+            net, ratioTrain, config.checkConnectivity, config.adaptiveConnectivity);
     end
 end
 
 % ============================================================
 % Result row template
 % ============================================================
-function out = make_result_template(K, ratioTrain, rb, split_stats)
+function out = make_result_template(K, ratioTrain, rb, split_stats, config, expID, seed)
+    if nargin < 5 || isempty(config)
+        config = struct();
+    end
+    if nargin < 6
+        expID = 0;
+    end
+    if nargin < 7
+        seed = 0;
+    end
+
     out = struct( ...
+        'Version',get_config_text(config, 'version', 'WLNM_dir_neg'), ...
         'ROC_AUC',0, 'PR_AUC',0, 'TimeElapsed','', ...
         'K',K, 'TrainRatio',ratioTrain, 'BackboneRatio',rb, ...
+        'ExperimentID',expID, ...
+        'Seed',seed, ...
+        'ThresholdMode',get_config_text(config, 'thresholdMode', 'fixed'), ...
+        'CvK',0, 'FoldID',0, 'NumFolds',0, ...
         'Threshold',0, 'Precision',0, 'Recall',0, 'F1Score',0, ...
         'TotalLinks',split_stats.TotalLinks, ...
         'TrainLinks',split_stats.TrainLinks, ...
@@ -408,5 +453,49 @@ function val = safe_field(s, f)
         val = s.(f);
     else
         val = NaN;
+    end
+end
+
+function seed = make_experiment_seed(base_seed, dataname, K, ratioTrain, rb, expID)
+    name_hash = sum(double(char(string(dataname))));
+    raw = double(base_seed) ...
+        + 1000003 * name_hash ...
+        + 1009 * double(K) ...
+        + 9173 * round(1000 * double(ratioTrain)) ...
+        + 131 * round(1000 * double(rb)) ...
+        + double(expID);
+    seed = mod(round(raw), 2147483646) + 1;
+end
+
+function tag = make_artifact_tag(version, expID, seed, rb, inverse_backbone)
+    if inverse_backbone
+        rb_tag = sprintf('nonbb%03d', round(100 * rb));
+    else
+        rb_tag = sprintf('bb%03d', round(100 * rb));
+    end
+    tag = sprintf('%s_%s_exp%03d_seed%d', lower(char(string(version))), rb_tag, expID, seed);
+end
+
+function value = get_config_bool(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = logical(config.(field));
+    else
+        value = logical(default_value);
+    end
+end
+
+function value = get_config_number(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = config.(field);
+    else
+        value = default_value;
+    end
+end
+
+function value = get_config_text(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = char(string(config.(field)));
+    else
+        value = char(string(default_value));
     end
 end

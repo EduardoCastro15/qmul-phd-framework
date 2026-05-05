@@ -104,7 +104,7 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, 
 
     if evaluate_on_all_unseen
         % train_neg: up to a*train_size; test_neg: remaining unseen
-        k_train = min(a * train_size, pool_size);
+        k_train = min(floor(a * train_size), pool_size);
         idx_train = perm(1:k_train);
         train_neg = neg_links(idx_train, :);
 
@@ -114,8 +114,8 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, 
     else
         % proportional split if need_total < a*(train_size+test_size)
         ratio   = train_size / max(1, (train_size + test_size));
-        k_train_target = a * train_size;
-        k_test_target  = a * test_size;
+        k_train_target = floor(a * train_size);
+        k_test_target  = floor(a * test_size);
 
         % propose proportional counts then cap by targets and need_total
         k_train = min(k_train_target, floor(need_total * ratio));

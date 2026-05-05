@@ -29,12 +29,13 @@ function [data, label] = graph2vector_negative(pos, neg, A, K, dataname)
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
     t0 = tic;
 
+    step = max(1, floor(all_size / 10));
     for i = 1:all_size
         ind = all(i, :);
         is_positive = i <= pos_size;
         data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
 
-        if mod(i, floor(all_size / 10)) == 0
+        if mod(i, step) == 0 || i == all_size
             fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
             % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
         end
@@ -92,9 +93,10 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     adj_before = subgraph;                      % Save before editing
 
     % Calculate the link-weighted subgraph, each entry in the adjacency matrix is weighted by the inverse of its distance to the target link
-    links_ind = sub2ind(size(A), links(:, 1), links(:, 2));
+    keep_links = links_dist > 0;
+    links_ind = sub2ind(size(A), links(keep_links, 1), links(keep_links, 2));
     A_copy = A / (dist + 1);  % if a link between two existing nodes < dist+1, it must be in 'links'. The only links not in 'links' are the dist+1 links between some farthest nodes in 'nodes', so here we weight them by dist+1
-    A_copy(links_ind) = 1 ./ links_dist;
+    A_copy(links_ind) = 1 ./ links_dist(keep_links);
     A_copy_u = max(triu(A_copy, 1), tril(A_copy, -1)');  % for links (i, j) and (j, i), keep the smallest dist
     A_copy = A_copy_u + A_copy_u';
     lweight_subgraph  = A_copy(nodes, nodes);

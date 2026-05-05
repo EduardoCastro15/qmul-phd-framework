@@ -25,7 +25,11 @@ function [data, label] = graph2vector_dir_neg(pos, neg, A, K, useParallel, datan
     neg_size = size(neg, 1);
     all_size = pos_size + neg_size;
     label = [ones(pos_size, 1); zeros(neg_size, 1)];
-    d = K * (K - 1) / 2;
+    if use_original_wlnm
+        d = K * (K - 1) / 2;
+    else
+        d = K * (K - 1);
+    end
     data = zeros(all_size, d);
 
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
@@ -46,6 +50,7 @@ function [data, label] = graph2vector_dir_neg(pos, neg, A, K, useParallel, datan
             end
         end
     else
+        step = max(1, floor(all_size / 10));
         for i = 1:all_size
             ind = all(i, :);
             is_positive = i <= pos_size;
@@ -54,7 +59,7 @@ function [data, label] = graph2vector_dir_neg(pos, neg, A, K, useParallel, datan
             else
                 data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
             end
-            if mod(i, floor(all_size / 10)) == 0
+            if mod(i, step) == 0 || i == all_size
                 fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc);
                 % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
             end
@@ -115,7 +120,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     % Save enclosing subgraph snapshot (optional for building block extraction)
     save_building_blocks = false;
 
-    D = K * (K - 1) / 2;
+    D = K * (K - 1);
     max_depth = 2;
 
     nodes = unique([ind(1); ind(2)], 'stable');
@@ -162,15 +167,13 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
 
     % avoid encoding the true link if present
     if size(subgraph,1) >= 2
-        subgraph(1, 2) = 0;  % remove the link
-        subgraph(2, 1) = 0;  % remove the link
+        subgraph(1, 2) = 0;  % hide only the candidate direction
     end
 
-    links_ind = sub2ind(size(A), links(:,1), links(:,2));
+    keep_links = links_dist > 0;
+    links_ind = sub2ind(size(A), links(keep_links,1), links(keep_links,2));
     A_copy = A / (dist + 1);
-    A_copy(links_ind) = 1 ./ links_dist;
-    A_copy_u = max(triu(A_copy, 1), tril(A_copy, -1)');
-    A_copy = A_copy_u + A_copy_u';
+    A_copy(links_ind) = 1 ./ links_dist(keep_links);
     lweight_subgraph = A_copy(nodes, nodes);
 
     % === Canonical labeling ===
@@ -188,8 +191,11 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     plweight_subgraph = lweight_subgraph(order, order);% Weighted
 
     % Vector encoding
-    sample = plweight_subgraph(triu(true(size(subgraph)), 1));
-    sample(1) = eps;
+    offdiag = ~eye(size(plweight_subgraph, 1));
+    sample = plweight_subgraph(offdiag);
+    if ~isempty(sample)
+        sample(1) = eps;
+    end
 
     if numel(sample) < D
         sample(end+1:D) = 0;
