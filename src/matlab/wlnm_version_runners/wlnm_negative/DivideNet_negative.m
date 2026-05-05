@@ -27,12 +27,12 @@ function [train, test, train_nodes, test_nodes] = DivideNet_negative(net, ratioT
     
     % Randomly select edges to add to the test set until the desired count is reached
     while (nnz(test) < num_testlinks)
-        if length(linklist) <= 2
+        if size(linklist, 1) <= 2
             break;
         end
     
         % Randomly choose an edge from the link list
-        index_link = ceil(rand(1) * length(linklist));
+        index_link = randi(size(linklist, 1));
     
         % Identify the nodes connected by the selected edge
         uid1 = linklist(index_link, 1);
@@ -83,4 +83,3 @@ function [train, test, train_nodes, test_nodes] = DivideNet_negative(net, ratioT
     [si, sj] = find(test);
     test_nodes  = unique([si; sj]);   % column vector of nodes appearing in TEST
 end
-    

@@ -14,6 +14,10 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
     if ~isfield(config,'cvSaveConfusion'), config.cvSaveConfusion = false; end
     if ~isfield(config,'numExperiments'), config.numExperiments = 1; end
     if ~isfield(config,'evaluate_on_all_unseen'), config.evaluate_on_all_unseen = false; end
+    if ~isfield(config,'thresholdMode'), config.thresholdMode = 'fixed'; end
+    if ~isfield(config,'fixedThreshold'), config.fixedThreshold = 0.5; end
+    if ~isfield(config,'artifactDir'), config.artifactDir = 'data/result/confusion_matrix_csv/'; end
+    if ~isfield(config,'version'), config.version = 'WLNM_dir_neg_kfold'; end
 
     dataname      = data.dataname;
     net           = sparse(data.net);
@@ -34,14 +38,14 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
     k = folds.k;
 
     if k == 0
-        results = repmat(make_cv_result_template(K, NaN, 0, 0, 0, 0, empty_split_stats()), 0, 1);
+        results = repmat(make_cv_result_template(K, NaN, 0, 0, 0, 0, empty_split_stats(), config), 0, 1);
         return;
     end
 
     ratioTrain = (k - 1) / k; % for reporting only
 
     R = k * config.numExperiments;
-    results = repmat(make_cv_result_template(K, ratioTrain, k, 0, 0, 0, empty_split_stats()), R, 1);
+    results = repmat(make_cv_result_template(K, ratioTrain, k, 0, 0, 0, empty_split_stats(), config), R, 1);
 
     row = 0;
 
@@ -75,6 +79,7 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
             do_export = logical(config.cvSaveConfusion) && (e == 1);
 
             cv_tag = sprintf('cv_k%d_fold%02d_exp%02d', k, f, e);
+            artifact_tag = sprintf('%s_seed%d', lower(char(string(config.version))), seed);
 
             [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
                 dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
@@ -82,9 +87,13 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
                 'save_confusion', do_export, ...
                 'backbone_mask', backbone_mask, ...
                 'export_backbone', false, ...
-                'evaluate_on_all_unseen', config.evaluate_on_all_unseen);
+                'evaluate_on_all_unseen', config.evaluate_on_all_unseen, ...
+                'artifact_tag', artifact_tag, ...
+                'artifact_dir', config.artifactDir, ...
+                'threshold_mode', config.thresholdMode, ...
+                'fixed_threshold', config.fixedThreshold);
 
-            results(row) = make_cv_result_template(K, ratioTrain, k, f, e, seed, st);
+            results(row) = make_cv_result_template(K, ratioTrain, k, f, e, seed, st, config);
             results(row) = populate_result_row( ...
                 results(row), roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
 
@@ -98,13 +107,18 @@ end
 % CV result row template
 % Mirrors run_wlnm_dir_neg + CV bookkeeping fields
 % ============================================================
-function out = make_cv_result_template(K, ratioTrain, cvK, foldID, expID, seed, split_stats)
+function out = make_cv_result_template(K, ratioTrain, cvK, foldID, expID, seed, split_stats, config)
+    if nargin < 8 || isempty(config)
+        config = struct();
+    end
     out = struct( ...
+        'Version',get_config_text(config, 'version', 'WLNM_dir_neg_kfold'), ...
         'ROC_AUC',0, 'PR_AUC',0, 'TimeElapsed','', ...
         'K',K, 'TrainRatio',ratioTrain, 'BackboneRatio',0, ...
+        'ExperimentID',expID, 'Seed',seed, ...
+        'ThresholdMode',get_config_text(config, 'thresholdMode', 'fixed'), ...
         'CvK',cvK, ...
         'FoldID',foldID, 'NumFolds',cvK, ...
-        'ExperimentID',expID, 'Seed',seed, ...
         'Threshold',0, 'Precision',0, 'Recall',0, 'F1Score',0, ...
         'TotalLinks',split_stats.TotalLinks, ...
         'TrainLinks',split_stats.TrainLinks, ...
@@ -336,5 +350,13 @@ function val = safe_field(s, f)
         val = s.(f);
     else
         val = NaN;
+    end
+end
+
+function value = get_config_text(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = char(string(config.(field)));
+    else
+        value = char(string(default_value));
     end
 end

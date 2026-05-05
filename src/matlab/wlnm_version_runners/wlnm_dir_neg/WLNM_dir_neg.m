@@ -14,6 +14,10 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'backbone_mask', []);          % n×n sparse logical
     addParameter(p, 'export_backbone', false);      % toggle if needed
     addParameter(p, 'evaluate_on_all_unseen', false);
+    addParameter(p, 'artifact_tag', '');
+    addParameter(p, 'artifact_dir', 'data/result/confusion_matrix_csv/');
+    addParameter(p, 'threshold_mode', 'fixed');
+    addParameter(p, 'fixed_threshold', 0.5);
     parse(p, varargin{:});
     opt = p.Results;
 
@@ -63,8 +67,10 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % ------------------------------------------------------------
     % Train feedforward neural network
     % ------------------------------------------------------------
+    feature_dim = K * (K - 1);
+
     layers = [ ...
-        imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')
+        imageInputLayer([feature_dim 1 1], 'Normalization','none')
         fullyConnectedLayer(32)
         reluLayer
         fullyConnectedLayer(32)
@@ -86,7 +92,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         'Verbose', false);
 
     net = trainNetwork( ...
-        reshape(train_data', K*(K-1)/2, 1, 1, size(train_data, 1)), ...
+        reshape(train_data', feature_dim, 1, 1, size(train_data, 1)), ...
         categorical(train_label), ...
         layers, opts);
 
@@ -94,7 +100,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Predict probabilities
     % ------------------------------------------------------------
     [~, scores] = classify(net, ...
-        reshape(test_data', K*(K-1)/2, 1, 1, size(test_data, 1)));
+        reshape(test_data', feature_dim, 1, 1, size(test_data, 1)));
 
     % Keep probability of positive class
     scores(:,1) = [];
@@ -108,35 +114,13 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         'XCrit', 'reca', 'YCrit', 'prec');
 
     % ------------------------------------------------------------
-    % Optimize classification threshold (current protocol: max F1 on test)
+    % Thresholded metrics
     % ------------------------------------------------------------
-    thresholds = 0.1:0.05:0.9;
-    best_f1_score  = -Inf;
-    best_threshold = NaN;
-    best_precision = NaN;
-    best_recall    = NaN;
+    [best_threshold, best_precision, best_recall, best_f1_score] = ...
+        compute_threshold_metrics(scores, test_label, opt.threshold_mode, opt.fixed_threshold);
 
-    for t = thresholds
-        binary_predictions = scores' > t;
-
-        TP = sum((binary_predictions == 1) & (test_label' == 1));
-        FP = sum((binary_predictions == 1) & (test_label' == 0));
-        FN = sum((binary_predictions == 0) & (test_label' == 1));
-
-        precision = TP / max(TP + FP, eps);
-        recall    = TP / max(TP + FN, eps);
-        f1_score  = 2 * (precision * recall) / max(precision + recall, eps);
-
-        if f1_score > best_f1_score
-            best_f1_score  = f1_score;
-            best_threshold = t;
-            best_precision = precision;
-            best_recall    = recall;
-        end
-    end
-
-    fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
-        best_threshold, best_precision, best_recall, best_f1_score);
+    fprintf('Threshold mode: %s | Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
+        char(string(opt.threshold_mode)), best_threshold, best_precision, best_recall, best_f1_score);
     fprintf('ROC-AUC: %.4f\n', roc_auc);
     fprintf('PR-AUC: %.4f\n', pr_auc);
 
@@ -194,13 +178,20 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Save files
     % ------------------------------------------------------------
     base_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
+    tags = {};
+    if ~isempty(opt.artifact_tag)
+        tags{end+1} = char(string(opt.artifact_tag)); %#ok<AGROW>
+    end
     if ~isempty(opt.cv_tag)
-        exp_id = sprintf('%s_%s', base_id, opt.cv_tag);
-    else
+        tags{end+1} = char(string(opt.cv_tag)); %#ok<AGROW>
+    end
+    if isempty(tags)
         exp_id = base_id;
+    else
+        exp_id = sprintf('%s_%s', base_id, strjoin(tags, '_'));
     end
 
-    results_dir = 'data/result/confusion_matrix_csv/';
+    results_dir = char(string(opt.artifact_dir));
     if ~exist(results_dir, 'dir')
         mkdir(results_dir);
     end

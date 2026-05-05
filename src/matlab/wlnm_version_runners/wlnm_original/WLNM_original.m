@@ -1,6 +1,15 @@
 function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_score, aux] = ...
-    WLNM_original(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain)
+    WLNM_original(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, varargin)
     %WLNM_ORIGINAL Baseline WLNM with original negative sampling & encoders.
+
+    p = inputParser;
+    addParameter(p, 'save_confusion', false);
+    addParameter(p, 'artifact_tag', '');
+    addParameter(p, 'artifact_dir', 'data/result/confusion_matrix_csv/');
+    addParameter(p, 'threshold_mode', 'fixed');
+    addParameter(p, 'fixed_threshold', 0.5);
+    parse(p, varargin{:});
+    opt = p.Results;
 
     aux = struct();
 
@@ -37,7 +46,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     [test_data, test_label] = graph2vector_original(test_pos, test_neg, Aund, K, dataname);
 
     % Train feedforward neural network
-    layers = [imageInputLayer([K*(K-1)/2 1 1], 'Normalization','none')
+    feature_dim = K * (K - 1) / 2;
+    layers = [imageInputLayer([feature_dim 1 1], 'Normalization','none')
         fullyConnectedLayer(32)
         reluLayer
         fullyConnectedLayer(32)
@@ -54,11 +64,11 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         'ExecutionEnvironment', 'cpu');
 
     net = trainNetwork( ...
-        reshape(train_data', K*(K-1)/2, 1, 1, size(train_data, 1)), ...
+        reshape(train_data', feature_dim, 1, 1, size(train_data, 1)), ...
         categorical(train_label), layers, opts);
 
     % Predict probabilities
-    [~, scores] = classify(net, reshape(test_data', K*(K-1)/2, 1, 1, size(test_data, 1)));
+    [~, scores] = classify(net, reshape(test_data', feature_dim, 1, 1, size(test_data, 1)));
     scores(:, 1) = [];
 
     % Compute ROC-AUC
@@ -67,33 +77,11 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Compute PR-AUC
     [~, ~, ~, pr_auc] = perfcurve(test_label', scores', 1, 'XCrit', 'reca', 'YCrit', 'prec');
 
-    % Optimize classification threshold
-    thresholds = 0.1:0.05:0.9;
-    best_f1_score = 0;
-    best_threshold = 0;
-    best_precision = 0;
-    best_recall = 0;
+    [best_threshold, best_precision, best_recall, best_f1_score] = ...
+        compute_threshold_metrics(scores, test_label, opt.threshold_mode, opt.fixed_threshold);
 
-    for t = thresholds
-        binary_predictions = scores' > t;
-        TP = sum((binary_predictions == 1) & (test_label' == 1));
-        FP = sum((binary_predictions == 1) & (test_label' == 0));
-        FN = sum((binary_predictions == 0) & (test_label' == 1));
-
-        precision = TP / max(TP + FP, eps);
-        recall = TP / max(TP + FN, eps);
-        f1_score = 2 * (precision * recall) / max(precision + recall, eps);
-
-        if f1_score > best_f1_score
-            best_f1_score = f1_score;
-            best_threshold = t;
-            best_precision = precision;
-            best_recall = recall;
-        end
-    end
-
-    fprintf('Best Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
-        best_threshold, best_precision, best_recall, best_f1_score);
+    fprintf('Threshold mode: %s | Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
+        char(string(opt.threshold_mode)), best_threshold, best_precision, best_recall, best_f1_score);
     fprintf('ROC-AUC: %.4f\n', roc_auc);
     fprintf('PR-AUC: %.4f\n', pr_auc);
 
@@ -136,22 +124,30 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     aux.EvaluateOnAllUnseen    = evaluate_on_all_unseen;
 
     % Save files
-    exp_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
-    results_dir = 'data/result/confusion_matrix_csv/';
+    base_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
+    if isempty(opt.artifact_tag)
+        exp_id = base_id;
+    else
+        exp_id = sprintf('%s_%s', base_id, char(string(opt.artifact_tag)));
+    end
+
+    results_dir = char(string(opt.artifact_dir));
     if ~exist(results_dir, 'dir')
         mkdir(results_dir);
     end
 
-    % === Save scores and labels to CSV ===
-    scores_labels_table = table(scores, test_label, 'VariableNames', {'Score', 'Label'});
-    writetable(scores_labels_table, fullfile(results_dir, ...
-        sprintf('%s_scores_labels.csv', exp_id)));
+    if opt.save_confusion
+        % === Save scores and labels to CSV ===
+        scores_labels_table = table(scores, test_label, 'VariableNames', {'Score', 'Label'});
+        writetable(scores_labels_table, fullfile(results_dir, ...
+            sprintf('%s_scores_labels.csv', exp_id)));
 
-    % Save enriched CSVs
-    export_augmented_links(TP_links, [exp_id '_TP_links.csv'], taxonomy, mass, results_dir);
-    export_augmented_links(FP_links, [exp_id '_FP_links.csv'], taxonomy, mass, results_dir);
-    export_augmented_links(FN_links, [exp_id '_FN_links.csv'], taxonomy, mass, results_dir);
-    export_augmented_links(train_pos, [exp_id '_train_links.csv'], taxonomy, mass, results_dir);
+        % Save enriched CSVs
+        export_augmented_links(TP_links, [exp_id '_TP_links.csv'], taxonomy, mass, results_dir);
+        export_augmented_links(FP_links, [exp_id '_FP_links.csv'], taxonomy, mass, results_dir);
+        export_augmented_links(FN_links, [exp_id '_FN_links.csv'], taxonomy, mass, results_dir);
+        export_augmented_links(train_pos, [exp_id '_train_links.csv'], taxonomy, mass, results_dir);
+    end
 end
 
 % === Save TP/FP/FN links with metadata ===

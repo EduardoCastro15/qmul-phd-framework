@@ -22,7 +22,7 @@ function [data, label] = graph2vector_directed(pos, neg, A, K, useParallel, data
     label = [ones(pos_size, 1); zeros(neg_size, 1)];
 
     % Generate vector data
-    d = K * (K - 1) / 2;  % dim of data vectors
+    d = K * (K - 1);  % dim of directed off-diagonal data vectors
     data = zeros(all_size, d);
 
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
@@ -60,7 +60,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     %  *author: Muhan Zhang, Washington University in St. Louis
     save_building_blocks = false;
 
-    D = K * (K - 1) / 2;  % the length of output vector
+    D = K * (K - 1);  % the length of directed off-diagonal output vector
 
     % Extract a subgraph of K nodes
     links = [ind];
@@ -76,8 +76,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
         if isempty(fringe)  % no more new neighbors, add dummy nodes
             subgraph = A(nodes, nodes);
             adj_before = subgraph;
-            subgraph(1, 2) = 0;  % ensure subgraph patterns do not contain information about link existence
-            subgraph(2, 1) = 0;
+            subgraph(1, 2) = 0;  % hide only the candidate direction
             break
         end
         new_nodes = setdiff(fringe(:), nodes, 'rows');
@@ -88,8 +87,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
         if size(nodes, 1) >= K  % nodes enough, extract subgraph
             subgraph = A(nodes, nodes);  % the unweighted subgraph
             adj_before = subgraph;
-            subgraph(1, 2) = 0;  % ensure subgraph patterns do not contain information about link existence
-            subgraph(2, 1) = 0;
+            subgraph(1, 2) = 0;  % hide only the candidate direction
             break
         end
     end
@@ -116,7 +114,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     % Keep only arcs whose endpoints are inside 'nodes'
     u = double(loc(links(:,1)));
     v = double(loc(links(:,2)));
-    m_mask = (u > 0) & (v > 0);
+    m_mask = (u > 0) & (v > 0) & (links_dist > 0);
     u = u(m_mask); v = v(m_mask); w = 1 ./ links_dist(m_mask);
 
     % Build sparse directed weights from frontier distances
@@ -142,12 +140,14 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     switch ng2v
     case 1  % the simplest way -- one dimensional vector by ravelling adjacency matrix
         psubgraph = subgraph(order, order);  % g_labeled subgraph
-        sample = psubgraph(triu(logical(ones(size(subgraph))), 1));
+        sample = psubgraph(~eye(size(psubgraph, 1)));
         sample(1) = eps;
     case 2  % use link distance-weighted adjcency matrix, performanc is better
         plweight_subgraph = lweight_subgraph(order, order);  % g_labeled link-weighted subgraph
-        sample = plweight_subgraph(triu(logical(ones(size(subgraph))), 1));
-        sample(1) = eps;  % avoid inf, and more important, avoid empty vector in libsvm format (directly deleting sample(1) results in libsvm format error)
+        sample = plweight_subgraph(~eye(size(plweight_subgraph, 1)));
+        if ~isempty(sample)
+            sample(1) = eps;  % avoid empty vectors in libsvm-style consumers
+        end
     end
     if length(sample) < D  % add dummy nodes if not enough nodes extracted in subgraph
         sample = [sample; zeros(D - length(sample), 1)];
