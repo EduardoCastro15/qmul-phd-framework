@@ -1,4 +1,4 @@
-function [data, label] = graph2vector_negative(pos, neg, A, K, dataname)
+function [data, label] = graph2vector_negative(pos, neg, A, K, dataname, useParallel)
     %GRAPH2VECTOR_ORIGINAL Encode enclosing subgraphs with original WLNM logic
     % while preserving "building blocks" storage (optional).
     %
@@ -14,6 +14,9 @@ function [data, label] = graph2vector_negative(pos, neg, A, K, dataname)
     %   data  : [N × (K*(K-1)/2)] vectorized, ordered, link-weighted subgraphs
     %   label : [N × 1] labels (1 for pos, 0 for neg)
 
+    if nargin < 6 || isempty(useParallel), useParallel = false; end
+
+    A = sparse(A);
     all      = [pos; neg];
     pos_size = size(pos, 1);
     neg_size = size(neg, 1);
@@ -29,15 +32,27 @@ function [data, label] = graph2vector_negative(pos, neg, A, K, dataname)
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
     t0 = tic;
 
-    step = max(1, floor(all_size / 10));
-    for i = 1:all_size
-        ind = all(i, :);
-        is_positive = i <= pos_size;
-        data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+    if useParallel && isempty(gcp('nocreate'))
+        parpool('local');
+    end
 
-        if mod(i, step) == 0 || i == all_size
-            fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
-            % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
+    if useParallel
+        parfor i = 1:all_size
+            ind = all(i, :);
+            is_positive = i <= pos_size;
+            data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+        end
+    else
+        step = max(1, floor(all_size / 10));
+        for i = 1:all_size
+            ind = all(i, :);
+            is_positive = i <= pos_size;
+            data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+
+            if mod(i, step) == 0 || i == all_size
+                fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
+                % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
+            end
         end
     end
 
@@ -92,14 +107,22 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
 
     adj_before = subgraph;                      % Save before editing
 
-    % Calculate the link-weighted subgraph, each entry in the adjacency matrix is weighted by the inverse of its distance to the target link
-    keep_links = links_dist > 0;
-    links_ind = sub2ind(size(A), links(keep_links, 1), links(keep_links, 2));
-    A_copy = A / (dist + 1);  % if a link between two existing nodes < dist+1, it must be in 'links'. The only links not in 'links' are the dist+1 links between some farthest nodes in 'nodes', so here we weight them by dist+1
-    A_copy(links_ind) = 1 ./ links_dist(keep_links);
-    A_copy_u = max(triu(A_copy, 1), tril(A_copy, -1)');  % for links (i, j) and (j, i), keep the smallest dist
-    A_copy = A_copy_u + A_copy_u';
-    lweight_subgraph  = A_copy(nodes, nodes);
+    % Fast local weighting on the K-node induced subgraph.
+    subA = spones(A(nodes, nodes));
+    default_w = 1 / (dist + 1);
+    lweight_subgraph = default_w * subA;
+
+    loc = zeros(size(A,1), 1, 'uint32');
+    loc(nodes) = uint32(1:numel(nodes));
+
+    u = double(loc(links(:,1)));
+    v = double(loc(links(:,2)));
+    m = (u > 0) & (v > 0) & (links_dist > 0);
+    u = u(m); v = v(m); w = 1 ./ links_dist(m);
+
+    S = sparse(u, v, w, numel(nodes), numel(nodes));
+    S = max(S, S');
+    lweight_subgraph = max(lweight_subgraph, S);
 
     % Calculate the graph labeling of the subgraph
     [order, classes] = g_label(subgraph);
@@ -157,17 +180,28 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
 end
 
 function N = neighbors(fringe, A)
-    %  Usage: find the neighbor links of all links in fringe from A
-    
-    N = [];
-    for no = 1: size(fringe, 1)
-        ind = fringe(no, :);
-        i = ind(1);
-        j = ind(2);
-        [~, ij] = find(A(i, :));
-        [ji, ~] = find(A(:, j));
-        N = [N; [i * ones(length(ij), 1), ij']; [ji, j * ones(length(ji), 1)]];
-        N = unique(N, 'rows', 'stable');  % eliminate repeated ones and keep in order
+    % Find neighbor links of all links in fringe from A.
+
+    ii = [];
+    jj = [];
+    m = size(fringe, 1);
+
+    for t = 1:m
+        i = fringe(t,1);
+        j = fringe(t,2);
+
+        nbr_i = find(A(i,:));
+        nbr_j = find(A(:,j));
+
+        ii = [ii; repmat(i, numel(nbr_i), 1); nbr_j(:)]; %#ok<AGROW>
+        jj = [jj; nbr_i(:); repmat(j, numel(nbr_j), 1)]; %#ok<AGROW>
+    end
+
+    if isempty(ii)
+        N = zeros(0,2);
+    else
+        N = [ii, jj];
+        N = unique(N, 'rows', 'stable');
     end
 end
 

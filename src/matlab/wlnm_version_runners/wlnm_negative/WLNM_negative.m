@@ -8,6 +8,9 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'artifact_dir', 'data/result/confusion_matrix_csv/');
     addParameter(p, 'threshold_mode', 'fixed');
     addParameter(p, 'fixed_threshold', 0.5);
+    addParameter(p, 'evaluate_on_all_unseen', false);
+    addParameter(p, 'encode_parallel', false);
+    addParameter(p, 'compute_ecological_metrics', true);
     parse(p, varargin{:});
     opt = p.Results;
 
@@ -15,10 +18,10 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
 
     a = 2;
     portion = 1;
-    evaluate_on_all_unseen = false;
+    evaluate_on_all_unseen = logical(opt.evaluate_on_all_unseen);
     use_role_filter = true;
-    use_original_wlnm = false;
-    useParallel = false;
+    useParallel = logical(opt.encode_parallel);
+    compute_ecological_metrics = logical(opt.compute_ecological_metrics);
 
     % === Half-matrix setup (undirected representation) ===
     htrain = triu(train, 1);
@@ -42,8 +45,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     end
 
     % === Graph encoders ===
-    [train_data, train_label] = graph2vector_negative(train_pos, train_neg, train, K, dataname);
-    [test_data, test_label] = graph2vector_negative(test_pos, test_neg, train, K, dataname);
+    [train_data, train_label] = graph2vector_negative(train_pos, train_neg, Aund, K, dataname, useParallel);
+    [test_data, test_label] = graph2vector_negative(test_pos, test_neg, Aund, K, dataname, useParallel);
 
     % Train feedforward neural network
     feature_dim = K * (K - 1) / 2;
@@ -69,6 +72,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Predict probabilities
     [~, scores] = classify(net, reshape(test_data', feature_dim, 1, 1, size(test_data, 1)));
     scores(:, 1) = [];
+    scores = scores(:);
 
     % Compute ROC-AUC
     [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
@@ -85,15 +89,21 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     fprintf('PR-AUC: %.4f\n', pr_auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
-    binary_predictions = scores' > best_threshold;
+    binary_predictions = scores > best_threshold;
     test_pairs = [test_pos; test_neg];
 
     predicted_links = test_pairs(binary_predictions == 1, :);
     true_links      = test_pairs(test_label == 1, :);
 
-    TP_links = intersect(predicted_links, true_links, 'rows');
-    FP_links = setdiff(predicted_links, true_links, 'rows');
-    FN_links = setdiff(true_links, predicted_links, 'rows');
+    if opt.save_confusion
+        TP_links = intersect(predicted_links, true_links, 'rows');
+        FP_links = setdiff(predicted_links, true_links, 'rows');
+        FN_links = setdiff(true_links, predicted_links, 'rows');
+    else
+        TP_links = zeros(0, 2);
+        FP_links = zeros(0, 2);
+        FN_links = zeros(0, 2);
+    end
 
     % ------------------------------------------------------------
     % Build empirical full graph and pseudo full graph (undirected)
@@ -115,7 +125,11 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     pseudo_full = pseudo_full - spdiags(diag(pseudo_full), 0, n, n);
     pseudo_full = spones(pseudo_full);
 
-    cmp_metrics = compare_binary_graphs_negative(empirical_full, pseudo_full);
+    if compute_ecological_metrics
+        cmp_metrics = compare_binary_graphs_negative(empirical_full, pseudo_full);
+    else
+        cmp_metrics = struct();
+    end
 
     aux.comparison_metrics     = cmp_metrics;
     aux.NumPredictedNovelLinks = size(predicted_links, 1);
@@ -176,13 +190,29 @@ end
 % ============================================================
 function cmp = compare_binary_graphs_negative(empirical_full, pseudo_full)
 
-    E = logical(full(empirical_full));
-    P = logical(full(pseudo_full));
+    if isempty(empirical_full) || isempty(pseudo_full)
+        error('compare_binary_graphs_negative:EmptyInput', ...
+              'Both empirical_full and pseudo_full must be non-empty.');
+    end
 
-    TP = sum(E(:) & P(:));
-    FP = sum(~E(:) & P(:));
-    FN = sum(E(:) & ~P(:));
-    TN = sum(~E(:) & ~P(:));
+    if ~isequal(size(empirical_full), size(pseudo_full))
+        error('compare_binary_graphs_negative:SizeMismatch', ...
+              'empirical_full and pseudo_full must have the same size.');
+    end
+
+    E = spones(sparse(empirical_full));
+    P = spones(sparse(pseudo_full));
+
+    n = size(E, 1);
+    E = E - spdiags(diag(E), 0, n, n);
+    P = P - spdiags(diag(P), 0, n, n);
+    E = spones(E);
+    P = spones(P);
+
+    TP = nnz(E & P);
+    FP = nnz(P) - TP;
+    FN = nnz(E) - TP;
+    TN = numel(E) - TP - FP - FN;
 
     TPR = TP / max(TP + FN, eps);
     TNR = TN / max(TN + FP, eps);

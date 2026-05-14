@@ -20,6 +20,7 @@ function [data, label] = graph2vector_dir_neg(pos, neg, A, K, useParallel, datan
     % Author: Jorge Eduardo Castro Cruces, Queen Mary University of London
 
     if nargin < 7, use_original_wlnm = false; end
+    A = sparse(A);
     all = [pos; neg];
     pos_size = size(pos, 1);
     neg_size = size(neg, 1);
@@ -127,12 +128,12 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     links = ind;
     links_dist = 0;
     dist = 0;
-    visited = false(size(A));
-    visited(ind(1), ind(2)) = true;
+    n = size(A, 1);
+    blocked_idx = sub2ind([n, n], ind(1), ind(2));
 
     while true
         dist = dist + 1;
-        fringe = neighbors_vectorized(links, A, visited);
+        fringe = neighbors_vectorized(links, A, blocked_idx);
 
         if isempty(fringe) || dist > max_depth
             break;
@@ -170,11 +171,7 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
         subgraph(1, 2) = 0;  % hide only the candidate direction
     end
 
-    keep_links = links_dist > 0;
-    links_ind = sub2ind(size(A), links(keep_links,1), links(keep_links,2));
-    A_copy = A / (dist + 1);
-    A_copy(links_ind) = 1 ./ links_dist(keep_links);
-    lweight_subgraph = A_copy(nodes, nodes);
+    lweight_subgraph = build_weighted_subgraph(A, nodes, links, links_dist, dist);
 
     % === Canonical labeling ===
     [order, classes] = g_label(subgraph);
@@ -229,8 +226,10 @@ function sample = subgraph2vector(ind, A, K, dataname, is_positive, idx)
     end    
 end
 
-function N = neighbors_vectorized(links, A, visited)
-    N = [];
+function N = neighbors_vectorized(links, A, blocked_idx)
+    n = size(A, 1);
+    N = zeros(0, 2);
+    visited_idx = blocked_idx(:);
 
     for i = 1:size(links, 1)
         u = links(i, 1);
@@ -239,17 +238,19 @@ function N = neighbors_vectorized(links, A, visited)
         succ = find(A(u, :));
         pred = find(A(:, v))';
 
-        % Build new pairs and filter if not visited
         for s = succ
-            if ~visited(u, s)
-                N(end+1, :) = [u, s];
-                visited(u, s) = true;
+            link_idx = sub2ind([n, n], u, s);
+            if ~ismember(link_idx, visited_idx)
+                N(end+1, :) = [u, s]; %#ok<AGROW>
+                visited_idx(end+1, 1) = link_idx; %#ok<AGROW>
             end
         end
+
         for p = pred
-            if ~visited(p, v)
-                N(end+1, :) = [p, v];
-                visited(p, v) = true;
+            link_idx = sub2ind([n, n], p, v);
+            if ~ismember(link_idx, visited_idx)
+                N(end+1, :) = [p, v]; %#ok<AGROW>
+                visited_idx(end+1, 1) = link_idx; %#ok<AGROW>
             end
         end
     end
@@ -257,6 +258,30 @@ function N = neighbors_vectorized(links, A, visited)
     if ~isempty(N)
         N = unique(N, 'rows');
     end
+end
+
+function lweight_subgraph = build_weighted_subgraph(A, nodes, links, links_dist, dist)
+    lweight_subgraph = A(nodes, nodes) / (dist + 1);
+
+    keep_links = links_dist > 0;
+    if ~any(keep_links)
+        return;
+    end
+
+    node_position = zeros(size(A, 1), 1);
+    node_position(nodes) = 1:numel(nodes);
+
+    local_i = node_position(links(keep_links, 1));
+    local_j = node_position(links(keep_links, 2));
+    local_dist = links_dist(keep_links);
+
+    inside = local_i > 0 & local_j > 0;
+    if ~any(inside)
+        return;
+    end
+
+    local_idx = sub2ind(size(lweight_subgraph), local_i(inside), local_j(inside));
+    lweight_subgraph(local_idx) = 1 ./ local_dist(inside);
 end
 
 function [order, classes] = g_label(subgraph)
