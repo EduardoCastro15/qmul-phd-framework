@@ -13,6 +13,11 @@ function [data, label] = graph2vector_directed(pos, neg, A, K, useParallel, data
     %
     %  *author: Muhan Zhang, Washington University in St. Louis
 
+    if nargin < 5 || isempty(useParallel), useParallel = false; end
+    if nargin < 6 || isempty(dataname), dataname = ''; end
+    if nargin < 7 || isempty(use_original_wlnm), use_original_wlnm = false; end %#ok<NASGU>
+
+    A = sparse(A);
     all = [pos; neg];
     pos_size = size(pos, 1);
     neg_size = size(neg, 1);
@@ -28,7 +33,11 @@ function [data, label] = graph2vector_directed(pos, neg, A, K, useParallel, data
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
     t0 = tic;
 
-    if useParallel && ~isempty(gcp('nocreate'))
+    if useParallel && isempty(gcp('nocreate'))
+        parpool('local');
+    end
+
+    if useParallel
         parfor i = 1:all_size
             ind = all(i, :);
             is_positive = i <= pos_size;

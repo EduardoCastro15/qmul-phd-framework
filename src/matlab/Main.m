@@ -19,15 +19,16 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',            false, ...                % Enable/disable parallel pool
+        'useParallel',            true, ...                 % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
-        'numExperiments',         1, ...                   % Repeated experiments per food web
+        'numExperiments',         5, ...                   % Repeated experiments per food web
+        'parallelWorkers',        [], ...                  % [] auto; WLNM runners use useful workers only
         'baseSeed',               12345, ...                % Base seed for repeated holdout experiments
         'resampleSplitsEachExperiment', true, ...           % Resample train/test split for each repeated experiment
         'kRange',                 10, ...                  % Number of nodes per subgraph
-        'sweepTrainRatios',       false, ...               % Sweep over multiple ratios or fixed
+        'sweepTrainRatios',       true, ...               % Sweep over multiple ratios or fixed
         'ratioTrain',             0.60, ...                 % Default training ratio
-        'trainRatioRange',        0.10:0.10:0.90, ...      % Training ratios to test
+        'trainRatioRange',        0.70:0.10:0.90, ...      % Training ratios to test
         'nodeSelection',          'random', ...            % Type of node selection
         'checkConnectivity',      true, ...                % Ensure train graph connectivity
         'adaptiveConnectivity',   true, ...                % Adapt connectivity check based on train ratio
@@ -43,14 +44,16 @@ function Main()
         'backbone_max_q',         0.25, ...                % PF thresholding max q
         'backbone_q_ladder',      2.0, ...                 % PF thresholding q ladder
         'alpha_fallback',         [], ...                  % PF thresholding alpha fallback
-        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_1.csv', ...              % CSV with food web names
+        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
         'matFolder',              'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
         'logDir',                 'data/result/prediction_scores_logs', ...                           % Directory for result logs
         'terminalLogDir',         'data/result/terminal_logs/', ...                                   % Directory for terminal logs
         'artifactDir',            'data/result/confusion_matrix_csv/', ...                            % Directory for auxiliary TP/FP/FN CSVs
-        'exportAuxiliaryCSVs',     true, ...                                                          % Export per-run score/link CSVs
+        'exportAuxiliaryCSVs',     true, ...                                                         % Set true only for inspection CSVs; false keeps all 5 experiments parallel
         'thresholdMode',          'fixed', ...                                                        % 'fixed' or legacy 'test_f1'
         'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
+        'useGraphEncodingParallel', false, ...                                                        % WLNM runners: only useful when useParallel=false
+        'computeEcologicalMetrics', true, ...                                                         % WLNM metric/comparison outputs; required for dir_neg delta t-tests
         'runDeltaTTests',         true, ...                                                           % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
         'deltaTTestAlpha',        0.05, ...                                                           % Significance level for delta t-tests
         'deltaTTestFile',         'data/result/statistical_tests/wlnm_dir_neg_delta_ttests.csv', ...   % Summary CSV for delta t-tests
@@ -103,19 +106,34 @@ function Main()
     if ~exist(config.logDir, 'dir'); mkdir(config.logDir); end
     if ~exist(config.terminalLogDir, 'dir'); mkdir(config.terminalLogDir); end
 
-    % Start parallel pool if enabled
-    pool_created = false;
-    if config.useParallel && isempty(gcp('nocreate'))
-        parpool(feature('numcores'));
-        pool_created = true;
-    end
-
     %% === RESOLVE RUNNER FOR REQUESTED VERSION ===
     registry = get_version_registry();                         % containers.Map
     runner   = resolve_runner(registry, config.version);       % function handle
     version_key = char(lower(string(config.version)));
+
+    if is_experiment_parallel_wlnm(version_key) && config.useParallel && ...
+            get_main_config_bool(config, 'useGraphEncodingParallel', false)
+        warning(['[Main] useGraphEncodingParallel=true is ignored when useParallel=true ' ...
+                 'for this WLNM runner to avoid nested parfor. Disabling graph encoding parallelism.']);
+        config.useGraphEncodingParallel = false;
+    end
+
     collect_delta_ttests = strcmp(version_key, 'wlnm_dir_neg') && ...
         get_main_config_bool(config, 'runDeltaTTests', true);
+
+    if collect_delta_ttests && ~get_main_config_bool(config, 'computeEcologicalMetrics', true)
+        warning(['[Main] runDeltaTTests=true requires computeEcologicalMetrics=true ' ...
+                 'because the t-tests are computed from ecological metric deltas. Enabling it.']);
+        config.computeEcologicalMetrics = true;
+    end
+
+    % Start parallel pool if enabled
+    pool_created = false;
+    if config.useParallel && isempty(gcp('nocreate'))
+        parpool(resolve_parallel_workers(config, version_key));
+        pool_created = true;
+    end
+
     delta_ttest_rows = struct([]);
 
     %% === MAIN EXECUTION LOOP ===
@@ -289,6 +307,36 @@ function value = get_main_config_bool(config, field, default_value)
     else
         value = logical(default_value);
     end
+end
+
+function workers = resolve_parallel_workers(config, version_key)
+    max_workers = feature('numcores');
+
+    if isfield(config, 'parallelWorkers') && ~isempty(config.parallelWorkers)
+        workers = min(max_workers, max(1, floor(double(config.parallelWorkers))));
+        fprintf('[Main] Starting parallel pool with %d workers (configured).\n', workers);
+        return;
+    end
+
+    workers = max_workers;
+
+    if is_experiment_parallel_wlnm(version_key) && isfield(config, 'numExperiments')
+        experiments_in_parfor = double(config.numExperiments);
+
+        % WLNM runners run experiment 1 serially when auxiliary CSVs are
+        % exported, then parallelizes the remaining experiments.
+        if get_main_config_bool(config, 'exportAuxiliaryCSVs', false)
+            experiments_in_parfor = max(1, experiments_in_parfor - 1);
+        end
+
+        workers = min(workers, max(1, floor(experiments_in_parfor)));
+    end
+
+    fprintf('[Main] Starting parallel pool with %d workers (auto).\n', workers);
+end
+
+function tf = is_experiment_parallel_wlnm(version_key)
+    tf = any(strcmp(version_key, {'wlnm_dir_neg', 'wlnm_original', 'wlnm_directed', 'wlnm_negative'}));
 end
 
 function results = attach_foodweb_to_results(results, dataname)

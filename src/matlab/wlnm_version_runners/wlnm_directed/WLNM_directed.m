@@ -9,6 +9,9 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'threshold_mode', 'fixed');
     addParameter(p, 'fixed_threshold', 0.5);
     addParameter(p, 'ith_experiment', 0);
+    addParameter(p, 'evaluate_on_all_unseen', false);
+    addParameter(p, 'encode_parallel', false);
+    addParameter(p, 'compute_ecological_metrics', true);
     parse(p, varargin{:});
     opt = p.Results;
     ith_experiment = opt.ith_experiment;
@@ -17,10 +20,11 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
 
     a = 2;
     portion = 1;
-    evaluate_on_all_unseen = false;
+    evaluate_on_all_unseen = logical(opt.evaluate_on_all_unseen);
     use_role_filter = false;
     use_original_wlnm = false;
-    useParallel = false;
+    useParallel = logical(opt.encode_parallel);
+    compute_ecological_metrics = logical(opt.compute_ecological_metrics);
 
     % Full directed adjacency
     htrain = train;
@@ -123,6 +127,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
             delete(sprintf('tempdata/test_log_scores_%d.asc', ith_experiment));
     end
 
+    scores = scores(:);
+
     % Compute ROC-AUC
     [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
 
@@ -138,15 +144,21 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     fprintf('PR-AUC: %.4f\n', pr_auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
-    binary_predictions = scores' > best_threshold;
+    binary_predictions = scores > best_threshold;
     test_pairs = [test_pos; test_neg];
 
     predicted_links = test_pairs(binary_predictions == 1, :);
     true_links      = test_pairs(test_label == 1, :);
 
-    TP_links = intersect(predicted_links, true_links, 'rows');
-    FP_links = setdiff(predicted_links, true_links, 'rows');
-    FN_links = setdiff(true_links, predicted_links, 'rows');
+    if opt.save_confusion
+        TP_links = intersect(predicted_links, true_links, 'rows');
+        FP_links = setdiff(predicted_links, true_links, 'rows');
+        FN_links = setdiff(true_links, predicted_links, 'rows');
+    else
+        TP_links = zeros(0, 2);
+        FP_links = zeros(0, 2);
+        FN_links = zeros(0, 2);
+    end
 
     % ------------------------------------------------------------
     % Build empirical full web and pseudo full web (directed)
@@ -170,9 +182,15 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % ------------------------------------------------------------
     % Ecological / structural metrics
     % ------------------------------------------------------------
-    emp_metrics    = compute_foodweb_metrics(empirical_full);
-    pseudo_metrics = compute_foodweb_metrics(pseudo_full);
-    cmp_metrics    = compare_empirical_pseudo_webs(empirical_full, pseudo_full);
+    if compute_ecological_metrics
+        emp_metrics    = compute_foodweb_metrics(empirical_full);
+        pseudo_metrics = compute_foodweb_metrics(pseudo_full);
+        cmp_metrics    = compare_empirical_pseudo_webs_directed_sparse(empirical_full, pseudo_full);
+    else
+        emp_metrics    = struct();
+        pseudo_metrics = struct();
+        cmp_metrics    = struct();
+    end
 
     aux.empirical_metrics      = emp_metrics;
     aux.pseudo_metrics         = pseudo_metrics;
@@ -228,4 +246,69 @@ function export_augmented_links(links, filename, taxonomy, mass, results_dir)
         T = sortrows(T, 'PredatorMass');
     end
     writetable(T, fullfile(results_dir, filename));
+end
+
+function cmp = compare_empirical_pseudo_webs_directed_sparse(empirical_full, pseudo_full)
+    if isempty(empirical_full) || isempty(pseudo_full)
+        error('compare_empirical_pseudo_webs_directed_sparse:EmptyInput', ...
+              'Both empirical_full and pseudo_full must be non-empty.');
+    end
+
+    if ~isequal(size(empirical_full), size(pseudo_full))
+        error('compare_empirical_pseudo_webs_directed_sparse:SizeMismatch', ...
+              'empirical_full and pseudo_full must have the same size.');
+    end
+
+    E = spones(sparse(empirical_full));
+    P = spones(sparse(pseudo_full));
+
+    n = size(E, 1);
+    E = E - spdiags(diag(E), 0, n, n);
+    P = P - spdiags(diag(P), 0, n, n);
+    E = spones(E);
+    P = spones(P);
+
+    TP = nnz(E & P);
+    FP = nnz(P) - TP;
+    FN = nnz(E) - TP;
+    TN = n * max(0, n - 1) - TP - FP - FN;
+
+    TPR = TP / max(TP + FN, eps);
+    TNR = TN / max(TN + FP, eps);
+    FPR = FP / max(FP + TN, eps);
+    FNR = FN / max(FN + TP, eps);
+
+    precision = TP / max(TP + FP, eps);
+    recall = TPR;
+    f1_score = 2 * (precision * recall) / max(precision + recall, eps);
+    TSS = TPR + TNR - 1;
+
+    union_links = TP + FP + FN;
+    if union_links > 0
+        jaccard_links = TP / union_links;
+    else
+        jaccard_links = 0;
+    end
+
+    empirical_links = nnz(E);
+    pseudo_links = nnz(P);
+
+    cmp = struct( ...
+        'TP', TP, ...
+        'FP', FP, ...
+        'FN', FN, ...
+        'TN', TN, ...
+        'TPR', TPR, ...
+        'TNR', TNR, ...
+        'FPR', FPR, ...
+        'FNR', FNR, ...
+        'Precision', precision, ...
+        'Recall', recall, ...
+        'F1Score', f1_score, ...
+        'TSS', TSS, ...
+        'JaccardLinks', jaccard_links, ...
+        'EmpiricalLinks', empirical_links, ...
+        'PseudoLinks', pseudo_links, ...
+        'LinkDelta', pseudo_links - empirical_links ...
+    );
 end

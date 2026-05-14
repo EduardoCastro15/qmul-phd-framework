@@ -1,4 +1,4 @@
-function [data, label] = graph2vector_original(pos, neg, A, K, dataname)
+function [data, label] = graph2vector_original(pos, neg, A, K, dataname, useParallel)
     %GRAPH2VECTOR_ORIGINAL Encode enclosing subgraphs with original WLNM logic
     % while preserving "building blocks" storage (optional).
     %
@@ -14,6 +14,9 @@ function [data, label] = graph2vector_original(pos, neg, A, K, dataname)
     %   data  : [N × (K*(K-1)/2)] vectorized, ordered, link-weighted subgraphs
     %   label : [N × 1] labels (1 for pos, 0 for neg)
 
+    if nargin < 6 || isempty(useParallel), useParallel = false; end
+
+    A = sparse(A);
     all      = [pos; neg];
     pos_size = size(pos, 1);
     neg_size = size(neg, 1);
@@ -29,15 +32,27 @@ function [data, label] = graph2vector_original(pos, neg, A, K, dataname)
     fprintf('Encoding %d subgraphs (K = %d)...\n', all_size, K);
     t0 = tic;
 
-    step = max(1, floor(all_size / 10));
-    for i = 1:all_size
-        ind = all(i, :);
-        is_positive = i <= pos_size;
-        data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+    if useParallel && isempty(gcp('nocreate'))
+        parpool('local');
+    end
 
-        if mod(i, step) == 0 || i == all_size
-            fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
-            % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
+    if useParallel
+        parfor i = 1:all_size
+            ind = all(i, :);
+            is_positive = i <= pos_size;
+            data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+        end
+    else
+        step = max(1, floor(all_size / 10));
+        for i = 1:all_size
+            ind = all(i, :);
+            is_positive = i <= pos_size;
+            data(i, :) = subgraph2vector(ind, A, K, dataname, is_positive, i);
+
+            if mod(i, step) == 0 || i == all_size
+                fprintf('Progress: %d%% - Elapsed: %.1fs\n', round(100 * i / all_size), toc(t0));
+                % fprintf("Encoding link %d of %d: (%d,%d)\n", i, all_size, ind(1), ind(2));
+            end
         end
     end
 
