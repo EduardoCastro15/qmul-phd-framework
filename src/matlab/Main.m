@@ -21,14 +21,14 @@ function Main()
     config = struct( ...
         'useParallel',            true, ...                 % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
-        'numExperiments',         5, ...                   % Repeated experiments per food web
+        'numExperiments',         20, ...                   % Repeated experiments per food web
         'parallelWorkers',        [], ...                  % [] auto; WLNM runners use useful workers only
         'baseSeed',               12345, ...                % Base seed for repeated holdout experiments
         'resampleSplitsEachExperiment', true, ...           % Resample train/test split for each repeated experiment
         'kRange',                 10, ...                  % Number of nodes per subgraph
-        'sweepTrainRatios',       true, ...               % Sweep over multiple ratios or fixed
-        'ratioTrain',             0.60, ...                 % Default training ratio
-        'trainRatioRange',        0.70:0.10:0.90, ...      % Training ratios to test
+        'sweepTrainRatios',       false, ...               % Sweep over multiple ratios or fixed
+        'ratioTrain',             0.90, ...                 % Default training ratio
+        'trainRatioRange',        0.10:0.20:0.90, ...      % Training ratios to test
         'nodeSelection',          'random', ...            % Type of node selection
         'checkConnectivity',      true, ...                % Ensure train graph connectivity
         'adaptiveConnectivity',   true, ...                % Adapt connectivity check based on train ratio
@@ -57,6 +57,7 @@ function Main()
         'runDeltaTTests',         true, ...                                                           % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
         'deltaTTestAlpha',        0.05, ...                                                           % Significance level for delta t-tests
         'deltaTTestFile',         'data/result/statistical_tests/wlnm_dir_neg_delta_ttests.csv', ...   % Summary CSV for delta t-tests
+        'deltaTTestByEcosystemFile', '', ...                                                  % Empty derives *_by_ecosystem.csv from deltaTTestFile
         'backboneStatsFile',      'data/result/backbone_stats/backbone_overview_per_foodweb.csv', ... % CSV for backbone stats
         'cvEnabled',              false, ...                % enable cross-validation mode
         'cvKList',                [], ...          % list of K values for K-fold CV
@@ -185,7 +186,7 @@ function Main()
 
                     results = runner(data, K, ratioTrain_cv, config); % ratioTrain is ignored by CV runner
                     if collect_delta_ttests
-                        results = attach_foodweb_to_results(results, dataname);
+                        results = attach_foodweb_to_results(results, dataname, ecosystem_type_for_index(foodweb_list, f_idx));
                         delta_ttest_rows = append_result_rows(delta_ttest_rows, results);
                     end
 
@@ -273,7 +274,7 @@ function Main()
                     % --- Delegate to the selected version runner ---
                     results = runner(data, K, ratioTrain, config);
                     if collect_delta_ttests
-                        results = attach_foodweb_to_results(results, dataname);
+                        results = attach_foodweb_to_results(results, dataname, ecosystem_type_for_index(foodweb_list, f_idx));
                         delta_ttest_rows = append_result_rows(delta_ttest_rows, results);
                     end
 
@@ -288,9 +289,11 @@ function Main()
     end
 
     if collect_delta_ttests
+        by_ecosystem_file = resolve_delta_ttest_by_ecosystem_file(config);
         write_delta_ttest_summary(config.deltaTTestFile, delta_ttest_rows, ...
             'alpha', config.deltaTTestAlpha, ...
-            'version', config.version);
+            'version', config.version, ...
+            'byEcosystemFile', by_ecosystem_file);
     end
 
     % Close parallel pool if open
@@ -339,9 +342,37 @@ function tf = is_experiment_parallel_wlnm(version_key)
     tf = any(strcmp(version_key, {'wlnm_dir_neg', 'wlnm_original', 'wlnm_directed', 'wlnm_negative'}));
 end
 
-function results = attach_foodweb_to_results(results, dataname)
+function results = attach_foodweb_to_results(results, dataname, ecosystem_type)
+    if nargin < 3
+        ecosystem_type = '';
+    end
+
     for i = 1:numel(results)
         results(i).Foodweb = char(string(dataname));
+        results(i).EcosystemType = char(string(ecosystem_type));
+    end
+end
+
+function ecosystem_type = ecosystem_type_for_index(foodweb_list, f_idx)
+    ecosystem_type = '';
+    if ismember('EcosystemType', foodweb_list.Properties.VariableNames)
+        ecosystem_type = foodweb_list.EcosystemType(f_idx);
+    end
+end
+
+function by_ecosystem_file = resolve_delta_ttest_by_ecosystem_file(config)
+    by_ecosystem_file = '';
+    if isfield(config, 'deltaTTestByEcosystemFile') && ...
+            ~isempty(config.deltaTTestByEcosystemFile)
+        by_ecosystem_file = char(string(config.deltaTTestByEcosystemFile));
+    end
+
+    if isempty(by_ecosystem_file)
+        [out_dir, base_name, ext] = fileparts(config.deltaTTestFile);
+        if isempty(ext)
+            ext = '.csv';
+        end
+        by_ecosystem_file = fullfile(out_dir, [base_name '_by_ecosystem' ext]);
     end
 end
 

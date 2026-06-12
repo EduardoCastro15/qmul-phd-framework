@@ -20,6 +20,12 @@ function metrics = compute_foodweb_metrics(A)
     %   MeanDegree
     %   MeanGenerality
     %   MeanVulnerability
+    %   DegreeStd / DegreeCV / DegreeGini
+    %   GeneralityStd / GeneralityCV / GeneralityGini
+    %   VulnerabilityStd / VulnerabilityCV / VulnerabilityGini
+    %   TrophicLevelStd / TrophicLevelCV / TrophicLevelRange
+    %   MeanLocalClustering / Transitivity / TriangleDensity
+    %   MeanDietOverlap
     %   NumBasal / NumIntermediate / NumTop / NumIsolate
     %   PropBasal / PropIntermediate / PropTop / PropIsolate
     %
@@ -94,6 +100,17 @@ function metrics = compute_foodweb_metrics(A)
     end
 
     mean_degree = mean(total_degree);
+    degree_std  = finite_std(total_degree);
+    degree_cv   = finite_cv(total_degree);
+    degree_gini = gini_coefficient(total_degree);
+
+    generality_std  = finite_std(generality);
+    generality_cv   = finite_cv(generality);
+    generality_gini = gini_coefficient(generality);
+
+    vulnerability_std  = finite_std(vulnerability);
+    vulnerability_cv   = finite_cv(vulnerability);
+    vulnerability_gini = gini_coefficient(vulnerability);
 
     % ------------------------------------------------------------
     % Prey-averaged trophic levels (stable implementation)
@@ -185,10 +202,20 @@ function metrics = compute_foodweb_metrics(A)
     trophic_level(~isfinite(trophic_level)) = NaN;
 
     if any(isfinite(trophic_level))
-        mean_trophic_level = mean(trophic_level(isfinite(trophic_level)));
+        finite_trophic_level = trophic_level(isfinite(trophic_level));
+        mean_trophic_level = mean(finite_trophic_level);
+        trophic_level_std = finite_std(finite_trophic_level);
+        trophic_level_cv = finite_cv(finite_trophic_level);
+        trophic_level_range = max(finite_trophic_level) - min(finite_trophic_level);
     else
         mean_trophic_level = NaN;
+        trophic_level_std = NaN;
+        trophic_level_cv = NaN;
+        trophic_level_range = NaN;
     end
+
+    closure_metrics = compute_closure_metrics(A);
+    mean_diet_overlap = compute_mean_diet_overlap(A);
 
     % --- Pack output ---
     metrics = struct();
@@ -201,6 +228,26 @@ function metrics = compute_foodweb_metrics(A)
     metrics.MeanDegree           = mean_degree;
     metrics.MeanGenerality       = mean_generality;
     metrics.MeanVulnerability    = mean_vulnerability;
+
+    metrics.DegreeStd            = degree_std;
+    metrics.DegreeCV             = degree_cv;
+    metrics.DegreeGini           = degree_gini;
+    metrics.GeneralityStd        = generality_std;
+    metrics.GeneralityCV         = generality_cv;
+    metrics.GeneralityGini       = generality_gini;
+    metrics.VulnerabilityStd     = vulnerability_std;
+    metrics.VulnerabilityCV      = vulnerability_cv;
+    metrics.VulnerabilityGini    = vulnerability_gini;
+
+    metrics.TrophicLevelStd      = trophic_level_std;
+    metrics.TrophicLevelCV       = trophic_level_cv;
+    metrics.TrophicLevelRange    = trophic_level_range;
+
+    metrics.MeanLocalClustering  = closure_metrics.MeanLocalClustering;
+    metrics.Transitivity         = closure_metrics.Transitivity;
+    metrics.NumTriangles         = closure_metrics.NumTriangles;
+    metrics.TriangleDensity      = closure_metrics.TriangleDensity;
+    metrics.MeanDietOverlap      = mean_diet_overlap;
 
     metrics.NumBasal             = num_basal;
     metrics.NumIntermediate      = num_intermediate;
@@ -224,4 +271,126 @@ function metrics = compute_foodweb_metrics(A)
     metrics.IntermediateMask     = intermediate_mask;
     metrics.TopMask              = top_mask;
     metrics.IsolateMask          = isolate_mask;
+end
+
+function val = finite_std(x)
+    x = x(:);
+    x = x(isfinite(x));
+    if numel(x) <= 1
+        val = 0;
+    else
+        val = std(double(x), 0);
+    end
+end
+
+function val = finite_cv(x)
+    x = x(:);
+    x = x(isfinite(x));
+    if isempty(x)
+        val = NaN;
+        return;
+    end
+
+    mu = mean(double(x));
+    if abs(mu) <= eps
+        val = 0;
+    else
+        val = finite_std(x) / abs(mu);
+    end
+end
+
+function g = gini_coefficient(x)
+    x = double(x(:));
+    x = x(isfinite(x));
+    if isempty(x)
+        g = NaN;
+        return;
+    end
+
+    x = sort(max(x, 0));
+    n = numel(x);
+    sx = sum(x);
+    if sx <= eps
+        g = 0;
+    else
+        g = (2 * sum((1:n)' .* x) / (n * sx)) - ((n + 1) / n);
+    end
+end
+
+function closure = compute_closure_metrics(A)
+    n = size(A, 1);
+    B = spones(A | A');
+    B = B - spdiags(diag(B), 0, n, n);
+    B = spones(B);
+
+    undirected_degree = full(sum(B, 2));
+    connected_triples = sum(undirected_degree .* max(undirected_degree - 1, 0) / 2);
+
+    if n >= 3 && nnz(B) > 0
+        BB = B * B;
+        num_triangles = full(sum(sum((BB .* B))) / 6);
+    else
+        num_triangles = 0;
+    end
+
+    local_clustering = NaN(n, 1);
+    for i = 1:n
+        neighbors = find(B(:, i));
+        k = numel(neighbors);
+        if k >= 2
+            subgraph = B(neighbors, neighbors);
+            local_edges = nnz(triu(subgraph, 1));
+            local_clustering(i) = (2 * local_edges) / (k * (k - 1));
+        end
+    end
+
+    finite_clustering = local_clustering(isfinite(local_clustering));
+    if isempty(finite_clustering)
+        mean_local_clustering = 0;
+    else
+        mean_local_clustering = mean(finite_clustering);
+    end
+
+    if connected_triples > 0
+        transitivity = (3 * num_triangles) / connected_triples;
+    else
+        transitivity = 0;
+    end
+
+    if n >= 3
+        triangle_density = num_triangles / nchoosek(n, 3);
+    else
+        triangle_density = 0;
+    end
+
+    closure = struct( ...
+        'MeanLocalClustering', mean_local_clustering, ...
+        'Transitivity', transitivity, ...
+        'NumTriangles', num_triangles, ...
+        'TriangleDensity', triangle_density);
+end
+
+function mean_overlap = compute_mean_diet_overlap(A)
+    prey_per_consumer = full(sum(A, 1))';
+    consumer_idx = find(prey_per_consumer > 0);
+    num_consumers = numel(consumer_idx);
+
+    if num_consumers < 2
+        mean_overlap = 0;
+        return;
+    end
+
+    diets = spones(A(:, consumer_idx));
+    shared_prey = full(diets' * diets);
+    diet_size = full(sum(diets, 1))';
+    union_prey = diet_size + diet_size' - shared_prey;
+
+    upper_mask = triu(true(num_consumers), 1) & union_prey > 0;
+    overlaps = shared_prey(upper_mask) ./ union_prey(upper_mask);
+
+    if isempty(overlaps)
+        mean_overlap = 0;
+    else
+        mean_overlap = mean(overlaps);
+    end
 end
