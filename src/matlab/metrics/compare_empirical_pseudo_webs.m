@@ -14,6 +14,7 @@ function cmp = compare_empirical_pseudo_webs(empirical_full, pseudo_full)
     %   TP, FP, FN, TN
     %   TPR, TNR, FPR, FNR
     %   Precision, Recall, F1Score
+    %   MCC
     %   TSS
     %   JaccardLinks
     %   EmpiricalLinks, PseudoLinks
@@ -56,6 +57,9 @@ function cmp = compare_empirical_pseudo_webs(empirical_full, pseudo_full)
     precision = TP / max(TP + FP, eps);
     recall    = TPR;
     f1_score  = 2 * (precision * recall) / max(precision + recall, eps);
+    mcc_den = sqrt(double(TP + FP) * double(TP + FN) * ...
+                   double(TN + FP) * double(TN + FN));
+    mcc = (double(TP) * double(TN) - double(FN) * double(FP)) / max(mcc_den, eps);
 
     TSS = TPR + TNR - 1;
 
@@ -83,6 +87,7 @@ function cmp = compare_empirical_pseudo_webs(empirical_full, pseudo_full)
     cmp.Precision       = precision;
     cmp.Recall          = recall;
     cmp.F1Score         = f1_score;
+    cmp.MCC             = mcc;
 
     cmp.TSS             = TSS;
     cmp.JaccardLinks    = jaccard_links;

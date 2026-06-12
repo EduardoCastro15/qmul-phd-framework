@@ -131,6 +131,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Link-level outputs (TP / FP / FN)
     % ------------------------------------------------------------
     binary_predictions = scores > best_threshold;
+    test_metrics = compute_binary_classification_metrics(binary_predictions, test_label);
     test_pairs = [test_pos; test_neg];
 
     predicted_links = test_pairs(binary_predictions == 1, :); % predicted present
@@ -185,6 +186,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     aux.empirical_metrics      = emp_metrics;
     aux.pseudo_metrics         = pseudo_metrics;
     aux.comparison_metrics     = cmp_metrics;
+    aux.test_metrics           = test_metrics;
     aux.NumPredictedNovelLinks = size(predicted_links, 1);
     aux.NumTrueNovelLinks      = size(true_links, 1);
     aux.EvaluateOnAllUnseen    = evaluate_on_all_unseen;
@@ -303,6 +305,9 @@ function cmp = compare_empirical_pseudo_webs_sparse(empirical_full, pseudo_full)
     precision = TP / max(TP + FP, eps);
     recall = TPR;
     f1_score = 2 * (precision * recall) / max(precision + recall, eps);
+    mcc_den = sqrt(double(TP + FP) * double(TP + FN) * ...
+                   double(TN + FP) * double(TN + FN));
+    mcc = (double(TP) * double(TN) - double(FN) * double(FP)) / max(mcc_den, eps);
 
     union_links = TP + FP + FN;
     if union_links > 0
@@ -323,9 +328,57 @@ function cmp = compare_empirical_pseudo_webs_sparse(empirical_full, pseudo_full)
     cmp.Precision = precision;
     cmp.Recall = recall;
     cmp.F1Score = f1_score;
+    cmp.MCC = mcc;
     cmp.TSS = TPR + TNR - 1;
     cmp.JaccardLinks = jaccard_links;
     cmp.EmpiricalLinks = empirical_links;
     cmp.PseudoLinks = pseudo_links;
     cmp.LinkDelta = pseudo_links - empirical_links;
+end
+
+function metrics = compute_binary_classification_metrics(predictions, labels)
+    predictions = logical(predictions(:));
+    labels = double(labels(:)) == 1;
+
+    TP = sum(predictions & labels);
+    FP = sum(predictions & ~labels);
+    FN = sum(~predictions & labels);
+    TN = sum(~predictions & ~labels);
+
+    TPR = TP / max(TP + FN, eps);
+    TNR = TN / max(TN + FP, eps);
+    FPR = FP / max(FP + TN, eps);
+    FNR = FN / max(FN + TP, eps);
+
+    precision = TP / max(TP + FP, eps);
+    recall = TPR;
+    f1_score = 2 * (precision * recall) / max(precision + recall, eps);
+
+    n_total = TP + FP + FN + TN;
+    accuracy = (TP + TN) / max(n_total, eps);
+    expected_accuracy = ((TP + FP) * (TP + FN) + ...
+                         (FN + TN) * (FP + TN)) / max(n_total^2, eps);
+    kappa = (accuracy - expected_accuracy) / max(1 - expected_accuracy, eps);
+
+    mcc_den = sqrt(double(TP + FP) * double(TP + FN) * ...
+                   double(TN + FP) * double(TN + FN));
+    mcc = (double(TP) * double(TN) - double(FN) * double(FP)) / max(mcc_den, eps);
+
+    metrics = struct();
+    metrics.TP = TP;
+    metrics.FP = FP;
+    metrics.FN = FN;
+    metrics.TN = TN;
+    metrics.TPR = TPR;
+    metrics.TNR = TNR;
+    metrics.FPR = FPR;
+    metrics.FNR = FNR;
+    metrics.Precision = precision;
+    metrics.Recall = recall;
+    metrics.F1Score = f1_score;
+    metrics.Accuracy = accuracy;
+    metrics.ExpectedAccuracy = expected_accuracy;
+    metrics.Kappa = kappa;
+    metrics.MCC = mcc;
+    metrics.TSS = TPR + TNR - 1;
 end
