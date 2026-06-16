@@ -19,18 +19,18 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',            true, ...                 % Enable/disable parallel pool
+        'useParallel',            false, ...                 % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
         'numExperiments',         20, ...                   % Repeated experiments per food web
         'parallelWorkers',        [], ...                  % [] auto; WLNM runners use useful workers only
         'baseSeed',               12345, ...                % Base seed for repeated holdout experiments
         'resampleSplitsEachExperiment', true, ...           % Resample train/test split for each repeated experiment
         'kRange',                 10, ...                  % Number of nodes per subgraph
-        'sweepTrainRatios',       false, ...               % Sweep over multiple ratios or fixed
+        'sweepTrainRatios',       true, ...               % Sweep over multiple ratios or fixed
         'ratioTrain',             0.90, ...                 % Default training ratio
-        'trainRatioRange',        0.10:0.20:0.90, ...      % Training ratios to test
+        'trainRatioRange',        0.10:0.10:0.90, ...      % Training ratios to test
         'nodeSelection',          'random', ...            % Type of node selection
-        'checkConnectivity',      true, ...                % Ensure train graph connectivity
+        'checkConnectivity',      false, ...               % Allow train/test splits even when removing bridge links
         'adaptiveConnectivity',   true, ...                % Adapt connectivity check based on train ratio
         'use_backbone' ,          false, ...               % Enable backbone extraction
         'inverse_backbone',       false, ...               % Use non-backbone edges instead (keeps old semantics)
@@ -44,7 +44,7 @@ function Main()
         'backbone_max_q',         0.25, ...                % PF thresholding max q
         'backbone_q_ladder',      2.0, ...                 % PF thresholding q ladder
         'alpha_fallback',         [], ...                  % PF thresholding alpha fallback
-        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
+        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_1.csv', ...              % CSV with food web names
         'matFolder',              'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
         'logDir',                 'data/result/prediction_scores_logs', ...                           % Directory for result logs
         'terminalLogDir',         'data/result/terminal_logs/', ...                                   % Directory for terminal logs
@@ -314,6 +314,11 @@ end
 
 function workers = resolve_parallel_workers(config, version_key)
     max_workers = feature('numcores');
+    slurm_tasks = str2double(getenv('SLURM_NTASKS'));
+    if ~isnan(slurm_tasks) && slurm_tasks > 0
+        % Leave one allocated CPU for the MATLAB client process.
+        max_workers = min(max_workers, max(1, floor(slurm_tasks) - 1));
+    end
 
     if isfield(config, 'parallelWorkers') && ~isempty(config.parallelWorkers)
         workers = min(max_workers, max(1, floor(double(config.parallelWorkers))));
