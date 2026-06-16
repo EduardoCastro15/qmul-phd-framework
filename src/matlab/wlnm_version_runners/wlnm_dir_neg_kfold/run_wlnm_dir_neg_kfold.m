@@ -47,8 +47,6 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
     R = k * config.numExperiments;
     results = repmat(make_cv_result_template(K, ratioTrain, k, 0, 0, 0, empty_split_stats(), config), R, 1);
 
-    row = 0;
-
     for f = 1:k
         idx = find(folds.fold_id == f);
 
@@ -65,42 +63,64 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
 
         st = cv_split_stats(net, train, test, backbone_mask);
 
-        for e = 1:config.numExperiments
-            row = row + 1;
+        fold_results = repmat(make_cv_result_template(K, ratioTrain, k, f, 0, 0, st, config), ...
+            config.numExperiments, 1);
 
-            % deterministic seed per (fold, experiment)
-            seed = config.cvSeed + 1000*f + e;
-            rng(seed, 'twister');
-
-            t0 = tic;
-
-            % Export confusion-style CSVs only once per fold, matching the
-            % standard runner's "first run exports" pattern.
-            do_export = logical(config.cvSaveConfusion) && (e == 1);
-
-            cv_tag = sprintf('cv_k%d_fold%02d_exp%02d', k, f, e);
-            artifact_tag = sprintf('%s_seed%d', lower(char(string(config.version))), seed);
-
-            [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
-                dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
-                'cv_tag', cv_tag, ...
-                'save_confusion', do_export, ...
-                'backbone_mask', backbone_mask, ...
-                'export_backbone', false, ...
-                'evaluate_on_all_unseen', config.evaluate_on_all_unseen, ...
-                'artifact_tag', artifact_tag, ...
-                'artifact_dir', config.artifactDir, ...
-                'threshold_mode', config.thresholdMode, ...
-                'fixed_threshold', config.fixedThreshold);
-
-            results(row) = make_cv_result_template(K, ratioTrain, k, f, e, seed, st, config);
-            results(row) = populate_result_row( ...
-                results(row), roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
-
-            fprintf('[CV] %s | K=%d | fold %d/%d | exp %d/%d | ROC-AUC=%.4f | PR-AUC=%.4f\n', ...
-                dataname, K, f, k, e, config.numExperiments, roc_auc, pr_auc);
+        start_exp = 1;
+        if logical(config.useParallel) && logical(config.cvSaveConfusion)
+            fold_results(1) = run_one_cv_experiment( ...
+                1, f, k, K, ratioTrain, st, config, dataname, train, test, ...
+                taxonomy, mass, role, nodeSelection, backbone_mask, true);
+            start_exp = 2;
         end
+
+        if logical(config.useParallel)
+            parfor e = start_exp:config.numExperiments
+                fold_results(e) = run_one_cv_experiment( ...
+                    e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
+                    taxonomy, mass, role, nodeSelection, backbone_mask, false);
+            end
+        else
+            for e = start_exp:config.numExperiments
+                do_export = logical(config.cvSaveConfusion) && (e == 1);
+                fold_results(e) = run_one_cv_experiment( ...
+                    e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
+                    taxonomy, mass, role, nodeSelection, backbone_mask, do_export);
+            end
+        end
+
+        rows = ((f - 1) * config.numExperiments + 1):(f * config.numExperiments);
+        results(rows) = fold_results;
     end
+end
+
+function result = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
+        taxonomy, mass, role, nodeSelection, backbone_mask, do_export)
+
+    seed = config.cvSeed + 1000*f + e;
+    rng(seed, 'twister');
+
+    t0 = tic;
+    cv_tag = sprintf('cv_k%d_fold%02d_exp%02d', k, f, e);
+    artifact_tag = sprintf('%s_seed%d', lower(char(string(config.version))), seed);
+
+    [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
+        dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
+        'cv_tag', cv_tag, ...
+        'save_confusion', do_export, ...
+        'backbone_mask', backbone_mask, ...
+        'export_backbone', false, ...
+        'evaluate_on_all_unseen', config.evaluate_on_all_unseen, ...
+        'artifact_tag', artifact_tag, ...
+        'artifact_dir', config.artifactDir, ...
+        'threshold_mode', config.thresholdMode, ...
+        'fixed_threshold', config.fixedThreshold);
+
+    result = make_cv_result_template(K, ratioTrain, k, f, e, seed, st, config);
+    result = populate_result_row(result, roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
+
+    fprintf('[CV] %s | K=%d | fold %d/%d | exp %d/%d | ROC-AUC=%.4f | PR-AUC=%.4f\n', ...
+        dataname, K, f, k, e, config.numExperiments, roc_auc, pr_auc);
 end
 
 % ============================================================
