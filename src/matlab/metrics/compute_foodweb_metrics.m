@@ -24,6 +24,11 @@ function metrics = compute_foodweb_metrics(A)
     %   GeneralityStd / GeneralityCV / GeneralityGini
     %   VulnerabilityStd / VulnerabilityCV / VulnerabilityGini
     %   TrophicLevelStd / TrophicLevelCV / TrophicLevelRange
+    %   NetworkXMeanTrophicLevel
+    %   NetworkXTrophicLevelStd / NetworkXTrophicLevelRange
+    %   NetworkXTrophicLevelNumSpeciesFull / NetworkXTrophicLevelNumSpeciesLargest
+    %   NetworkXTrophicLevelNumSpeciesWithLevel
+    %   NetworkXTrophicLevelLargestFraction / NetworkXTrophicLevelStatusCode
     %   MeanLocalClustering / Transitivity / TriangleDensity
     %   MeanDietOverlap
     %   NumBasal / NumIntermediate / NumTop / NumIsolate
@@ -36,6 +41,7 @@ function metrics = compute_foodweb_metrics(A)
     %   Generality      : same as InDegree under this adjacency convention
     %   Vulnerability   : same as OutDegree under this adjacency convention
     %   TrophicLevel
+    %   NetworkXTrophicLevel
     %   BasalMask / IntermediateMask / TopMask / IsolateMask
 
     % --- Validate and binarize ---
@@ -188,7 +194,6 @@ function metrics = compute_foodweb_metrics(A)
 
         if converged && all(tl_new >= 1 - 1e-8) && all(tl_new <= max(20, n))
             trophic_level = tl_new;
-            solve_ok = true;
         else
             warning('compute_foodweb_metrics:TrophicLevelUnstable', ...
                 ['Trophic level calculation was unstable for this network. ' ...
@@ -212,6 +217,22 @@ function metrics = compute_foodweb_metrics(A)
         trophic_level_std = NaN;
         trophic_level_cv = NaN;
         trophic_level_range = NaN;
+    end
+
+    % NetworkX trophic levels on the largest weakly connected
+    % component. This intentionally does not use the fixed-point fallback
+    % above: singular systems remain NaN so failures such as unanchored
+    % directed cycles are visible in the output.
+    [networkx_trophic_level, networkx_trophic_stats] = compute_networkx_trophic_levels(A);
+    finite_networkx_trophic_level = networkx_trophic_level(isfinite(networkx_trophic_level));
+    if isempty(finite_networkx_trophic_level)
+        networkx_mean_trophic_level = NaN;
+        networkx_trophic_level_std = NaN;
+        networkx_trophic_level_range = NaN;
+    else
+        networkx_mean_trophic_level = mean(finite_networkx_trophic_level);
+        networkx_trophic_level_std = finite_std(finite_networkx_trophic_level);
+        networkx_trophic_level_range = max(finite_networkx_trophic_level) - min(finite_networkx_trophic_level);
     end
 
     closure_metrics = compute_closure_metrics(A);
@@ -243,6 +264,15 @@ function metrics = compute_foodweb_metrics(A)
     metrics.TrophicLevelCV       = trophic_level_cv;
     metrics.TrophicLevelRange    = trophic_level_range;
 
+    metrics.NetworkXMeanTrophicLevel = networkx_mean_trophic_level;
+    metrics.NetworkXTrophicLevelStd  = networkx_trophic_level_std;
+    metrics.NetworkXTrophicLevelRange = networkx_trophic_level_range;
+    metrics.NetworkXTrophicLevelNumSpeciesFull = networkx_trophic_stats.NumSpeciesFull;
+    metrics.NetworkXTrophicLevelNumSpeciesLargest = networkx_trophic_stats.NumSpeciesLargest;
+    metrics.NetworkXTrophicLevelNumSpeciesWithLevel = networkx_trophic_stats.NumSpeciesWithLevel;
+    metrics.NetworkXTrophicLevelLargestFraction = networkx_trophic_stats.LargestFraction;
+    metrics.NetworkXTrophicLevelStatusCode = networkx_trophic_stats.StatusCode;
+
     metrics.MeanLocalClustering  = closure_metrics.MeanLocalClustering;
     metrics.Transitivity         = closure_metrics.Transitivity;
     metrics.NumTriangles         = closure_metrics.NumTriangles;
@@ -266,6 +296,7 @@ function metrics = compute_foodweb_metrics(A)
     metrics.Generality           = generality;
     metrics.Vulnerability        = vulnerability;
     metrics.TrophicLevel         = trophic_level;
+    metrics.NetworkXTrophicLevel = networkx_trophic_level;
 
     metrics.BasalMask            = basal_mask;
     metrics.IntermediateMask     = intermediate_mask;
@@ -280,6 +311,93 @@ function val = finite_std(x)
         val = 0;
     else
         val = std(double(x), 0);
+    end
+end
+
+function [trophic_level, stats] = compute_networkx_trophic_levels(A)
+    % StatusCode: 0 ok, 1 empty/LCC missing, 2 singular/ill-conditioned,
+    % 3 implausible solution, 4 graph/solve error, 5 no finite levels.
+    n = size(A, 1);
+    trophic_level = NaN(n, 1);
+
+    stats = struct( ...
+        'NumSpeciesFull', n, ...
+        'NumSpeciesLargest', 0, ...
+        'NumSpeciesWithLevel', 0, ...
+        'LargestFraction', NaN, ...
+        'StatusCode', 0);
+
+    if n == 0
+        stats.StatusCode = 1;
+        return;
+    end
+
+    undirected = spones(A | A');
+    undirected = undirected - spdiags(diag(undirected), 0, n, n);
+    undirected = spones(undirected);
+
+    try
+        bins = conncomp(graph(undirected));
+        counts = accumarray(bins(:), 1);
+        [~, largest_bin] = max(counts);
+        largest_idx = find(bins(:) == largest_bin);
+    catch
+        stats.StatusCode = 4;
+        return;
+    end
+
+    m = numel(largest_idx);
+    stats.NumSpeciesLargest = m;
+    stats.LargestFraction = m / max(n, 1);
+
+    if m == 0
+        stats.StatusCode = 1;
+        return;
+    end
+
+    if m == 1
+        % A single node with no incoming links is basal in NetworkX and has
+        % trophic level 1.
+        trophic_level(largest_idx) = 1;
+        stats.NumSpeciesWithLevel = 1;
+        return;
+    end
+
+    A_lcc = A(largest_idx, largest_idx);
+    in_degree_lcc = full(sum(A_lcc, 1))';
+
+    denom = max(in_degree_lcc, 1);
+    prey_average = spdiags(1 ./ denom, 0, m, m) * A_lcc';
+    M = speye(m) - prey_average;
+    rhs = ones(m, 1);
+
+    try
+        reciprocal_condition = rcond(full(M));
+        if ~isfinite(reciprocal_condition) || reciprocal_condition <= 1e-10
+            stats.StatusCode = 2;
+            return;
+        end
+
+        tl_try = M \ rhs;
+
+        if all(isfinite(tl_try)) && all(tl_try >= 1 - 1e-8) && all(tl_try <= max(20, m))
+            % NetworkX returns basal nodes with trophic level 1. Retain them
+            % so the reported mean is over every node in the largest weakly
+            % connected component.
+            tl_output = tl_try;
+            stats.NumSpeciesWithLevel = sum(isfinite(tl_output));
+
+            if stats.NumSpeciesWithLevel == 0
+                stats.StatusCode = 5;
+                return;
+            end
+
+            trophic_level(largest_idx) = tl_output;
+        else
+            stats.StatusCode = 3;
+        end
+    catch
+        stats.StatusCode = 4;
     end
 end
 

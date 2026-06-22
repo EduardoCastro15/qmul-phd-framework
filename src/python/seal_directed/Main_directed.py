@@ -32,6 +32,13 @@ def safe_divide(numerator, denominator):
     return float(numerator) / float(denominator)
 
 
+def compute_mcc(tp, fp, fn, tn):
+    denominator = math.sqrt(
+        float(tp + fp) * float(tp + fn) * float(tn + fp) * float(tn + fn)
+    )
+    return safe_divide(float(tp) * float(tn) - float(fn) * float(fp), denominator)
+
+
 def compute_link_prediction_metrics(labels, scores, threshold=0.5):
     labels = np.asarray(labels, dtype=np.int64)
     scores = np.asarray(scores, dtype=np.float64)
@@ -58,6 +65,19 @@ def compute_link_prediction_metrics(labels, scores, threshold=0.5):
     precision = safe_divide(tp, tp + fp)
     recall = safe_divide(tp, tp + fn)
     f1_score = safe_divide(2 * precision * recall, precision + recall)
+    tpr = recall
+    tnr = safe_divide(tn, tn + fp)
+    fpr = safe_divide(fp, fp + tn)
+    fnr = safe_divide(fn, fn + tp)
+    n_total = tp + fp + fn + tn
+    accuracy = safe_divide(tp + tn, n_total)
+    expected_accuracy = safe_divide(
+        (tp + fp) * (tp + fn) + (fn + tn) * (fp + tn),
+        n_total ** 2,
+    )
+    kappa = safe_divide(accuracy - expected_accuracy, 1 - expected_accuracy)
+    mcc = compute_mcc(tp, fp, fn, tn)
+    tss = tpr + tnr - 1
 
     return {
         'ROC_AUC': roc_auc,
@@ -70,6 +90,22 @@ def compute_link_prediction_metrics(labels, scores, threshold=0.5):
         'FP': fp,
         'FN': fn,
         'TN': tn,
+        'TestTP': tp,
+        'TestFP': fp,
+        'TestFN': fn,
+        'TestTN': tn,
+        'TestTPR': tpr,
+        'TestTNR': tnr,
+        'TestFPR': fpr,
+        'TestFNR': fnr,
+        'TestPrecision': precision,
+        'TestRecall': recall,
+        'TestF1Score': f1_score,
+        'TestAccuracy': accuracy,
+        'TestExpectedAccuracy': expected_accuracy,
+        'TestKappa': kappa,
+        'TestMCC': mcc,
+        'TestTSS': tss,
     }
 
 
@@ -85,6 +121,98 @@ def binarize_adjacency(A):
     A = remove_self_loops(A)
     A.data = np.ones_like(A.data)
     return A
+
+
+def finite_std(x):
+    x = np.asarray(x, dtype=np.float64)
+    x = x[np.isfinite(x)]
+    if x.size <= 1:
+        return 0.0
+    return float(np.std(x, ddof=1))
+
+
+def finite_cv(x):
+    x = np.asarray(x, dtype=np.float64)
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        return np.nan
+    mean_value = float(np.mean(x))
+    if abs(mean_value) <= np.finfo(float).eps:
+        return 0.0
+    return finite_std(x) / abs(mean_value)
+
+
+def gini_coefficient(x):
+    x = np.asarray(x, dtype=np.float64)
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        return np.nan
+    x = np.sort(np.maximum(x, 0))
+    total = float(np.sum(x))
+    if total <= np.finfo(float).eps:
+        return 0.0
+    ranks = np.arange(1, x.size + 1, dtype=np.float64)
+    return float((2 * np.sum(ranks * x) / (x.size * total)) - ((x.size + 1) / x.size))
+
+
+def compute_closure_metrics(A):
+    n = A.shape[0]
+    B = binarize_adjacency(A + A.transpose())
+    undirected_degree = np.asarray(B.sum(axis=1)).ravel()
+    connected_triples = float(
+        np.sum(undirected_degree * np.maximum(undirected_degree - 1, 0) / 2)
+    )
+
+    if n >= 3 and B.nnz > 0:
+        BB = B.dot(B)
+        num_triangles = float(BB.multiply(B).sum() / 6)
+    else:
+        num_triangles = 0.0
+
+    local_clustering = np.full(n, np.nan)
+    for i in range(n):
+        neighbors = B.getrow(i).indices
+        k = len(neighbors)
+        if k >= 2:
+            subgraph = B[neighbors, :][:, neighbors]
+            local_edges = ssp.triu(subgraph, k=1).nnz
+            local_clustering[i] = safe_divide(2 * local_edges, k * (k - 1))
+
+    finite_clustering = local_clustering[np.isfinite(local_clustering)]
+    mean_local_clustering = (
+        float(np.mean(finite_clustering)) if finite_clustering.size else 0.0
+    )
+    transitivity = safe_divide(3 * num_triangles, connected_triples)
+    triangle_density = (
+        safe_divide(num_triangles, n * (n - 1) * (n - 2) / 6) if n >= 3 else 0.0
+    )
+
+    return {
+        'MeanLocalClustering': mean_local_clustering,
+        'Transitivity': transitivity,
+        'NumTriangles': num_triangles,
+        'TriangleDensity': triangle_density,
+    }
+
+
+def compute_mean_diet_overlap(A):
+    prey_per_consumer = np.asarray(A.sum(axis=0)).ravel()
+    consumer_idx = np.where(prey_per_consumer > 0)[0]
+    num_consumers = len(consumer_idx)
+    if num_consumers < 2:
+        return 0.0
+
+    diets = ssp.csr_matrix(A[:, consumer_idx])
+    diets.data = np.ones_like(diets.data)
+    shared_prey = diets.transpose().dot(diets).toarray()
+    diet_size = np.asarray(diets.sum(axis=0)).ravel()
+    union_prey = diet_size[:, None] + diet_size[None, :] - shared_prey
+    upper_mask = np.triu(np.ones((num_consumers, num_consumers), dtype=bool), k=1)
+    valid_mask = upper_mask & (union_prey > 0)
+
+    if not np.any(valid_mask):
+        return 0.0
+    return float(np.mean(shared_prey[valid_mask] / union_prey[valid_mask]))
 
 
 def compute_foodweb_metrics(A):
@@ -110,6 +238,15 @@ def compute_foodweb_metrics(A):
     mean_generality = float(np.mean(positive_generality)) if positive_generality.size else 0.0
     mean_vulnerability = float(np.mean(positive_vulnerability)) if positive_vulnerability.size else 0.0
     mean_degree = float(np.mean(total_degree)) if n else 0.0
+    degree_std = finite_std(total_degree)
+    degree_cv = finite_cv(total_degree)
+    degree_gini = gini_coefficient(total_degree)
+    generality_std = finite_std(generality)
+    generality_cv = finite_cv(generality)
+    generality_gini = gini_coefficient(generality)
+    vulnerability_std = finite_std(vulnerability)
+    vulnerability_cv = finite_cv(vulnerability)
+    vulnerability_gini = gini_coefficient(vulnerability)
 
     prey_count_per_consumer = in_degree
     basal_or_isolate_mask = prey_count_per_consumer == 0
@@ -161,6 +298,13 @@ def compute_foodweb_metrics(A):
 
     finite_tl = trophic_level[np.isfinite(trophic_level)]
     mean_trophic_level = float(np.mean(finite_tl)) if finite_tl.size else np.nan
+    trophic_level_std = finite_std(finite_tl) if finite_tl.size else np.nan
+    trophic_level_cv = finite_cv(finite_tl) if finite_tl.size else np.nan
+    trophic_level_range = (
+        float(np.max(finite_tl) - np.min(finite_tl)) if finite_tl.size else np.nan
+    )
+    closure_metrics = compute_closure_metrics(A)
+    mean_diet_overlap = compute_mean_diet_overlap(A)
 
     return {
         'NumSpecies': n,
@@ -170,6 +314,23 @@ def compute_foodweb_metrics(A):
         'MeanDegree': mean_degree,
         'MeanGenerality': mean_generality,
         'MeanVulnerability': mean_vulnerability,
+        'DegreeStd': degree_std,
+        'DegreeCV': degree_cv,
+        'DegreeGini': degree_gini,
+        'GeneralityStd': generality_std,
+        'GeneralityCV': generality_cv,
+        'GeneralityGini': generality_gini,
+        'VulnerabilityStd': vulnerability_std,
+        'VulnerabilityCV': vulnerability_cv,
+        'VulnerabilityGini': vulnerability_gini,
+        'TrophicLevelStd': trophic_level_std,
+        'TrophicLevelCV': trophic_level_cv,
+        'TrophicLevelRange': trophic_level_range,
+        'MeanLocalClustering': closure_metrics['MeanLocalClustering'],
+        'Transitivity': closure_metrics['Transitivity'],
+        'NumTriangles': closure_metrics['NumTriangles'],
+        'TriangleDensity': closure_metrics['TriangleDensity'],
+        'MeanDietOverlap': mean_diet_overlap,
         'PropBasal': safe_divide(int(np.sum(basal_mask)), n),
         'PropIntermediate': safe_divide(int(np.sum(intermediate_mask)), n),
         'PropTop': safe_divide(int(np.sum(top_mask)), n),
@@ -195,6 +356,7 @@ def compare_empirical_pseudo_webs(empirical_full, pseudo_full):
     precision = safe_divide(tp, tp + fp)
     recall = tpr
     f1_score = safe_divide(2 * precision * recall, precision + recall)
+    mcc = compute_mcc(tp, fp, fn, tn)
     jaccard_links = safe_divide(tp, tp + fp + fn)
 
     return {
@@ -209,6 +371,7 @@ def compare_empirical_pseudo_webs(empirical_full, pseudo_full):
         'Precision': precision,
         'Recall': recall,
         'F1Score': f1_score,
+        'MCC': mcc,
         'TSS': tpr + tnr - 1,
         'JaccardLinks': jaccard_links,
         'EmpiricalLinks': empirical_links,
@@ -252,6 +415,23 @@ def build_ecological_metric_row(net, observed_train, test_pos, test_neg, labels,
         'EmpiricalMeanDegree': empirical_metrics['MeanDegree'],
         'EmpiricalMeanGenerality': empirical_metrics['MeanGenerality'],
         'EmpiricalMeanVulnerability': empirical_metrics['MeanVulnerability'],
+        'EmpiricalDegreeStd': empirical_metrics['DegreeStd'],
+        'EmpiricalDegreeCV': empirical_metrics['DegreeCV'],
+        'EmpiricalDegreeGini': empirical_metrics['DegreeGini'],
+        'EmpiricalGeneralityStd': empirical_metrics['GeneralityStd'],
+        'EmpiricalGeneralityCV': empirical_metrics['GeneralityCV'],
+        'EmpiricalGeneralityGini': empirical_metrics['GeneralityGini'],
+        'EmpiricalVulnerabilityStd': empirical_metrics['VulnerabilityStd'],
+        'EmpiricalVulnerabilityCV': empirical_metrics['VulnerabilityCV'],
+        'EmpiricalVulnerabilityGini': empirical_metrics['VulnerabilityGini'],
+        'EmpiricalTrophicLevelStd': empirical_metrics['TrophicLevelStd'],
+        'EmpiricalTrophicLevelCV': empirical_metrics['TrophicLevelCV'],
+        'EmpiricalTrophicLevelRange': empirical_metrics['TrophicLevelRange'],
+        'EmpiricalMeanLocalClustering': empirical_metrics['MeanLocalClustering'],
+        'EmpiricalTransitivity': empirical_metrics['Transitivity'],
+        'EmpiricalNumTriangles': empirical_metrics['NumTriangles'],
+        'EmpiricalTriangleDensity': empirical_metrics['TriangleDensity'],
+        'EmpiricalMeanDietOverlap': empirical_metrics['MeanDietOverlap'],
         'EmpiricalPropBasal': empirical_metrics['PropBasal'],
         'EmpiricalPropIntermediate': empirical_metrics['PropIntermediate'],
         'EmpiricalPropTop': empirical_metrics['PropTop'],
@@ -262,6 +442,23 @@ def build_ecological_metric_row(net, observed_train, test_pos, test_neg, labels,
         'PseudoMeanDegree': pseudo_metrics['MeanDegree'],
         'PseudoMeanGenerality': pseudo_metrics['MeanGenerality'],
         'PseudoMeanVulnerability': pseudo_metrics['MeanVulnerability'],
+        'PseudoDegreeStd': pseudo_metrics['DegreeStd'],
+        'PseudoDegreeCV': pseudo_metrics['DegreeCV'],
+        'PseudoDegreeGini': pseudo_metrics['DegreeGini'],
+        'PseudoGeneralityStd': pseudo_metrics['GeneralityStd'],
+        'PseudoGeneralityCV': pseudo_metrics['GeneralityCV'],
+        'PseudoGeneralityGini': pseudo_metrics['GeneralityGini'],
+        'PseudoVulnerabilityStd': pseudo_metrics['VulnerabilityStd'],
+        'PseudoVulnerabilityCV': pseudo_metrics['VulnerabilityCV'],
+        'PseudoVulnerabilityGini': pseudo_metrics['VulnerabilityGini'],
+        'PseudoTrophicLevelStd': pseudo_metrics['TrophicLevelStd'],
+        'PseudoTrophicLevelCV': pseudo_metrics['TrophicLevelCV'],
+        'PseudoTrophicLevelRange': pseudo_metrics['TrophicLevelRange'],
+        'PseudoMeanLocalClustering': pseudo_metrics['MeanLocalClustering'],
+        'PseudoTransitivity': pseudo_metrics['Transitivity'],
+        'PseudoNumTriangles': pseudo_metrics['NumTriangles'],
+        'PseudoTriangleDensity': pseudo_metrics['TriangleDensity'],
+        'PseudoMeanDietOverlap': pseudo_metrics['MeanDietOverlap'],
         'PseudoPropBasal': pseudo_metrics['PropBasal'],
         'PseudoPropIntermediate': pseudo_metrics['PropIntermediate'],
         'PseudoPropTop': pseudo_metrics['PropTop'],
@@ -271,6 +468,23 @@ def build_ecological_metric_row(net, observed_train, test_pos, test_neg, labels,
         'DeltaMeanDegree': pseudo_metrics['MeanDegree'] - empirical_metrics['MeanDegree'],
         'DeltaMeanGenerality': pseudo_metrics['MeanGenerality'] - empirical_metrics['MeanGenerality'],
         'DeltaMeanVulnerability': pseudo_metrics['MeanVulnerability'] - empirical_metrics['MeanVulnerability'],
+        'DeltaDegreeStd': pseudo_metrics['DegreeStd'] - empirical_metrics['DegreeStd'],
+        'DeltaDegreeCV': pseudo_metrics['DegreeCV'] - empirical_metrics['DegreeCV'],
+        'DeltaDegreeGini': pseudo_metrics['DegreeGini'] - empirical_metrics['DegreeGini'],
+        'DeltaGeneralityStd': pseudo_metrics['GeneralityStd'] - empirical_metrics['GeneralityStd'],
+        'DeltaGeneralityCV': pseudo_metrics['GeneralityCV'] - empirical_metrics['GeneralityCV'],
+        'DeltaGeneralityGini': pseudo_metrics['GeneralityGini'] - empirical_metrics['GeneralityGini'],
+        'DeltaVulnerabilityStd': pseudo_metrics['VulnerabilityStd'] - empirical_metrics['VulnerabilityStd'],
+        'DeltaVulnerabilityCV': pseudo_metrics['VulnerabilityCV'] - empirical_metrics['VulnerabilityCV'],
+        'DeltaVulnerabilityGini': pseudo_metrics['VulnerabilityGini'] - empirical_metrics['VulnerabilityGini'],
+        'DeltaTrophicLevelStd': pseudo_metrics['TrophicLevelStd'] - empirical_metrics['TrophicLevelStd'],
+        'DeltaTrophicLevelCV': pseudo_metrics['TrophicLevelCV'] - empirical_metrics['TrophicLevelCV'],
+        'DeltaTrophicLevelRange': pseudo_metrics['TrophicLevelRange'] - empirical_metrics['TrophicLevelRange'],
+        'DeltaMeanLocalClustering': pseudo_metrics['MeanLocalClustering'] - empirical_metrics['MeanLocalClustering'],
+        'DeltaTransitivity': pseudo_metrics['Transitivity'] - empirical_metrics['Transitivity'],
+        'DeltaNumTriangles': pseudo_metrics['NumTriangles'] - empirical_metrics['NumTriangles'],
+        'DeltaTriangleDensity': pseudo_metrics['TriangleDensity'] - empirical_metrics['TriangleDensity'],
+        'DeltaMeanDietOverlap': pseudo_metrics['MeanDietOverlap'] - empirical_metrics['MeanDietOverlap'],
         'DeltaPropBasal': pseudo_metrics['PropBasal'] - empirical_metrics['PropBasal'],
         'DeltaPropIntermediate': pseudo_metrics['PropIntermediate'] - empirical_metrics['PropIntermediate'],
         'DeltaPropTop': pseudo_metrics['PropTop'] - empirical_metrics['PropTop'],
@@ -285,6 +499,7 @@ def build_ecological_metric_row(net, observed_train, test_pos, test_neg, labels,
         'PseudoPrecision': comparison_metrics['Precision'],
         'PseudoRecall': comparison_metrics['Recall'],
         'PseudoF1Score': comparison_metrics['F1Score'],
+        'PseudoMCC': comparison_metrics['MCC'],
         'PseudoTSS': comparison_metrics['TSS'],
         'PseudoJaccardLinks': comparison_metrics['JaccardLinks'],
         'NumPredictedNovelLinks': int(predicted_links.shape[0]),
@@ -358,6 +573,22 @@ def write_metrics_csv(row, result_dir, data_name):
         'Precision',
         'Recall',
         'F1Score',
+        'TestTP',
+        'TestFP',
+        'TestFN',
+        'TestTN',
+        'TestTPR',
+        'TestTNR',
+        'TestFPR',
+        'TestFNR',
+        'TestPrecision',
+        'TestRecall',
+        'TestF1Score',
+        'TestAccuracy',
+        'TestExpectedAccuracy',
+        'TestKappa',
+        'TestMCC',
+        'TestTSS',
         'TotalLinks',
         'TrainLinks',
         'TestLinks',
@@ -374,6 +605,23 @@ def write_metrics_csv(row, result_dir, data_name):
         'EmpiricalMeanDegree',
         'EmpiricalMeanGenerality',
         'EmpiricalMeanVulnerability',
+        'EmpiricalDegreeStd',
+        'EmpiricalDegreeCV',
+        'EmpiricalDegreeGini',
+        'EmpiricalGeneralityStd',
+        'EmpiricalGeneralityCV',
+        'EmpiricalGeneralityGini',
+        'EmpiricalVulnerabilityStd',
+        'EmpiricalVulnerabilityCV',
+        'EmpiricalVulnerabilityGini',
+        'EmpiricalTrophicLevelStd',
+        'EmpiricalTrophicLevelCV',
+        'EmpiricalTrophicLevelRange',
+        'EmpiricalMeanLocalClustering',
+        'EmpiricalTransitivity',
+        'EmpiricalNumTriangles',
+        'EmpiricalTriangleDensity',
+        'EmpiricalMeanDietOverlap',
         'EmpiricalPropBasal',
         'EmpiricalPropIntermediate',
         'EmpiricalPropTop',
@@ -384,6 +632,23 @@ def write_metrics_csv(row, result_dir, data_name):
         'PseudoMeanDegree',
         'PseudoMeanGenerality',
         'PseudoMeanVulnerability',
+        'PseudoDegreeStd',
+        'PseudoDegreeCV',
+        'PseudoDegreeGini',
+        'PseudoGeneralityStd',
+        'PseudoGeneralityCV',
+        'PseudoGeneralityGini',
+        'PseudoVulnerabilityStd',
+        'PseudoVulnerabilityCV',
+        'PseudoVulnerabilityGini',
+        'PseudoTrophicLevelStd',
+        'PseudoTrophicLevelCV',
+        'PseudoTrophicLevelRange',
+        'PseudoMeanLocalClustering',
+        'PseudoTransitivity',
+        'PseudoNumTriangles',
+        'PseudoTriangleDensity',
+        'PseudoMeanDietOverlap',
         'PseudoPropBasal',
         'PseudoPropIntermediate',
         'PseudoPropTop',
@@ -393,6 +658,23 @@ def write_metrics_csv(row, result_dir, data_name):
         'DeltaMeanDegree',
         'DeltaMeanGenerality',
         'DeltaMeanVulnerability',
+        'DeltaDegreeStd',
+        'DeltaDegreeCV',
+        'DeltaDegreeGini',
+        'DeltaGeneralityStd',
+        'DeltaGeneralityCV',
+        'DeltaGeneralityGini',
+        'DeltaVulnerabilityStd',
+        'DeltaVulnerabilityCV',
+        'DeltaVulnerabilityGini',
+        'DeltaTrophicLevelStd',
+        'DeltaTrophicLevelCV',
+        'DeltaTrophicLevelRange',
+        'DeltaMeanLocalClustering',
+        'DeltaTransitivity',
+        'DeltaNumTriangles',
+        'DeltaTriangleDensity',
+        'DeltaMeanDietOverlap',
         'DeltaPropBasal',
         'DeltaPropIntermediate',
         'DeltaPropTop',
@@ -407,6 +689,7 @@ def write_metrics_csv(row, result_dir, data_name):
         'PseudoPrecision',
         'PseudoRecall',
         'PseudoF1Score',
+        'PseudoMCC',
         'PseudoTSS',
         'PseudoJaccardLinks',
         'NumPredictedNovelLinks',
@@ -444,6 +727,10 @@ def write_metrics_csv(row, result_dir, data_name):
         'K',
         'ExperimentID',
         'Seed',
+        'TestTP',
+        'TestFP',
+        'TestFN',
+        'TestTN',
         'TotalLinks',
         'TrainLinks',
         'TestLinks',
@@ -455,9 +742,12 @@ def write_metrics_csv(row, result_dir, data_name):
         'NonBackboneTestLinks',
         'EmpiricalNumSpecies',
         'EmpiricalLinks',
+        'EmpiricalNumTriangles',
         'PseudoNumSpecies',
         'PseudoLinks',
+        'PseudoNumTriangles',
         'DeltaLinks',
+        'DeltaNumTriangles',
         'PseudoTP',
         'PseudoFP',
         'PseudoFN',

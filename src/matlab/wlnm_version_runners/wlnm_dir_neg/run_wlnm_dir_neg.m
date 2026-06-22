@@ -306,6 +306,8 @@ function out = make_result_template(K, ratioTrain, rb, split_stats, config, expI
     out = add_extended_metric_defaults(out, 'Empirical');
     out = add_extended_metric_defaults(out, 'Pseudo');
     out = add_extended_metric_defaults(out, 'Delta');
+    out = add_networkx_trophic_diagnostic_defaults(out, 'Empirical');
+    out = add_networkx_trophic_diagnostic_defaults(out, 'Pseudo');
 end
 
 % ============================================================
@@ -402,6 +404,8 @@ function flat = flatten_aux_metrics(aux)
     flat = add_extended_metric_defaults(flat, 'Empirical');
     flat = add_extended_metric_defaults(flat, 'Pseudo');
     flat = add_extended_metric_defaults(flat, 'Delta');
+    flat = add_networkx_trophic_diagnostic_defaults(flat, 'Empirical');
+    flat = add_networkx_trophic_diagnostic_defaults(flat, 'Pseudo');
 
     if nargin == 0 || isempty(aux)
         return;
@@ -421,6 +425,7 @@ function flat = flatten_aux_metrics(aux)
         flat.EmpiricalPropIntermediate  = safe_field(m, 'PropIntermediate');
         flat.EmpiricalPropTop           = safe_field(m, 'PropTop');
         flat = copy_extended_metrics(flat, m, 'Empirical');
+        flat = copy_networkx_trophic_diagnostics(flat, m, 'Empirical');
     end
 
     % ---- pseudo metrics ----
@@ -437,6 +442,7 @@ function flat = flatten_aux_metrics(aux)
         flat.PseudoPropIntermediate  = safe_field(m, 'PropIntermediate');
         flat.PseudoPropTop           = safe_field(m, 'PropTop');
         flat = copy_extended_metrics(flat, m, 'Pseudo');
+        flat = copy_networkx_trophic_diagnostics(flat, m, 'Pseudo');
     end
 
     % ---- deltas ----
@@ -513,8 +519,23 @@ function s = add_extended_metric_defaults(s, prefix)
     end
 end
 
+function s = add_networkx_trophic_diagnostic_defaults(s, prefix)
+    suffixes = networkx_trophic_diagnostic_suffixes();
+    for i = 1:numel(suffixes)
+        s.([prefix suffixes{i}]) = NaN;
+    end
+end
+
 function s = copy_extended_metrics(s, metrics, prefix)
     suffixes = extended_metric_suffixes();
+    for i = 1:numel(suffixes)
+        suffix = suffixes{i};
+        s.([prefix suffix]) = safe_field(metrics, suffix);
+    end
+end
+
+function s = copy_networkx_trophic_diagnostics(s, metrics, prefix)
+    suffixes = networkx_trophic_diagnostic_suffixes();
     for i = 1:numel(suffixes)
         suffix = suffixes{i};
         s.([prefix suffix]) = safe_field(metrics, suffix);
@@ -543,11 +564,24 @@ function suffixes = extended_metric_suffixes()
         'TrophicLevelStd', ...
         'TrophicLevelCV', ...
         'TrophicLevelRange', ...
+        'NetworkXMeanTrophicLevel', ...
+        'NetworkXTrophicLevelStd', ...
+        'NetworkXTrophicLevelRange', ...
         'MeanLocalClustering', ...
         'Transitivity', ...
         'NumTriangles', ...
         'TriangleDensity', ...
         'MeanDietOverlap' ...
+    };
+end
+
+function suffixes = networkx_trophic_diagnostic_suffixes()
+    suffixes = { ...
+        'NetworkXTrophicLevelNumSpeciesFull', ...
+        'NetworkXTrophicLevelNumSpeciesLargest', ...
+        'NetworkXTrophicLevelNumSpeciesWithLevel', ...
+        'NetworkXTrophicLevelLargestFraction', ...
+        'NetworkXTrophicLevelStatusCode' ...
     };
 end
 

@@ -161,7 +161,7 @@ function s = csv_value_to_string(v)
         elseif abs(v - round(v)) < 1e-12
             s = sprintf('%d', round(v));
         else
-            s = sprintf('%.4f', v);
+            s = sprintf('%.12g', v);
         end
 
     else
