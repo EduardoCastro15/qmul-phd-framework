@@ -19,7 +19,7 @@ function Main()
     %% === CONFIGURATION FLAGS ===
 
     config = struct( ...
-        'useParallel',            false, ...                 % Enable/disable parallel pool
+        'useParallel',            true, ...                 % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
         'numExperiments',         20, ...                   % Repeated experiments per food web
         'parallelWorkers',        [], ...                  % [] auto; WLNM runners use useful workers only
@@ -45,19 +45,24 @@ function Main()
         'backbone_q_ladder',      2.0, ...                 % PF thresholding q ladder
         'alpha_fallback',         [], ...                  % PF thresholding alpha fallback
         'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_1.csv', ...              % CSV with food web names
-        'matFolder',              'data/foodwebs_mat_backbones/', ...                                 % Folder with .mat files
-        'logDir',                 'data/result/prediction_scores_logs', ...                           % Directory for result logs
-        'terminalLogDir',         'data/result/terminal_logs/', ...                                   % Directory for terminal logs
-        'artifactDir',            'data/result/confusion_matrix_csv/', ...                            % Directory for auxiliary TP/FP/FN CSVs
-        'exportAuxiliaryCSVs',     true, ...                                                         % Set true only for inspection CSVs; false keeps all 5 experiments parallel
+        'matFolder',              'data/foodwebs_mat/', ...                                 % Folder with .mat files
+        'logDir',                 'data/result/fixed_foodwebs_4/prediction_scores_logs', ... % Directory for result logs
+        'terminalLogDir',         'data/result/fixed_foodwebs_4/terminal_logs/', ...          % Directory for terminal logs
+        'artifactDir',            'data/result/fixed_foodwebs_4/confusion_matrix_csv/', ...   % Directory for auxiliary TP/FP/FN CSVs
+        'exportAuxiliaryCSVs',     false, ...                                                        % Set true only for inspection CSVs; false keeps all repeated experiments parallel
         'thresholdMode',          'fixed', ...                                                        % 'fixed' or legacy 'test_f1'
         'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
         'useGraphEncodingParallel', false, ...                                                        % WLNM runners: only useful when useParallel=false
         'computeEcologicalMetrics', true, ...                                                         % WLNM metric/comparison outputs; required for dir_neg delta t-tests
-        'runDeltaTTests',         true, ...                                                           % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
+        'runDeltaTTests',         false, ...                                                          % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
         'deltaTTestAlpha',        0.05, ...                                                           % Significance level for delta t-tests
-        'deltaTTestFile',         'data/result/statistical_tests/wlnm_dir_neg_delta_ttests.csv', ...   % Summary CSV for delta t-tests
+        'deltaTTestFile',         'data/result/statistical_tests/wlnm_dir_neg_delta_ttests.csv', ... % Summary CSV for delta t-tests
         'deltaTTestByEcosystemFile', '', ...                                                  % Empty derives *_by_ecosystem.csv from deltaTTestFile
+        'runDeltaEquivalenceTests', false, ...                                                        % WLNM_dir_neg: TOST equivalence tests on food-web metric deltas
+        'deltaEquivalenceAlpha',  0.05, ...                                                           % TOST alpha; alpha=0.05 gives a 90% CI decision rule
+        'deltaEquivalenceFile',   'data/result/statistical_tests/wlnm_dir_neg_delta_equivalence.csv', ...
+        'deltaEquivalenceByEcosystemFile', '', ...                                                    % Empty derives *_by_ecosystem.csv from deltaEquivalenceFile
+        'deltaEquivalenceMarginsFile', 'data/result/statistical_tests/wlnm_dir_neg_delta_equivalence_margins.csv', ...
         'backboneStatsFile',      'data/result/backbone_stats/backbone_overview_per_foodweb.csv', ... % CSV for backbone stats
         'cvEnabled',              false, ...                % enable cross-validation mode
         'cvKList',                [], ...          % list of K values for K-fold CV
@@ -121,10 +126,13 @@ function Main()
 
     collect_delta_ttests = strcmp(version_key, 'wlnm_dir_neg') && ...
         get_main_config_bool(config, 'runDeltaTTests', true);
+    collect_delta_equivalence = strcmp(version_key, 'wlnm_dir_neg') && ...
+        get_main_config_bool(config, 'runDeltaEquivalenceTests', true);
+    collect_delta_stats = collect_delta_ttests || collect_delta_equivalence;
 
-    if collect_delta_ttests && ~get_main_config_bool(config, 'computeEcologicalMetrics', true)
-        warning(['[Main] runDeltaTTests=true requires computeEcologicalMetrics=true ' ...
-                 'because the t-tests are computed from ecological metric deltas. Enabling it.']);
+    if collect_delta_stats && ~get_main_config_bool(config, 'computeEcologicalMetrics', true)
+        warning(['[Main] Delta statistical tests require computeEcologicalMetrics=true ' ...
+                 'because they are computed from ecological metric deltas. Enabling it.']);
         config.computeEcologicalMetrics = true;
     end
 
@@ -135,7 +143,7 @@ function Main()
         pool_created = true;
     end
 
-    delta_ttest_rows = struct([]);
+    delta_metric_rows = struct([]);
 
     %% === MAIN EXECUTION LOOP ===
     if config.cvEnabled
@@ -162,6 +170,9 @@ function Main()
                 end
 
                 load(datapath, 'net', 'taxonomy', 'mass', 'role', 'p_values_mat');
+                if ~exist('p_values_mat', 'var')
+                    p_values_mat = [];
+                end
                 fprintf('[INFO] Processing dataset: %s\n', dataname);
 
                 backbone_mask = []; % CV run in non-backbone mode for now
@@ -185,9 +196,9 @@ function Main()
                     fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));
 
                     results = runner(data, K, ratioTrain_cv, config); % ratioTrain is ignored by CV runner
-                    if collect_delta_ttests
+                    if collect_delta_stats
                         results = attach_foodweb_to_results(results, dataname, ecosystem_type_for_index(foodweb_list, f_idx));
-                        delta_ttest_rows = append_result_rows(delta_ttest_rows, results);
+                        delta_metric_rows = append_result_rows(delta_metric_rows, results);
                     end
 
                     append_results(log_file, results, config.use_backbone);
@@ -227,6 +238,9 @@ function Main()
                 end
 
                 load(datapath, 'net', 'taxonomy', 'mass', 'role', 'p_values_mat');
+                if ~exist('p_values_mat', 'var')
+                    p_values_mat = [];
+                end
                 fprintf('[INFO] Processing dataset: %s\n', dataname);
 
                 % ---- Optional: compute backbone once per dataset (controlled from Main) ----
@@ -273,9 +287,9 @@ function Main()
 
                     % --- Delegate to the selected version runner ---
                     results = runner(data, K, ratioTrain, config);
-                    if collect_delta_ttests
+                    if collect_delta_stats
                         results = attach_foodweb_to_results(results, dataname, ecosystem_type_for_index(foodweb_list, f_idx));
-                        delta_ttest_rows = append_result_rows(delta_ttest_rows, results);
+                        delta_metric_rows = append_result_rows(delta_metric_rows, results);
                     end
 
                     % --- Append results ---
@@ -290,10 +304,19 @@ function Main()
 
     if collect_delta_ttests
         by_ecosystem_file = resolve_delta_ttest_by_ecosystem_file(config);
-        write_delta_ttest_summary(config.deltaTTestFile, delta_ttest_rows, ...
+        write_delta_ttest_summary(config.deltaTTestFile, delta_metric_rows, ...
             'alpha', config.deltaTTestAlpha, ...
             'version', config.version, ...
             'byEcosystemFile', by_ecosystem_file);
+    end
+
+    if collect_delta_equivalence
+        by_ecosystem_file = resolve_delta_equivalence_by_ecosystem_file(config);
+        write_delta_equivalence_summary(config.deltaEquivalenceFile, delta_metric_rows, ...
+            'alpha', config.deltaEquivalenceAlpha, ...
+            'version', config.version, ...
+            'byEcosystemFile', by_ecosystem_file, ...
+            'marginsFile', config.deltaEquivalenceMarginsFile);
     end
 
     % Close parallel pool if open
@@ -374,6 +397,22 @@ function by_ecosystem_file = resolve_delta_ttest_by_ecosystem_file(config)
 
     if isempty(by_ecosystem_file)
         [out_dir, base_name, ext] = fileparts(config.deltaTTestFile);
+        if isempty(ext)
+            ext = '.csv';
+        end
+        by_ecosystem_file = fullfile(out_dir, [base_name '_by_ecosystem' ext]);
+    end
+end
+
+function by_ecosystem_file = resolve_delta_equivalence_by_ecosystem_file(config)
+    by_ecosystem_file = '';
+    if isfield(config, 'deltaEquivalenceByEcosystemFile') && ...
+            ~isempty(config.deltaEquivalenceByEcosystemFile)
+        by_ecosystem_file = char(string(config.deltaEquivalenceByEcosystemFile));
+    end
+
+    if isempty(by_ecosystem_file)
+        [out_dir, base_name, ext] = fileparts(config.deltaEquivalenceFile);
         if isempty(ext)
             ext = '.csv';
         end
