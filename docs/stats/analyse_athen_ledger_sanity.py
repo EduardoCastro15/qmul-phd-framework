@@ -390,6 +390,7 @@ def excel_rows(main_rows: Sequence[Dict[str, object]]) -> List[Dict[str, object]
             "Empirical mean": row["MeanEmpirical"],
             "Mean pseudo": row["MeanPseudo"],
             "Mean delta": row["MeanDelta"],
+            "Absolute mean delta": abs(float(row["MeanDelta"])),
             "Mean relative error (90% CI)": row["RelativeError90CI"],
             "Ledger mean": row["LedgerMean"],
             "Ledger SEM": row["LedgerSEM"],
