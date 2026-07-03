@@ -20,6 +20,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'fixed_threshold', 0.5);
     addParameter(p, 'encode_parallel', false);
     addParameter(p, 'compute_ecological_metrics', true);
+    addParameter(p, 'use_role_filter', true);
     parse(p, varargin{:});
     opt = p.Results;
 
@@ -29,7 +30,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     a = 2;                      % negative sampling multiplier for training
     portion = 1;
     evaluate_on_all_unseen = logical(opt.evaluate_on_all_unseen);
-    use_role_filter = true;     % preserve graph direction and filter negatives by role
+    use_role_filter = logical(opt.use_role_filter); % preserve graph direction and filter negatives by role
     use_original_wlnm = false;
     useParallel = logical(opt.encode_parallel);
     compute_ecological_metrics = logical(opt.compute_ecological_metrics);

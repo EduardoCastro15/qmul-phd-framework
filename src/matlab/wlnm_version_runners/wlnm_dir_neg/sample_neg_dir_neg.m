@@ -2,9 +2,11 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, 
     %SAMPLE_NEG_DIR_NEG Sample directed negative links for WLNM_dir_neg.
     %
     % The common path samples only the requested number of negatives by
-    % rejection, avoiding materializing the full n-by-n complement. When
-    % evaluate_on_all_unseen is true we still enumerate the pool because the
-    % caller explicitly asks for every unseen candidate in the test set.
+    % rejection, avoiding materializing the full n-by-n complement. If the
+    % role-constrained pool is too small, constrained links are used first and
+    % the remaining negatives are sampled from random directed non-links.
+    % When evaluate_on_all_unseen is true we still enumerate the pool because
+    % the caller explicitly asks for every unseen candidate in the test set.
 
     if nargin < 5 || isempty(portion), portion = 1; end
     if nargin < 6 || isempty(evaluate_on_all_unseen), evaluate_on_all_unseen = false; end
@@ -37,18 +39,28 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, 
 
     pos_total = train_size + test_size;
     need_total_requested = floor(a * pos_total);
-    pool_size = negative_pool_size(net, role_code, effective_role_filter);
+    constrained_pool_size = negative_pool_size(net, role_code, true);
+    full_pool_size = negative_pool_size(net, role_code, false);
 
-    % Fallback: if the role-constrained pool is too small, match the legacy
-    % behavior and sample from all non-links.
-    if pool_size < need_total_requested && requested_role_filter
-        warning('[sample_neg] Pool %d < need %d with role filter. Disabling role filter.', ...
-            pool_size, need_total_requested);
-        effective_role_filter = false;
-        pool_size = negative_pool_size(net, role_code, false);
+    if requested_role_filter
+        if constrained_pool_size < need_total_requested
+            sampling_mode = 'hybrid';
+            pool_size = full_pool_size;
+            warning(['[sample_neg] Role-constrained pool %d < need %d. ' ...
+                'Using constrained negatives first, then random non-link top-up.'], ...
+                constrained_pool_size, need_total_requested);
+        else
+            sampling_mode = 'role';
+            pool_size = constrained_pool_size;
+        end
+    else
+        sampling_mode = 'all_nonlinks';
+        pool_size = full_pool_size;
     end
 
     need_total = min(need_total_requested, pool_size);
+    constrained_neg_count = 0;
+    random_topup_count = 0;
 
     if pool_size == 0 || need_total == 0
         warning('[sample_neg] No negatives available. Returning empties.');
@@ -72,7 +84,9 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, 
         [k_train, k_test] = split_negative_counts( ...
             need_total, train_size, test_size, floor(a * train_size), floor(a * test_size));
 
-        neg_links = sample_negative_links(net, role_code, effective_role_filter, k_train + k_test, pool_size);
+        [neg_links, constrained_neg_count, random_topup_count] = sample_negative_links_with_topup( ...
+            net, role_code, requested_role_filter, k_train + k_test, ...
+            constrained_pool_size, full_pool_size);
         train_neg = neg_links(1:k_train, :);
         test_neg = neg_links(k_train+1:end, :);
     end
@@ -91,10 +105,14 @@ function [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg(train, 
     end
 
     % --- logging ---
-    fprintf('[NegPool] pool=%d need_total=%d a=%d eval_all=%d role_filter=%d | k_train=%d k_test=%d\n', ...
-        pool_size, need_total, a, evaluate_on_all_unseen, effective_role_filter, size(train_neg,1), size(test_neg,1));
+    fprintf(['[NegPool] mode=%s role_pool=%d full_pool=%d need_total=%d a=%d ' ...
+        'eval_all=%d role_filter=%d | constrained_neg=%d random_topup=%d | k_train=%d k_test=%d\n'], ...
+        sampling_mode, constrained_pool_size, full_pool_size, need_total, a, ...
+        evaluate_on_all_unseen, effective_role_filter, constrained_neg_count, random_topup_count, ...
+        size(train_neg,1), size(test_neg,1));
 
-    fprintf('[sample_neg] Final link counts (use_role_filter = %d):\n', effective_role_filter);
+    fprintf('[sample_neg] Final link counts (mode = %s, use_role_filter = %d):\n', ...
+        sampling_mode, effective_role_filter);
     fprintf('    Train Positive: %d\n', size(train_pos, 1));
     fprintf('    Train Negative: %d\n', size(train_neg, 1));
     fprintf('    Test  Positive: %d\n', size(test_pos, 1));
@@ -110,17 +128,31 @@ function role_code = encode_roles(role, n)
     role_str = lower(string(role(:)));
     upto = min(n, numel(role_str));
     role_code(1:upto) = double(role_str(1:upto) == "consumer") + ...
-        2 * double(role_str(1:upto) == "resource");
+        2 * double(role_str(1:upto) == "resource") + ...
+        3 * double(role_str(1:upto) == "consumer-resource");
 end
 
 function pool_size = negative_pool_size(net, role_code, use_role_filter)
     n = size(net, 1);
 
     if use_role_filter
-        num_consumers = sum(role_code == 1);
-        num_resources = sum(role_code == 2);
-        total_candidates = num_consumers * max(0, num_consumers - 1) + ...
-            num_resources * max(0, num_resources - 1);
+        valid_codes = role_code(role_code >= 1 & role_code <= 3);
+        role_counts = accumarray(valid_codes(:), 1, [3, 1], @sum, 0);
+        pairs = allowed_role_pairs();
+        total_candidates = 0;
+
+        for p = 1:size(pairs, 1)
+            src_code = pairs(p, 1);
+            tgt_code = pairs(p, 2);
+
+            if src_code == tgt_code
+                total_candidates = total_candidates + ...
+                    role_counts(src_code) * max(0, role_counts(tgt_code) - 1);
+            else
+                total_candidates = total_candidates + ...
+                    role_counts(src_code) * role_counts(tgt_code);
+            end
+        end
 
         [pi, pj] = find(net);
         positive_is_candidate = is_valid_role_pair(pi, pj, role_code);
@@ -135,7 +167,23 @@ end
 function tf = is_valid_role_pair(i, j, role_code)
     src = role_code(i);
     tgt = role_code(j);
-    tf = (src == tgt) & (src == 1 | src == 2);
+    pairs = allowed_role_pairs();
+    tf = false(size(src));
+
+    for p = 1:size(pairs, 1)
+        tf = tf | (src == pairs(p, 1) & tgt == pairs(p, 2));
+    end
+end
+
+function pairs = allowed_role_pairs()
+    % Role codes: consumer=1, resource=2, consumer-resource=3.
+    pairs = [
+        1 1  % consumer -> consumer
+        2 2  % resource -> resource
+        1 2  % consumer -> resource
+        1 3  % consumer -> consumer-resource
+        3 2  % consumer-resource -> resource
+    ];
 end
 
 function [k_train, k_test] = split_negative_counts(need_total, train_size, test_size, k_train_target, k_test_target)
@@ -160,6 +208,64 @@ function [k_train, k_test] = split_negative_counts(need_total, train_size, test_
             k_train = need_total - 1;
         end
     end
+end
+
+function [neg_links, constrained_count, random_topup_count] = sample_negative_links_with_topup( ...
+        net, role_code, use_role_filter, k, constrained_pool_size, full_pool_size)
+
+    constrained_count = 0;
+    random_topup_count = 0;
+
+    if k <= 0
+        neg_links = zeros(0, 2);
+        return;
+    end
+
+    if ~use_role_filter
+        neg_links = sample_negative_links(net, role_code, false, k, full_pool_size);
+        random_topup_count = size(neg_links, 1);
+        return;
+    end
+
+    if constrained_pool_size >= k
+        neg_links = sample_negative_links(net, role_code, true, k, constrained_pool_size);
+        constrained_count = size(neg_links, 1);
+        return;
+    end
+
+    constrained_links = sample_negative_links(net, role_code, true, constrained_pool_size, constrained_pool_size);
+    constrained_count = size(constrained_links, 1);
+
+    topup_needed = k - constrained_count;
+    topup_links = sample_random_topup_links(net, role_code, constrained_links, topup_needed, full_pool_size);
+    random_topup_count = size(topup_links, 1);
+
+    neg_links = [constrained_links; topup_links];
+end
+
+function topup_links = sample_random_topup_links(net, role_code, excluded_links, k, full_pool_size)
+    if k <= 0
+        topup_links = zeros(0, 2);
+        return;
+    end
+
+    pool = enumerate_negative_links(net, role_code, false);
+
+    if ~isempty(excluded_links)
+        n = size(net, 1);
+        pool_lin = sub2ind([n, n], pool(:,1), pool(:,2));
+        excluded_lin = sub2ind([n, n], excluded_links(:,1), excluded_links(:,2));
+        pool = pool(~ismember(pool_lin, excluded_lin), :);
+    end
+
+    if size(pool, 1) < k
+        error('sample_neg_dir_neg:InsufficientTopupPool', ...
+            'Random top-up pool has %d links but %d are required (full_pool=%d).', ...
+            size(pool, 1), k, full_pool_size);
+    end
+
+    idx = randperm(size(pool, 1), k);
+    topup_links = pool(idx, :);
 end
 
 function neg_links = sample_negative_links(net, role_code, use_role_filter, k, pool_size)
@@ -233,58 +339,101 @@ function cand = draw_candidate_pairs(n, role_code, use_role_filter, batch_size)
         return;
     end
 
-    consumer_nodes = find(role_code == 1);
-    resource_nodes = find(role_code == 2);
+    pairs = allowed_role_pairs();
+    pair_counts = zeros(size(pairs, 1), 1);
 
-    consumer_pairs = numel(consumer_nodes) * max(0, numel(consumer_nodes) - 1);
-    resource_pairs = numel(resource_nodes) * max(0, numel(resource_nodes) - 1);
-    total_pairs = consumer_pairs + resource_pairs;
+    for p = 1:size(pairs, 1)
+        src_nodes = find(role_code == pairs(p, 1));
+        tgt_nodes = find(role_code == pairs(p, 2));
+
+        if pairs(p, 1) == pairs(p, 2)
+            pair_counts(p) = numel(src_nodes) * max(0, numel(tgt_nodes) - 1);
+        else
+            pair_counts(p) = numel(src_nodes) * numel(tgt_nodes);
+        end
+    end
+
+    total_pairs = sum(pair_counts);
 
     if total_pairs == 0
         cand = zeros(0, 2);
         return;
     end
 
-    use_consumer = rand(batch_size, 1) < (consumer_pairs / total_pairs);
+    edges = cumsum(pair_counts) / total_pairs;
+    draws = rand(batch_size, 1);
     cand = zeros(batch_size, 2);
 
-    n_consumer = sum(use_consumer);
-    if n_consumer > 0
-        cand(use_consumer, :) = random_pairs_from_group(consumer_nodes, n_consumer);
-    end
+    lower = 0;
+    for p = 1:size(pairs, 1)
+        if pair_counts(p) == 0
+            continue;
+        end
 
-    n_resource = batch_size - n_consumer;
-    if n_resource > 0
-        cand(~use_consumer, :) = random_pairs_from_group(resource_nodes, n_resource);
+        selected = draws > lower & draws <= edges(p);
+        count = sum(selected);
+        if count > 0
+            src_nodes = find(role_code == pairs(p, 1));
+            tgt_nodes = find(role_code == pairs(p, 2));
+            cand(selected, :) = random_pairs_between_groups(src_nodes, tgt_nodes, count, pairs(p, 1) == pairs(p, 2));
+        end
+        lower = edges(p);
     end
 end
 
-function pairs = random_pairs_from_group(nodes, count)
-    m = numel(nodes);
-    pairs = [nodes(randi(m, count, 1)), nodes(randi(m, count, 1))];
+function pairs = random_pairs_between_groups(src_nodes, tgt_nodes, count, same_role)
+    if count <= 0
+        pairs = zeros(0, 2);
+        return;
+    end
+
+    if ~same_role
+        pairs = [src_nodes(randi(numel(src_nodes), count, 1)), ...
+                 tgt_nodes(randi(numel(tgt_nodes), count, 1))];
+        return;
+    end
+
+    m = numel(src_nodes);
+    if m < 2
+        pairs = zeros(0, 2);
+        return;
+    end
+
+    src_idx = randi(m, count, 1);
+    offset = randi(m - 1, count, 1);
+    tgt_idx = src_idx + offset;
+    tgt_idx(tgt_idx > m) = tgt_idx(tgt_idx > m) - m;
+
+    pairs = [src_nodes(src_idx), src_nodes(tgt_idx)];
 end
 
 function neg_links = enumerate_negative_links(net, role_code, use_role_filter)
     n = size(net, 1);
 
     if use_role_filter
-        groups = {find(role_code == 1), find(role_code == 2)};
-        chunks = cell(1, numel(groups));
+        pairs = allowed_role_pairs();
+        chunks = cell(1, size(pairs, 1));
 
-        for g = 1:numel(groups)
-            nodes = groups{g};
-            if numel(nodes) < 2
-                chunks{g} = zeros(0, 2);
+        for p = 1:size(pairs, 1)
+            src_nodes = find(role_code == pairs(p, 1));
+            tgt_nodes = find(role_code == pairs(p, 2));
+
+            if isempty(src_nodes) || isempty(tgt_nodes)
+                chunks{p} = zeros(0, 2);
                 continue;
             end
 
-            [src, tgt] = ndgrid(nodes, nodes);
-            keep = src ~= tgt;
-            src = src(keep);
-            tgt = tgt(keep);
+            [src, tgt] = ndgrid(src_nodes, tgt_nodes);
+            if pairs(p, 1) == pairs(p, 2)
+                keep = src ~= tgt;
+                src = src(keep);
+                tgt = tgt(keep);
+            end
             lin = sub2ind([n, n], src, tgt);
             keep = net(lin) == 0;
-            chunks{g} = [src(keep), tgt(keep)];
+            src = src(keep);
+            tgt = tgt(keep);
+            chunks{p} = [src(:), tgt(:)];
         end
 
         neg_links = vertcat(chunks{:});
