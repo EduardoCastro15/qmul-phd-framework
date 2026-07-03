@@ -44,7 +44,7 @@ function Main()
         'backbone_max_q',         0.25, ...                % PF thresholding max q
         'backbone_q_ladder',      2.0, ...                 % PF thresholding q ladder
         'alpha_fallback',         [], ...                  % PF thresholding alpha fallback
-        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_1.csv', ...              % CSV with food web names
+        'foodwebCSV',             'data/foodwebs_mat/foodweb_metrics_ecosystem.csv', ...              % CSV with food web names
         'matFolder',              'data/foodwebs_mat/', ...                                 % Folder with .mat files
         'logDir',                 'data/result/fixed_foodwebs_4/prediction_scores_logs', ... % Directory for result logs
         'terminalLogDir',         'data/result/fixed_foodwebs_4/terminal_logs/', ...          % Directory for terminal logs
@@ -72,6 +72,8 @@ function Main()
         'cvSaveConfusion',        true ...                 % save confusion matrices for each food web and fold (in terminal log dir)
     );
 
+    config = apply_runtime_overrides(config);
+
     %% === SETUP ===
     if config.sweepTrainRatios
         train_ratios = config.trainRatioRange;
@@ -93,7 +95,11 @@ function Main()
     end
 
     foodweb_list = readtable(config.foodwebCSV);
+    foodweb_indices = resolve_foodweb_indices(height(foodweb_list));
+    foodweb_list = foodweb_list(foodweb_indices, :);
     foodweb_names = foodweb_list.Foodweb;
+    fprintf('[Main] Processing %d foodweb(s): original index range [%d, %d]\n', ...
+        numel(foodweb_names), min(foodweb_indices), max(foodweb_indices));
 
     % Track which food webs already have backbone stats logged (for this run)
     backbone_logged = false(numel(foodweb_names), 1);
@@ -139,7 +145,7 @@ function Main()
     % Start parallel pool if enabled
     pool_created = false;
     if config.useParallel && isempty(gcp('nocreate'))
-        parpool(resolve_parallel_workers(config, version_key));
+        start_parallel_pool(resolve_parallel_workers(config, version_key));
         pool_created = true;
     end
 
@@ -335,10 +341,72 @@ function value = get_main_config_bool(config, field, default_value)
     end
 end
 
+function config = apply_runtime_overrides(config)
+    config.version = get_env_text('WLNM_VERSION', config.version);
+    config.foodwebCSV = get_env_text('WLNM_FOODWEB_CSV', config.foodwebCSV);
+    config.numExperiments = get_env_number('WLNM_NUM_EXPERIMENTS', config.numExperiments);
+    config.parallelWorkers = get_env_number('WLNM_PARALLEL_WORKERS', config.parallelWorkers);
+    config.sweepTrainRatios = get_env_bool('WLNM_SWEEP_TRAIN_RATIOS', config.sweepTrainRatios);
+    config.ratioTrain = get_env_number('WLNM_RATIO_TRAIN', config.ratioTrain);
+    config.trainRatioRange = get_env_number_list('WLNM_TRAIN_RATIO_RANGE', config.trainRatioRange);
+    config.cvEnabled = get_env_bool('WLNM_CV_ENABLED', config.cvEnabled);
+    config.cvKList = get_env_number_list('WLNM_CV_K_LIST', config.cvKList);
+    config.cvSaveConfusion = get_env_bool('WLNM_CV_SAVE_CONFUSION', config.cvSaveConfusion);
+    config.exportAuxiliaryCSVs = get_env_bool('WLNM_EXPORT_AUXILIARY_CSVS', config.exportAuxiliaryCSVs);
+    config.computeEcologicalMetrics = get_env_bool('WLNM_COMPUTE_ECOLOGICAL_METRICS', config.computeEcologicalMetrics);
+    config.runDeltaTTests = get_env_bool('WLNM_RUN_DELTA_TTESTS', config.runDeltaTTests);
+    config.runDeltaEquivalenceTests = get_env_bool('WLNM_RUN_DELTA_EQUIVALENCE', config.runDeltaEquivalenceTests);
+
+    output_root = strtrim(getenv('WLNM_OUTPUT_ROOT'));
+    if ~isempty(output_root)
+        config.logDir = fullfile(output_root, 'prediction_scores_logs');
+        config.terminalLogDir = fullfile(output_root, 'terminal_logs');
+        config.artifactDir = fullfile(output_root, 'confusion_matrix_csv');
+        config.deltaTTestFile = fullfile(output_root, 'statistical_tests', 'wlnm_dir_neg_delta_ttests.csv');
+        config.deltaEquivalenceFile = fullfile(output_root, 'statistical_tests', 'wlnm_dir_neg_delta_equivalence.csv');
+        config.deltaEquivalenceMarginsFile = fullfile(output_root, 'statistical_tests', 'wlnm_dir_neg_delta_equivalence_margins.csv');
+        config.backboneStatsFile = fullfile(output_root, 'backbone_stats', 'backbone_overview_per_foodweb.csv');
+    end
+end
+
+function indices = resolve_foodweb_indices(n)
+    indices = 1:n;
+
+    single_index = strtrim(getenv('WLNM_FOODWEB_INDEX'));
+    if isempty(single_index)
+        single_index = strtrim(getenv('SLURM_ARRAY_TASK_ID'));
+    end
+
+    if ~isempty(single_index)
+        idx = str2double(single_index);
+        if isnan(idx) || idx < 1 || idx > n || floor(idx) ~= idx
+            error('[Main] Invalid foodweb index %s for n=%d.', single_index, n);
+        end
+        indices = idx;
+        return;
+    end
+
+    start_index = get_env_number('WLNM_FOODWEB_START', 1);
+    end_index = get_env_number('WLNM_FOODWEB_END', n);
+    start_index = max(1, floor(start_index));
+    end_index = min(n, floor(end_index));
+
+    if start_index > end_index
+        error('[Main] Invalid foodweb range [%d, %d] for n=%d.', start_index, end_index, n);
+    end
+
+    indices = start_index:end_index;
+end
+
 function workers = resolve_parallel_workers(config, version_key)
     max_workers = feature('numcores');
+    slurm_cpus_per_task = str2double(getenv('SLURM_CPUS_PER_TASK'));
     slurm_tasks = str2double(getenv('SLURM_NTASKS'));
-    if ~isnan(slurm_tasks) && slurm_tasks > 0
+
+    if ~isnan(slurm_cpus_per_task) && slurm_cpus_per_task > 0
+        % Leave one allocated CPU for the MATLAB client process.
+        max_workers = min(max_workers, max(1, floor(slurm_cpus_per_task) - 1));
+    elseif ~isnan(slurm_tasks) && slurm_tasks > 0
         % Leave one allocated CPU for the MATLAB client process.
         max_workers = min(max_workers, max(1, floor(slurm_tasks) - 1));
     end
@@ -366,8 +434,60 @@ function workers = resolve_parallel_workers(config, version_key)
     fprintf('[Main] Starting parallel pool with %d workers (auto).\n', workers);
 end
 
+function start_parallel_pool(workers)
+    cluster = parcluster('Processes');
+    job_storage = resolve_matlab_job_storage();
+
+    if ~isempty(job_storage)
+        if ~isfolder(job_storage)
+            mkdir(job_storage);
+        end
+
+        if ~isfolder(job_storage)
+            error('[Main] Could not create MATLAB JobStorageLocation: %s', job_storage);
+        end
+
+        cluster.JobStorageLocation = job_storage;
+        fprintf('[Main] MATLAB parallel JobStorageLocation: %s\n', job_storage);
+        parpool(cluster, workers);
+        return;
+    end
+
+    parpool(workers);
+end
+
+function job_storage = resolve_matlab_job_storage()
+    job_storage = strtrim(getenv('WLNM_MATLAB_JOB_STORAGE'));
+    if ~isempty(job_storage)
+        return;
+    end
+
+    base_dir = strtrim(getenv('SLURM_TMPDIR'));
+    if isempty(base_dir)
+        base_dir = strtrim(getenv('TMPDIR'));
+    end
+    if isempty(base_dir)
+        base_dir = tempdir;
+    end
+
+    slurm_job_id = strtrim(getenv('SLURM_JOB_ID'));
+    slurm_task_id = strtrim(getenv('SLURM_ARRAY_TASK_ID'));
+
+    if isempty(slurm_job_id)
+        job_storage = tempname(base_dir);
+        return;
+    end
+
+    if isempty(slurm_task_id)
+        slurm_task_id = 'single';
+    end
+
+    job_storage = fullfile(base_dir, 'wlnm_matlab_jobs', ...
+        sprintf('%s_%s', slurm_job_id, slurm_task_id));
+end
+
 function tf = is_experiment_parallel_wlnm(version_key)
-    tf = any(strcmp(version_key, {'wlnm_dir_neg', 'wlnm_original', 'wlnm_directed', 'wlnm_negative'}));
+    tf = any(strcmp(version_key, {'wlnm_dir_neg', 'wlnm_dir_neg_kfold', 'wlnm_original', 'wlnm_directed', 'wlnm_negative'}));
 end
 
 function results = attach_foodweb_to_results(results, dataname, ecosystem_type)
@@ -378,6 +498,82 @@ function results = attach_foodweb_to_results(results, dataname, ecosystem_type)
     for i = 1:numel(results)
         results(i).Foodweb = char(string(dataname));
         results(i).EcosystemType = char(string(ecosystem_type));
+    end
+end
+
+function value = get_env_text(name, default_value)
+    raw = strtrim(getenv(name));
+    if isempty(raw)
+        value = default_value;
+    else
+        value = raw;
+    end
+end
+
+function value = get_env_number(name, default_value)
+    raw = strtrim(getenv(name));
+    if isempty(raw)
+        value = default_value;
+        return;
+    end
+
+    parsed = str2double(raw);
+    if isnan(parsed)
+        error('[Main] Environment variable %s must be numeric, got "%s".', name, raw);
+    end
+    value = parsed;
+end
+
+function value = get_env_bool(name, default_value)
+    raw = lower(strtrim(getenv(name)));
+    if isempty(raw)
+        value = logical(default_value);
+        return;
+    end
+
+    if any(strcmp(raw, {'1', 'true', 'yes', 'on'}))
+        value = true;
+    elseif any(strcmp(raw, {'0', 'false', 'no', 'off'}))
+        value = false;
+    else
+        error('[Main] Environment variable %s must be boolean, got "%s".', name, raw);
+    end
+end
+
+function value = get_env_number_list(name, default_value)
+    raw = strtrim(getenv(name));
+    if isempty(raw)
+        value = default_value;
+        return;
+    end
+
+    raw = strrep(raw, '[', '');
+    raw = strrep(raw, ']', '');
+
+    if contains(raw, ':')
+        parts = regexp(raw, ':', 'split');
+        if numel(parts) ~= 3
+            error('[Main] Environment variable %s must be start:step:end, got "%s".', name, raw);
+        end
+        start_value = str2double(parts{1});
+        step_value = str2double(parts{2});
+        end_value = str2double(parts{3});
+        if any(isnan([start_value, step_value, end_value])) || step_value == 0
+            error('[Main] Environment variable %s must be a numeric range, got "%s".', name, raw);
+        end
+        value = start_value:step_value:end_value;
+        return;
+    end
+
+    parts = regexp(raw, '[,\s]+', 'split');
+    parts = parts(~cellfun('isempty', parts));
+
+    value = zeros(1, numel(parts));
+    for i = 1:numel(parts)
+        value(i) = str2double(parts{i});
+        if isnan(value(i))
+            error('[Main] Environment variable %s must be a numeric list, got "%s".', name, raw);
+        end
     end
 end
 

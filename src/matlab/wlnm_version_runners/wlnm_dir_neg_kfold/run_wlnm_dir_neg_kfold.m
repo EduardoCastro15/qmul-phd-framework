@@ -14,6 +14,7 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
     if ~isfield(config,'cvSaveConfusion'), config.cvSaveConfusion = false; end
     if ~isfield(config,'numExperiments'), config.numExperiments = 1; end
     if ~isfield(config,'evaluate_on_all_unseen'), config.evaluate_on_all_unseen = false; end
+    if ~isfield(config,'use_role_filter'), config.use_role_filter = true; end
     if ~isfield(config,'thresholdMode'), config.thresholdMode = 'fixed'; end
     if ~isfield(config,'fixedThreshold'), config.fixedThreshold = 0.5; end
     if ~isfield(config,'artifactDir'), config.artifactDir = 'data/result/confusion_matrix_csv/'; end
@@ -104,6 +105,7 @@ function result = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, data
     cv_tag = sprintf('cv_k%d_fold%02d_exp%02d', k, f, e);
     artifact_tag = sprintf('%s_seed%d', lower(char(string(config.version))), seed);
 
+    % WLNM_dir_neg owns negative sampling, including role constraints and hybrid top-up.
     [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
         dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
         'cv_tag', cv_tag, ...
@@ -111,6 +113,7 @@ function result = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, data
         'backbone_mask', backbone_mask, ...
         'export_backbone', false, ...
         'evaluate_on_all_unseen', config.evaluate_on_all_unseen, ...
+        'use_role_filter', get_config_bool(config, 'use_role_filter', true), ...
         'artifact_tag', artifact_tag, ...
         'artifact_dir', config.artifactDir, ...
         'threshold_mode', config.thresholdMode, ...
@@ -490,5 +493,13 @@ function value = get_config_text(config, field, default_value)
         value = char(string(config.(field)));
     else
         value = char(string(default_value));
+    end
+end
+
+function value = get_config_bool(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = logical(config.(field));
+    else
+        value = logical(default_value);
     end
 end

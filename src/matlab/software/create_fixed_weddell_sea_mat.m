@@ -6,7 +6,7 @@ function output_path = create_fixed_weddell_sea_mat()
     matlab_dir = fileparts(fileparts(mfilename('fullpath')));
     data_dir = fullfile(matlab_dir, 'data', 'foodwebs_mat');
     input_path = fullfile(data_dir, 'Weddell Sea_tax_mass.mat');
-    output_path = fullfile(data_dir, 'Weddell Sea_tax_mass_fixed.mat');
+    output_path = input_path;
 
     S = load(input_path);
     required = {'net', 'taxonomy', 'mass', 'role'};
@@ -22,10 +22,9 @@ function output_path = create_fixed_weddell_sea_mat()
     original_links = nnz(net);
     original_self_links = nnz(diag(net));
 
-    assert(net(amphidinium_idx, gyrodinium_idx) == 1, ...
-        'Missing Amphidinium -> Gyrodinium link.');
-    assert(net(gyrodinium_idx, amphidinium_idx) == 1, ...
-        'Missing Gyrodinium -> Amphidinium link.');
+    reciprocal_links_removed = nnz(net([ ...
+        sub2ind(size(net), amphidinium_idx, gyrodinium_idx), ...
+        sub2ind(size(net), gyrodinium_idx, amphidinium_idx)]));
 
     net = net - spdiags(diag(net), 0, size(net, 1), size(net, 2));
     net(amphidinium_idx, gyrodinium_idx) = 0;
@@ -48,6 +47,6 @@ function output_path = create_fixed_weddell_sea_mat()
 
     fprintf('Created: %s\n', output_path);
     fprintf('Species: %d\n', size(net, 1));
-    fprintf('Links: %d -> %d (%d self-links and 2 reciprocal links removed)\n', ...
-        original_links, nnz(net), original_self_links);
+    fprintf('Links: %d -> %d (%d self-links and %d reciprocal links removed)\n', ...
+        original_links, nnz(net), original_self_links, reciprocal_links_removed);
 end
