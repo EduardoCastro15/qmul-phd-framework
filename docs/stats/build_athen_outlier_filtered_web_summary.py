@@ -132,6 +132,30 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep k-fold CvK values in separate grouping/output folders.",
     )
+    parser.add_argument(
+        "--threshold-mode",
+        default="",
+        help=(
+            "Optional ThresholdMode filter, for example 'threshold_sweep'. "
+            "Leave empty to keep all rows."
+        ),
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help=(
+            "Optional classification-threshold filter. Use this with "
+            "threshold-sweep logs to reconstruct the fixed-threshold figure, "
+            "for example --threshold 0.5."
+        ),
+    )
+    parser.add_argument(
+        "--threshold-tolerance",
+        type=float,
+        default=1e-9,
+        help="Absolute tolerance used when filtering Threshold.",
+    )
     return parser.parse_args()
 
 
@@ -265,8 +289,12 @@ def read_run_rows(
     metadata: Dict[str, str],
     train_ratios: Sequence[int],
     metrics: Sequence[MetricSpec],
+    threshold_mode: str,
+    threshold: Optional[float],
+    threshold_tolerance: float,
 ) -> List[Dict[str, object]]:
     train_ratio_set = set(train_ratios)
+    threshold_mode_filter = threshold_mode.strip().lower()
     rows: List[Dict[str, object]] = []
     for path in sorted(logs_dir.glob("*_results_random_wlnm_dir_neg*.csv")):
         food_web = web_from_filename(path)
@@ -277,6 +305,19 @@ def read_run_rows(
                 ratio_raw = str(raw.get("TrainRatio", "")).strip()
                 ratio = parse_int(ratio_raw)
                 if ratio not in train_ratio_set:
+                    continue
+                row_threshold_mode = str(raw.get("ThresholdMode", "")).strip()
+                if (
+                    threshold_mode_filter
+                    and row_threshold_mode.lower() != threshold_mode_filter
+                ):
+                    continue
+                row_threshold = parse_float(raw.get("Threshold"))
+                if threshold is not None and (
+                    row_threshold is None
+                    or not math.isfinite(row_threshold)
+                    or abs(row_threshold - threshold) > threshold_tolerance
+                ):
                     continue
                 for spec in metrics:
                     empirical = metric_value(raw, spec.empirical_column)
@@ -291,6 +332,8 @@ def read_run_rows(
                             "CvK": parse_int(raw.get("CvK")),
                             "FoldID": parse_int(raw.get("FoldID")),
                             "NumFolds": parse_int(raw.get("NumFolds")),
+                            "ThresholdMode": row_threshold_mode,
+                            "Threshold": row_threshold if row_threshold is not None else math.nan,
                             "Metric": spec.name,
                             "MetricLabel": spec.label,
                             "SourceMetric": spec.source_metric,
@@ -599,14 +642,28 @@ def write_readme(
     iqr_multiplier: float,
     trophic_source: str,
     cvk: Optional[int],
+    threshold_mode: str,
+    threshold: Optional[float],
 ) -> None:
     cvk_line = f"CvK: {cvk}" if cvk is not None else "CvK: not used as grouping variable"
+    threshold_mode_line = (
+        f"ThresholdMode filter: {threshold_mode}."
+        if threshold_mode
+        else "ThresholdMode filter: not applied."
+    )
+    threshold_line = (
+        f"Classification-threshold filter: {threshold:g}."
+        if threshold is not None
+        else "Classification-threshold filter: not applied."
+    )
     lines = [
         f"# Outlier-filtered web-level reconstruction summary, train ratio {train_ratio}",
         "",
         "This output is derived from the original WLNM logs; the original logs are not modified.",
         "One analysis unit is one empirical food web compared with the mean of retained pseudo-web realisations.",
         cvk_line,
+        threshold_mode_line,
+        threshold_line,
         f"Trophic-height source metric: {trophic_source}.",
         f"Outliers are pseudo-run metric values outside Tukey fences: Q1 - {iqr_multiplier} * IQR and Q3 + {iqr_multiplier} * IQR.",
         "Fences are calculated within each food web and metric.",
@@ -638,6 +695,8 @@ def write_outputs_for_ratio(
     metrics: Sequence[MetricSpec],
     trophic_source: str,
     cvk: Optional[int] = None,
+    threshold_mode: str = "",
+    threshold: Optional[float] = None,
 ) -> None:
     out_dir = output_base / f"train_ratio_{train_ratio}"
     ratio_flags = [
@@ -677,6 +736,8 @@ def write_outputs_for_ratio(
         iqr_multiplier,
         trophic_source,
         cvk,
+        threshold_mode,
+        threshold,
     )
 
 
@@ -690,7 +751,15 @@ def main() -> None:
     metrics = resolve_metrics(args.logs_dir, args.trophic_source)
     trophic_source = next(spec.source_metric for spec in metrics if spec.trophic)
     metadata = read_metadata(args.metadata_file)
-    run_rows = read_run_rows(args.logs_dir, metadata, train_ratios, metrics)
+    run_rows = read_run_rows(
+        args.logs_dir,
+        metadata,
+        train_ratios,
+        metrics,
+        args.threshold_mode,
+        args.threshold,
+        args.threshold_tolerance,
+    )
     flagged_rows = add_outlier_flags(
         run_rows,
         args.iqr_multiplier,
@@ -729,6 +798,8 @@ def main() -> None:
                     metrics,
                     trophic_source,
                     cvk=cvk,
+                    threshold_mode=args.threshold_mode,
+                    threshold=args.threshold,
                 )
     else:
         for ratio in train_ratios:
@@ -741,11 +812,15 @@ def main() -> None:
                 args.iqr_multiplier,
                 metrics,
                 trophic_source,
+                threshold_mode=args.threshold_mode,
+                threshold=args.threshold,
             )
 
     print(f"[OutlierFilter] Ratios: {train_ratios}")
     print(f"[OutlierFilter] Trophic source: {trophic_source}")
     print(f"[OutlierFilter] Split by CvK: {args.split_by_cvk}")
+    print(f"[OutlierFilter] ThresholdMode filter: {args.threshold_mode or 'not applied'}")
+    print(f"[OutlierFilter] Threshold filter: {args.threshold if args.threshold is not None else 'not applied'}")
     print(f"[OutlierFilter] Run-level metric rows: {len(run_rows)}")
     print(f"[OutlierFilter] Web-level metric rows: {len(web_rows)}")
     print(f"[OutlierFilter] Output base: {args.output_base_dir}")

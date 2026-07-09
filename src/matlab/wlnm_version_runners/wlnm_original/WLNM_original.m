@@ -8,12 +8,12 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'artifact_dir', 'data/result/confusion_matrix_csv/');
     addParameter(p, 'threshold_mode', 'fixed');
     addParameter(p, 'fixed_threshold', 0.5);
+    addParameter(p, 'threshold_sweep_enabled', false);
+    addParameter(p, 'threshold_sweep_range', 0.10:0.10:0.90);
     addParameter(p, 'encode_parallel', false);
     addParameter(p, 'compute_ecological_metrics', true);
     parse(p, varargin{:});
     opt = p.Results;
-
-    aux = struct();
 
     a = 2;
     portion = 1;
@@ -21,6 +21,12 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     use_role_filter = false;
     useParallel = logical(opt.encode_parallel);
     compute_ecological_metrics = logical(opt.compute_ecological_metrics);
+    threshold_sweep_enabled = logical(opt.threshold_sweep_enabled);
+    if threshold_sweep_enabled
+        threshold_sweep_range = normalize_threshold_values_original_wlnm(opt.threshold_sweep_range);
+    else
+        threshold_sweep_range = [];
+    end
 
     % === Original half-matrix setup (undirected) ===
     htrain = triu(train, 1);
@@ -36,10 +42,15 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         warning('[WLNM] Skipping due to empty filtered sets.');
         roc_auc = NaN;
         pr_auc = NaN;
-        best_threshold = NaN;
-        best_precision = NaN;
-        best_recall = NaN;
-        best_f1_score = NaN;
+        if threshold_sweep_enabled
+            best_threshold = threshold_sweep_range(:);
+        else
+            best_threshold = NaN;
+        end
+        best_precision = NaN(size(best_threshold));
+        best_recall = NaN(size(best_threshold));
+        best_f1_score = NaN(size(best_threshold));
+        aux = repmat(struct(), numel(best_threshold), 1);
         return;
     end
 
@@ -72,6 +83,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Predict probabilities
     [~, scores] = classify(net, reshape(test_data', feature_dim, 1, 1, size(test_data, 1)));
     scores(:, 1) = [];
+    scores = double(scores);
 
     % Compute ROC-AUC
     [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
@@ -79,26 +91,35 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Compute PR-AUC
     [~, ~, ~, pr_auc] = perfcurve(test_label', scores', 1, 'XCrit', 'reca', 'YCrit', 'prec');
 
-    [best_threshold, best_precision, best_recall, best_f1_score] = ...
+    [primary_threshold, primary_precision, primary_recall, primary_f1_score] = ...
         compute_threshold_metrics(scores, test_label, opt.threshold_mode, opt.fixed_threshold);
 
     fprintf('Threshold mode: %s | Threshold: %.2f, Precision: %.4f, Recall: %.4f, F1-Score: %.4f\n', ...
-        char(string(opt.threshold_mode)), best_threshold, best_precision, best_recall, best_f1_score);
+        char(string(opt.threshold_mode)), primary_threshold, primary_precision, primary_recall, primary_f1_score);
+    if threshold_sweep_enabled
+        fprintf('Threshold sweep enabled | %d thresholds from %.2f to %.2f\n', ...
+            numel(threshold_sweep_range), threshold_sweep_range(1), threshold_sweep_range(end));
+    end
     fprintf('ROC-AUC: %.4f\n', roc_auc);
     fprintf('PR-AUC: %.4f\n', pr_auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
-    binary_predictions = scores > best_threshold;
-    test_metrics = compute_binary_classification_metrics_original(binary_predictions, test_label);
     test_pairs = [test_pos; test_neg];
+    true_links = test_pairs(test_label == 1, :);
 
-    predicted_links = test_pairs(binary_predictions == 1, :);
-    true_links      = test_pairs(test_label == 1, :);
+    if threshold_sweep_enabled
+        best_threshold = threshold_sweep_range(:);
+    else
+        best_threshold = primary_threshold;
+    end
+
+    [primary_predicted_links, ~] = links_and_metrics_at_threshold_original( ...
+        scores, test_label, test_pairs, primary_threshold);
 
     if opt.save_confusion
-        TP_links = intersect(predicted_links, true_links, 'rows');
-        FP_links = setdiff(predicted_links, true_links, 'rows');
-        FN_links = setdiff(true_links, predicted_links, 'rows');
+        TP_links = intersect(primary_predicted_links, true_links, 'rows');
+        FP_links = setdiff(primary_predicted_links, true_links, 'rows');
+        FN_links = setdiff(true_links, primary_predicted_links, 'rows');
     else
         TP_links = zeros(0, 2);
         FP_links = zeros(0, 2);
@@ -114,28 +135,33 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     empirical_full = empirical_full - spdiags(diag(empirical_full), 0, n, n);
     empirical_full = spones(empirical_full);
 
-    if isempty(predicted_links)
-        predicted_sparse = sparse(n, n);
-    else
-        predicted_sparse = sparse(predicted_links(:,1), predicted_links(:,2), 1, n, n);
-        predicted_sparse = spones(predicted_sparse + predicted_sparse');
+    num_thresholds = numel(best_threshold);
+    best_precision = NaN(num_thresholds, 1);
+    best_recall = NaN(num_thresholds, 1);
+    best_f1_score = NaN(num_thresholds, 1);
+    aux = repmat(struct(), num_thresholds, 1);
+
+    for t = 1:num_thresholds
+        [predicted_links_t, test_metrics] = links_and_metrics_at_threshold_original( ...
+            scores, test_label, test_pairs, best_threshold(t));
+
+        if compute_ecological_metrics
+            pseudo_full = build_pseudo_full_original(htrain, predicted_links_t);
+            cmp_metrics = compare_binary_graphs_original(empirical_full, pseudo_full);
+        else
+            cmp_metrics = struct();
+        end
+
+        best_precision(t) = test_metrics.Precision;
+        best_recall(t) = test_metrics.Recall;
+        best_f1_score(t) = test_metrics.F1Score;
+
+        aux(t).comparison_metrics     = cmp_metrics;
+        aux(t).test_metrics           = test_metrics;
+        aux(t).NumPredictedNovelLinks = size(predicted_links_t, 1);
+        aux(t).NumTrueNovelLinks      = size(true_links, 1);
+        aux(t).EvaluateOnAllUnseen    = evaluate_on_all_unseen;
     end
-
-    pseudo_full = spones(htrain + htrain' + predicted_sparse);
-    pseudo_full = pseudo_full - spdiags(diag(pseudo_full), 0, n, n);
-    pseudo_full = spones(pseudo_full);
-
-    if compute_ecological_metrics
-        cmp_metrics = compare_binary_graphs_original(empirical_full, pseudo_full);
-    else
-        cmp_metrics = struct();
-    end
-
-    aux.comparison_metrics     = cmp_metrics;
-    aux.test_metrics           = test_metrics;
-    aux.NumPredictedNovelLinks = size(predicted_links, 1);
-    aux.NumTrueNovelLinks      = size(true_links, 1);
-    aux.EvaluateOnAllUnseen    = evaluate_on_all_unseen;
 
     % Save files
     base_id = sprintf('%s_K_%d_%s_ratio%.0f', dataname, K, nodeSelection, ratioTrain * 100);
@@ -184,6 +210,39 @@ function export_augmented_links(links, filename, taxonomy, mass, results_dir)
         T = sortrows(T, 'PredatorMass');
     end
     writetable(T, fullfile(results_dir, filename));
+end
+
+function thresholds = normalize_threshold_values_original_wlnm(values)
+    thresholds = double(values(:)');
+    thresholds = thresholds(isfinite(thresholds));
+    thresholds = unique(thresholds);
+    thresholds = thresholds(thresholds >= 0 & thresholds <= 1);
+
+    if isempty(thresholds)
+        error('WLNM_original:InvalidThresholdSweepRange', ...
+              'threshold_sweep_range must contain at least one finite value in [0, 1].');
+    end
+end
+
+function [predicted_links, metrics] = links_and_metrics_at_threshold_original(scores, labels, test_pairs, threshold)
+    binary_predictions = double(scores(:)) > threshold;
+    metrics = compute_binary_classification_metrics_original(binary_predictions, labels);
+    predicted_links = test_pairs(binary_predictions == 1, :);
+end
+
+function pseudo_full = build_pseudo_full_original(htrain, predicted_links)
+    n = size(htrain, 1);
+
+    if isempty(predicted_links)
+        predicted_sparse = sparse(n, n);
+    else
+        predicted_sparse = sparse(predicted_links(:,1), predicted_links(:,2), 1, n, n);
+        predicted_sparse = spones(predicted_sparse + predicted_sparse');
+    end
+
+    pseudo_full = spones(htrain + htrain' + predicted_sparse);
+    pseudo_full = pseudo_full - spdiags(diag(pseudo_full), 0, n, n);
+    pseudo_full = spones(pseudo_full);
 end
 
 % ============================================================

@@ -52,6 +52,10 @@ function Main()
         'exportAuxiliaryCSVs',     false, ...                                                        % Set true only for inspection CSVs; false keeps all repeated experiments parallel
         'thresholdMode',          'fixed', ...                                                        % 'fixed' or legacy 'test_f1'
         'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
+        'thresholdSweepEnabled',  true, ...                                                           % WLNM runners: write one result row per threshold
+        'thresholdSweepRange',    0.10:0.10:0.90, ...                                                 % Thresholds evaluated when thresholdSweepEnabled=true
+        'negativeMassPreferenceEnabled', true, ...                                                    % WLNM_dir_neg: prefer non-links where consumer mass < resource mass
+        'negativeMassPreferenceThreshold', 1.0, ...                                                    % mass(target) < threshold * mass(source)
         'useGraphEncodingParallel', false, ...                                                        % WLNM runners: only useful when useParallel=false
         'computeEcologicalMetrics', true, ...                                                         % WLNM metric/comparison outputs; required for dir_neg delta t-tests
         'runDeltaTTests',         false, ...                                                          % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
@@ -349,10 +353,18 @@ function config = apply_runtime_overrides(config)
     config.sweepTrainRatios = get_env_bool('WLNM_SWEEP_TRAIN_RATIOS', config.sweepTrainRatios);
     config.ratioTrain = get_env_number('WLNM_RATIO_TRAIN', config.ratioTrain);
     config.trainRatioRange = get_env_number_list('WLNM_TRAIN_RATIO_RANGE', config.trainRatioRange);
+    config.checkConnectivity = get_env_bool('WLNM_CHECK_CONNECTIVITY', config.checkConnectivity);
+    config.adaptiveConnectivity = get_env_bool('WLNM_ADAPTIVE_CONNECTIVITY', config.adaptiveConnectivity);
     config.cvEnabled = get_env_bool('WLNM_CV_ENABLED', config.cvEnabled);
     config.cvKList = get_env_number_list('WLNM_CV_K_LIST', config.cvKList);
     config.cvSaveConfusion = get_env_bool('WLNM_CV_SAVE_CONFUSION', config.cvSaveConfusion);
     config.exportAuxiliaryCSVs = get_env_bool('WLNM_EXPORT_AUXILIARY_CSVS', config.exportAuxiliaryCSVs);
+    config.thresholdMode = get_env_text('WLNM_THRESHOLD_MODE', config.thresholdMode);
+    config.fixedThreshold = get_env_number('WLNM_FIXED_THRESHOLD', config.fixedThreshold);
+    config.thresholdSweepEnabled = get_env_bool('WLNM_THRESHOLD_SWEEP_ENABLED', config.thresholdSweepEnabled);
+    config.thresholdSweepRange = get_env_number_list('WLNM_THRESHOLD_SWEEP_RANGE', config.thresholdSweepRange);
+    config.negativeMassPreferenceEnabled = get_env_bool('WLNM_NEGATIVE_MASS_PREFERENCE_ENABLED', config.negativeMassPreferenceEnabled);
+    config.negativeMassPreferenceThreshold = get_env_number('WLNM_NEGATIVE_MASS_PREFERENCE_THRESHOLD', config.negativeMassPreferenceThreshold);
     config.computeEcologicalMetrics = get_env_bool('WLNM_COMPUTE_ECOLOGICAL_METRICS', config.computeEcologicalMetrics);
     config.runDeltaTTests = get_env_bool('WLNM_RUN_DELTA_TTESTS', config.runDeltaTTests);
     config.runDeltaEquivalenceTests = get_env_bool('WLNM_RUN_DELTA_EQUIVALENCE', config.runDeltaEquivalenceTests);

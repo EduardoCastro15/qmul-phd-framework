@@ -1,12 +1,10 @@
-function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
+function results = run_wlnm_dir_neg_kfold(data, K, ~, config)
 %RUN_WLNM_DIR_NEG_KFOLD k-fold CV wrapper for WLNM_dir_neg.
 % Train positives are all positives excluding the fold.
 % Test positives are the fold.
 %
 % This version mirrors the same CSV log metric extraction used by
 % run_wlnm_dir_neg, while keeping CV-specific bookkeeping fields.
-
-    %#ok<NASGU> ratioTrain_unused
 
     if ~isfield(config,'cvK'), config.cvK = 5; end
     if ~isfield(config,'cvSeed'), config.cvSeed = 12345; end
@@ -17,6 +15,11 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
     if ~isfield(config,'use_role_filter'), config.use_role_filter = true; end
     if ~isfield(config,'thresholdMode'), config.thresholdMode = 'fixed'; end
     if ~isfield(config,'fixedThreshold'), config.fixedThreshold = 0.5; end
+    if ~isfield(config,'thresholdSweepEnabled'), config.thresholdSweepEnabled = false; end
+    if ~isfield(config,'thresholdSweepRange'), config.thresholdSweepRange = 0.10:0.10:0.90; end
+    if ~isfield(config,'negativeMassPreferenceEnabled'), config.negativeMassPreferenceEnabled = false; end
+    if ~isfield(config,'negativeMassPreferenceThreshold'), config.negativeMassPreferenceThreshold = 1.0; end
+    if ~isfield(config,'computeEcologicalMetrics'), config.computeEcologicalMetrics = true; end
     if ~isfield(config,'artifactDir'), config.artifactDir = 'data/result/confusion_matrix_csv/'; end
     if ~isfield(config,'version'), config.version = 'WLNM_dir_neg_kfold'; end
 
@@ -45,8 +48,10 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
 
     ratioTrain = (k - 1) / k; % for reporting only
 
-    R = k * config.numExperiments;
+    rows_per_experiment = get_threshold_result_row_count(config);
+    R = k * config.numExperiments * rows_per_experiment;
     results = repmat(make_cv_result_template(K, ratioTrain, k, 0, 0, 0, empty_split_stats(), config), R, 1);
+    row = 0;
 
     for f = 1:k
         idx = find(folds.fold_id == f);
@@ -65,37 +70,52 @@ function results = run_wlnm_dir_neg_kfold(data, K, ratioTrain_unused, config)
         st = cv_split_stats(net, train, test, backbone_mask);
 
         fold_results = repmat(make_cv_result_template(K, ratioTrain, k, f, 0, 0, st, config), ...
-            config.numExperiments, 1);
+            config.numExperiments * rows_per_experiment, 1);
+        fold_row = 0;
 
         start_exp = 1;
-        if logical(config.useParallel) && logical(config.cvSaveConfusion)
-            fold_results(1) = run_one_cv_experiment( ...
-                1, f, k, K, ratioTrain, st, config, dataname, train, test, ...
-                taxonomy, mass, role, nodeSelection, backbone_mask, true);
-            start_exp = 2;
-        end
-
         if logical(config.useParallel)
+            res_cells = cell(config.numExperiments, 1);
+
+            if logical(config.cvSaveConfusion)
+                res_cells{1} = run_one_cv_experiment( ...
+                    1, f, k, K, ratioTrain, st, config, dataname, train, test, ...
+                    taxonomy, mass, role, nodeSelection, backbone_mask, true);
+                start_exp = 2;
+            end
+
             parfor e = start_exp:config.numExperiments
-                fold_results(e) = run_one_cv_experiment( ...
+                res_cells{e} = run_one_cv_experiment( ...
                     e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
                     taxonomy, mass, role, nodeSelection, backbone_mask, false);
+            end
+
+            for e = 1:config.numExperiments
+                block = res_cells{e};
+                n_block = numel(block);
+                fold_results(fold_row + (1:n_block)) = block;
+                fold_row = fold_row + n_block;
             end
         else
             for e = start_exp:config.numExperiments
                 do_export = logical(config.cvSaveConfusion) && (e == 1);
-                fold_results(e) = run_one_cv_experiment( ...
+                block = run_one_cv_experiment( ...
                     e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
                     taxonomy, mass, role, nodeSelection, backbone_mask, do_export);
+                n_block = numel(block);
+                fold_results(fold_row + (1:n_block)) = block;
+                fold_row = fold_row + n_block;
             end
         end
 
-        rows = ((f - 1) * config.numExperiments + 1):(f * config.numExperiments);
-        results(rows) = fold_results;
+        results(row + (1:fold_row)) = fold_results(1:fold_row);
+        row = row + fold_row;
     end
+
+    results = results(1:row);
 end
 
-function result = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
+function rows = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, dataname, train, test, ...
         taxonomy, mass, role, nodeSelection, backbone_mask, do_export)
 
     seed = config.cvSeed + 1000*f + e;
@@ -104,9 +124,11 @@ function result = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, data
     t0 = tic;
     cv_tag = sprintf('cv_k%d_fold%02d_exp%02d', k, f, e);
     artifact_tag = sprintf('%s_seed%d', lower(char(string(config.version))), seed);
+    encode_parallel = get_config_bool(config, 'useGraphEncodingParallel', false) && ~logical(config.useParallel);
+    compute_ecological_metrics = get_config_bool(config, 'computeEcologicalMetrics', true);
 
     % WLNM_dir_neg owns negative sampling, including role constraints and hybrid top-up.
-    [roc_auc, pr_auc, thr, prec, rec, f1, aux] = WLNM_dir_neg( ...
+    [roc_auc, pr_auc, thresholds, precisions, recalls, f1_scores, aux_rows] = WLNM_dir_neg( ...
         dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
         'cv_tag', cv_tag, ...
         'save_confusion', do_export, ...
@@ -117,13 +139,25 @@ function result = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, data
         'artifact_tag', artifact_tag, ...
         'artifact_dir', config.artifactDir, ...
         'threshold_mode', config.thresholdMode, ...
-        'fixed_threshold', config.fixedThreshold);
+        'fixed_threshold', config.fixedThreshold, ...
+        'encode_parallel', encode_parallel, ...
+        'compute_ecological_metrics', compute_ecological_metrics, ...
+        'threshold_sweep_enabled', get_config_bool(config, 'thresholdSweepEnabled', false), ...
+        'threshold_sweep_range', get_config_number(config, 'thresholdSweepRange', 0.10:0.10:0.90), ...
+        'negative_mass_preference_enabled', get_config_bool(config, 'negativeMassPreferenceEnabled', false), ...
+        'negative_mass_preference_threshold', get_config_number(config, 'negativeMassPreferenceThreshold', 1.0));
 
-    result = make_cv_result_template(K, ratioTrain, k, f, e, seed, st, config);
-    result = populate_result_row(result, roc_auc, pr_auc, thr, prec, rec, f1, toc(t0), aux);
+    elapsed_seconds = toc(t0);
+    template = make_cv_result_template(K, ratioTrain, k, f, e, seed, st, config);
+    rows = repmat(template, numel(thresholds), 1);
+    for t = 1:numel(thresholds)
+        rows(t) = populate_result_row( ...
+            template, roc_auc, pr_auc, thresholds(t), precisions(t), ...
+            recalls(t), f1_scores(t), elapsed_seconds, aux_rows(t));
+    end
 
-    fprintf('[CV] %s | K=%d | fold %d/%d | exp %d/%d | ROC-AUC=%.4f | PR-AUC=%.4f\n', ...
-        dataname, K, f, k, e, config.numExperiments, roc_auc, pr_auc);
+    fprintf('[CV] %s | K=%d | fold %d/%d | exp %d/%d | thresholds=%d | ROC-AUC=%.4f | PR-AUC=%.4f\n', ...
+        dataname, K, f, k, e, config.numExperiments, numel(thresholds), roc_auc, pr_auc);
 end
 
 % ============================================================
@@ -139,7 +173,7 @@ function out = make_cv_result_template(K, ratioTrain, cvK, foldID, expID, seed, 
         'ROC_AUC',0, 'PR_AUC',0, 'TimeElapsed','', ...
         'K',K, 'TrainRatio',ratioTrain, 'BackboneRatio',0, ...
         'ExperimentID',expID, 'Seed',seed, ...
-        'ThresholdMode',get_config_text(config, 'thresholdMode', 'fixed'), ...
+        'ThresholdMode',get_result_threshold_mode(config), ...
         'CvK',cvK, ...
         'FoldID',foldID, 'NumFolds',cvK, ...
         'Threshold',0, 'Precision',0, 'Recall',0, 'F1Score',0, ...
@@ -178,6 +212,15 @@ function out = make_cv_result_template(K, ratioTrain, cvK, foldID, expID, seed, 
         'EmpiricalPropBasal',NaN, ...
         'EmpiricalPropIntermediate',NaN, ...
         'EmpiricalPropTop',NaN, ...
+        'TrainNumSpecies',NaN, ...
+        'TrainConnectance',NaN, ...
+        'TrainMeanTrophicLevel',NaN, ...
+        'TrainMeanDegree',NaN, ...
+        'TrainMeanGenerality',NaN, ...
+        'TrainMeanVulnerability',NaN, ...
+        'TrainPropBasal',NaN, ...
+        'TrainPropIntermediate',NaN, ...
+        'TrainPropTop',NaN, ...
         'PseudoNumSpecies',NaN, ...
         'PseudoLinks',NaN, ...
         'PseudoConnectance',NaN, ...
@@ -217,8 +260,12 @@ function out = make_cv_result_template(K, ratioTrain, cvK, foldID, expID, seed, 
     );
 
     out = add_extended_metric_defaults(out, 'Empirical');
+    out = add_extended_metric_defaults(out, 'Train');
     out = add_extended_metric_defaults(out, 'Pseudo');
     out = add_extended_metric_defaults(out, 'Delta');
+    out = add_networkx_trophic_diagnostic_defaults(out, 'Empirical');
+    out = add_networkx_trophic_diagnostic_defaults(out, 'Train');
+    out = add_networkx_trophic_diagnostic_defaults(out, 'Pseudo');
 end
 
 % ============================================================
@@ -274,6 +321,15 @@ function flat = flatten_aux_metrics(aux)
         'EmpiricalPropBasal',NaN, ...
         'EmpiricalPropIntermediate',NaN, ...
         'EmpiricalPropTop',NaN, ...
+        'TrainNumSpecies',NaN, ...
+        'TrainConnectance',NaN, ...
+        'TrainMeanTrophicLevel',NaN, ...
+        'TrainMeanDegree',NaN, ...
+        'TrainMeanGenerality',NaN, ...
+        'TrainMeanVulnerability',NaN, ...
+        'TrainPropBasal',NaN, ...
+        'TrainPropIntermediate',NaN, ...
+        'TrainPropTop',NaN, ...
         'PseudoNumSpecies',NaN, ...
         'PseudoLinks',NaN, ...
         'PseudoConnectance',NaN, ...
@@ -329,8 +385,12 @@ function flat = flatten_aux_metrics(aux)
     );
 
     flat = add_extended_metric_defaults(flat, 'Empirical');
+    flat = add_extended_metric_defaults(flat, 'Train');
     flat = add_extended_metric_defaults(flat, 'Pseudo');
     flat = add_extended_metric_defaults(flat, 'Delta');
+    flat = add_networkx_trophic_diagnostic_defaults(flat, 'Empirical');
+    flat = add_networkx_trophic_diagnostic_defaults(flat, 'Train');
+    flat = add_networkx_trophic_diagnostic_defaults(flat, 'Pseudo');
 
     if nargin == 0 || isempty(aux)
         return;
@@ -350,6 +410,23 @@ function flat = flatten_aux_metrics(aux)
         flat.EmpiricalPropIntermediate  = safe_field(m, 'PropIntermediate');
         flat.EmpiricalPropTop           = safe_field(m, 'PropTop');
         flat = copy_extended_metrics(flat, m, 'Empirical');
+        flat = copy_networkx_trophic_diagnostics(flat, m, 'Empirical');
+    end
+
+    % ---- train metrics ----
+    if isfield(aux, 'train_metrics') && ~isempty(aux.train_metrics)
+        m = aux.train_metrics;
+        flat.TrainNumSpecies        = safe_field(m, 'NumSpecies');
+        flat.TrainConnectance       = safe_field(m, 'Connectance');
+        flat.TrainMeanTrophicLevel  = safe_field(m, 'MeanTrophicLevel');
+        flat.TrainMeanDegree        = safe_field(m, 'MeanDegree');
+        flat.TrainMeanGenerality    = safe_field(m, 'MeanGenerality');
+        flat.TrainMeanVulnerability = safe_field(m, 'MeanVulnerability');
+        flat.TrainPropBasal         = safe_field(m, 'PropBasal');
+        flat.TrainPropIntermediate  = safe_field(m, 'PropIntermediate');
+        flat.TrainPropTop           = safe_field(m, 'PropTop');
+        flat = copy_extended_metrics(flat, m, 'Train');
+        flat = copy_networkx_trophic_diagnostics(flat, m, 'Train');
     end
 
     % ---- pseudo metrics ----
@@ -366,6 +443,7 @@ function flat = flatten_aux_metrics(aux)
         flat.PseudoPropIntermediate  = safe_field(m, 'PropIntermediate');
         flat.PseudoPropTop           = safe_field(m, 'PropTop');
         flat = copy_extended_metrics(flat, m, 'Pseudo');
+        flat = copy_networkx_trophic_diagnostics(flat, m, 'Pseudo');
     end
 
     % ---- deltas ----
@@ -442,8 +520,23 @@ function s = add_extended_metric_defaults(s, prefix)
     end
 end
 
+function s = add_networkx_trophic_diagnostic_defaults(s, prefix)
+    suffixes = networkx_trophic_diagnostic_suffixes();
+    for i = 1:numel(suffixes)
+        s.([prefix suffixes{i}]) = NaN;
+    end
+end
+
 function s = copy_extended_metrics(s, metrics, prefix)
     suffixes = extended_metric_suffixes();
+    for i = 1:numel(suffixes)
+        suffix = suffixes{i};
+        s.([prefix suffix]) = safe_field(metrics, suffix);
+    end
+end
+
+function s = copy_networkx_trophic_diagnostics(s, metrics, prefix)
+    suffixes = networkx_trophic_diagnostic_suffixes();
     for i = 1:numel(suffixes)
         suffix = suffixes{i};
         s.([prefix suffix]) = safe_field(metrics, suffix);
@@ -472,11 +565,24 @@ function suffixes = extended_metric_suffixes()
         'TrophicLevelStd', ...
         'TrophicLevelCV', ...
         'TrophicLevelRange', ...
+        'NetworkXMeanTrophicLevel', ...
+        'NetworkXTrophicLevelStd', ...
+        'NetworkXTrophicLevelRange', ...
         'MeanLocalClustering', ...
         'Transitivity', ...
         'NumTriangles', ...
         'TriangleDensity', ...
         'MeanDietOverlap' ...
+    };
+end
+
+function suffixes = networkx_trophic_diagnostic_suffixes()
+    suffixes = { ...
+        'NetworkXTrophicLevelNumSpeciesFull', ...
+        'NetworkXTrophicLevelNumSpeciesLargest', ...
+        'NetworkXTrophicLevelNumSpeciesWithLevel', ...
+        'NetworkXTrophicLevelLargestFraction', ...
+        'NetworkXTrophicLevelStatusCode' ...
     };
 end
 
@@ -501,5 +607,42 @@ function value = get_config_bool(config, field, default_value)
         value = logical(config.(field));
     else
         value = logical(default_value);
+    end
+end
+
+function value = get_config_number(config, field, default_value)
+    if isfield(config, field) && ~isempty(config.(field))
+        value = config.(field);
+    else
+        value = default_value;
+    end
+end
+
+function n = get_threshold_result_row_count(config)
+    if get_config_bool(config, 'thresholdSweepEnabled', false)
+        thresholds = normalize_threshold_values( ...
+            get_config_number(config, 'thresholdSweepRange', 0.10:0.10:0.90));
+        n = numel(thresholds);
+    else
+        n = 1;
+    end
+end
+
+function thresholds = normalize_threshold_values(values)
+    thresholds = double(values(:)');
+    thresholds = thresholds(isfinite(thresholds));
+    thresholds = unique(thresholds);
+    thresholds = thresholds(thresholds >= 0 & thresholds <= 1);
+
+    if isempty(thresholds)
+        error('[run_wlnm_dir_neg_kfold] thresholdSweepRange must contain at least one finite value in [0, 1].');
+    end
+end
+
+function mode = get_result_threshold_mode(config)
+    if get_config_bool(config, 'thresholdSweepEnabled', false)
+        mode = 'threshold_sweep';
+    else
+        mode = get_config_text(config, 'thresholdMode', 'fixed');
     end
 end
