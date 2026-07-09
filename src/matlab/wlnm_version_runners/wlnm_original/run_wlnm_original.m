@@ -2,8 +2,9 @@ function results = run_wlnm_original(data, K, ratioTrain, config)
     %RUN_WLNM_ORIGINAL Runner for WLNM with original sampling.
 
     % Preallocate result objects with extended CSV schema
+    rowsPerExperiment = get_threshold_result_row_count_original(config);
     results = repmat(make_result_template_original(K, ratioTrain, empty_split_stats_original(), config, 0, 0), ...
-        config.numExperiments, 1);
+        config.numExperiments * rowsPerExperiment, 1);
 
     % Broadcast-friendly locals
     dataname      = data.dataname;
@@ -34,10 +35,12 @@ function results = run_wlnm_original(data, K, ratioTrain, config)
     end
 
     % Execute experiments
+    row = 0;
     if config.useParallel
+        resCells = cell(config.numExperiments, 1);
         startIdx = 1;
         if saveAux
-            results(1) = one_experiment_original( ...
+            resCells{1} = one_experiment_original( ...
                 1, baseSeed, dataname, net, K, ratioTrain, taxonomy, mass, role, ...
                 nodeSelection, config, sharedTrain, sharedTest, sharedStats, true, ...
                 artifactDir, thresholdMode, fixedThreshold, encodeParallel, computeEcologicalMetrics);
@@ -46,23 +49,35 @@ function results = run_wlnm_original(data, K, ratioTrain, config)
 
         if startIdx <= config.numExperiments
             parfor i = startIdx:config.numExperiments
-                results(i) = one_experiment_original( ...
+                resCells{i} = one_experiment_original( ...
                     i, baseSeed, dataname, net, K, ratioTrain, taxonomy, mass, role, ...
                     nodeSelection, config, sharedTrain, sharedTest, sharedStats, false, ...
                     artifactDir, thresholdMode, fixedThreshold, encodeParallel, computeEcologicalMetrics);
             end
         end
+
+        for i = 1:config.numExperiments
+            block = resCells{i};
+            nBlock = numel(block);
+            results(row + (1:nBlock)) = block;
+            row = row + nBlock;
+        end
     else
         for i = 1:config.numExperiments
-            results(i) = one_experiment_original( ...
+            block = one_experiment_original( ...
                 i, baseSeed, dataname, net, K, ratioTrain, taxonomy, mass, role, ...
                 nodeSelection, config, sharedTrain, sharedTest, sharedStats, saveAux && i == 1, ...
                 artifactDir, thresholdMode, fixedThreshold, encodeParallel, computeEcologicalMetrics);
+            nBlock = numel(block);
+            results(row + (1:nBlock)) = block;
+            row = row + nBlock;
         end
     end
+
+    results = results(1:row);
 end
 
-function r = one_experiment_original(i, baseSeed, dataname, net, K, ratioTrain, taxonomy, mass, role, ...
+function rows = one_experiment_original(i, baseSeed, dataname, net, K, ratioTrain, taxonomy, mass, role, ...
         nodeSelection, config, sharedTrain, sharedTest, sharedStats, saveConfusion, artifactDir, ...
         thresholdMode, fixedThreshold, encodeParallel, computeEcologicalMetrics)
 
@@ -85,7 +100,7 @@ function r = one_experiment_original(i, baseSeed, dataname, net, K, ratioTrain, 
 
     artifactTag = sprintf('%s_exp%03d_seed%d', lower(get_config_text_original(config, 'version', 'WLNM_original')), i, seed);
 
-    [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_score, aux] = ...
+    [roc_auc, pr_auc, thresholds, precisions, recalls, f1Scores, auxRows] = ...
         WLNM_original(dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
             'save_confusion', saveConfusion, ...
             'artifact_tag', artifactTag, ...
@@ -93,12 +108,18 @@ function r = one_experiment_original(i, baseSeed, dataname, net, K, ratioTrain, 
             'threshold_mode', thresholdMode, ...
             'fixed_threshold', fixedThreshold, ...
             'encode_parallel', encodeParallel, ...
-            'compute_ecological_metrics', computeEcologicalMetrics);
+            'compute_ecological_metrics', computeEcologicalMetrics, ...
+            'threshold_sweep_enabled', get_config_bool_original(config, 'thresholdSweepEnabled', false), ...
+            'threshold_sweep_range', get_config_number_original(config, 'thresholdSweepRange', 0.10:0.10:0.90));
 
-    r = make_result_template_original(K, ratioTrain, splitStats, config, i, seed);
-    r = populate_result_row_original( ...
-        r, roc_auc, pr_auc, best_threshold, best_precision, best_recall, ...
-        best_f1_score, toc(t0), aux);
+    elapsedSeconds = toc(t0);
+    template = make_result_template_original(K, ratioTrain, splitStats, config, i, seed);
+    rows = repmat(template, numel(thresholds), 1);
+    for t = 1:numel(thresholds)
+        rows(t) = populate_result_row_original( ...
+            template, roc_auc, pr_auc, thresholds(t), precisions(t), ...
+            recalls(t), f1Scores(t), elapsedSeconds, auxRows(t));
+    end
 end
 
 % ============================================================
@@ -124,7 +145,7 @@ function out = make_result_template_original(K, ratioTrain, splitStats, config, 
         'TrainRatio', ratioTrain, ...
         'ExperimentID', expID, ...
         'Seed', seed, ...
-        'ThresholdMode', get_config_text_original(config, 'thresholdMode', 'fixed'), ...
+        'ThresholdMode', get_result_threshold_mode_original(config), ...
         'CvK', 0, ...
         'FoldID', 0, ...
         'NumFolds', 0, ...
@@ -401,5 +422,34 @@ function value = get_config_text_original(config, field, defaultValue)
         value = char(string(config.(field)));
     else
         value = char(string(defaultValue));
+    end
+end
+
+function n = get_threshold_result_row_count_original(config)
+    if get_config_bool_original(config, 'thresholdSweepEnabled', false)
+        thresholds = normalize_threshold_values_original( ...
+            get_config_number_original(config, 'thresholdSweepRange', 0.10:0.10:0.90));
+        n = numel(thresholds);
+    else
+        n = 1;
+    end
+end
+
+function thresholds = normalize_threshold_values_original(values)
+    thresholds = double(values(:)');
+    thresholds = thresholds(isfinite(thresholds));
+    thresholds = unique(thresholds);
+    thresholds = thresholds(thresholds >= 0 & thresholds <= 1);
+
+    if isempty(thresholds)
+        error('[run_wlnm_original] thresholdSweepRange must contain at least one finite value in [0, 1].');
+    end
+end
+
+function mode = get_result_threshold_mode_original(config)
+    if get_config_bool_original(config, 'thresholdSweepEnabled', false)
+        mode = 'threshold_sweep';
+    else
+        mode = get_config_text_original(config, 'thresholdMode', 'fixed');
     end
 end
