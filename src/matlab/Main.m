@@ -54,8 +54,8 @@ function Main()
         'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
         'thresholdSweepEnabled',  true, ...                                                           % WLNM runners: write one result row per threshold
         'thresholdSweepRange',    0.10:0.10:0.90, ...                                                 % Thresholds evaluated when thresholdSweepEnabled=true
-        'negativeMassPreferenceEnabled', true, ...                                                    % WLNM_dir_neg: prefer non-links where consumer mass < resource mass
-        'negativeMassPreferenceThreshold', 1.0, ...                                                    % mass(target) < threshold * mass(source)
+        'negativeMassEligibilityEnabled', true, ...                                                   % WLNM_dir_neg: eligible = role constraint OR body-mass constraint
+        'negativeMassEligibilityThreshold', 1.0, ...                                                  % mass(target) < threshold * mass(source); sampled uniformly in the union pool
         'useGraphEncodingParallel', false, ...                                                        % WLNM runners: only useful when useParallel=false
         'computeEcologicalMetrics', true, ...                                                         % WLNM metric/comparison outputs; required for dir_neg delta t-tests
         'runDeltaTTests',         false, ...                                                          % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
@@ -363,8 +363,13 @@ function config = apply_runtime_overrides(config)
     config.fixedThreshold = get_env_number('WLNM_FIXED_THRESHOLD', config.fixedThreshold);
     config.thresholdSweepEnabled = get_env_bool('WLNM_THRESHOLD_SWEEP_ENABLED', config.thresholdSweepEnabled);
     config.thresholdSweepRange = get_env_number_list('WLNM_THRESHOLD_SWEEP_RANGE', config.thresholdSweepRange);
-    config.negativeMassPreferenceEnabled = get_env_bool('WLNM_NEGATIVE_MASS_PREFERENCE_ENABLED', config.negativeMassPreferenceEnabled);
-    config.negativeMassPreferenceThreshold = get_env_number('WLNM_NEGATIVE_MASS_PREFERENCE_THRESHOLD', config.negativeMassPreferenceThreshold);
+    % Backward-compatible aliases are read first; MASS_ELIGIBILITY is canonical and wins.
+    config.negativeMassEligibilityEnabled = get_env_bool('WLNM_NEGATIVE_MASS_PREFERENCE_ENABLED', config.negativeMassEligibilityEnabled);
+    config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_PREFERENCE_THRESHOLD', config.negativeMassEligibilityThreshold);
+    config.negativeMassEligibilityEnabled = get_env_bool('WLNM_NEGATIVE_MASS_DIAGNOSTIC_ENABLED', config.negativeMassEligibilityEnabled);
+    config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_DIAGNOSTIC_THRESHOLD', config.negativeMassEligibilityThreshold);
+    config.negativeMassEligibilityEnabled = get_env_bool('WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED', config.negativeMassEligibilityEnabled);
+    config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD', config.negativeMassEligibilityThreshold);
     config.computeEcologicalMetrics = get_env_bool('WLNM_COMPUTE_ECOLOGICAL_METRICS', config.computeEcologicalMetrics);
     config.runDeltaTTests = get_env_bool('WLNM_RUN_DELTA_TTESTS', config.runDeltaTTests);
     config.runDeltaEquivalenceTests = get_env_bool('WLNM_RUN_DELTA_EQUIVALENCE', config.runDeltaEquivalenceTests);

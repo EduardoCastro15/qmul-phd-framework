@@ -23,8 +23,10 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'encode_parallel', false);
     addParameter(p, 'compute_ecological_metrics', true);
     addParameter(p, 'use_role_filter', true);
-    addParameter(p, 'negative_mass_preference_enabled', false);
-    addParameter(p, 'negative_mass_preference_threshold', 1.0);
+    addParameter(p, 'negative_mass_eligibility_enabled', []);
+    addParameter(p, 'negative_mass_eligibility_threshold', []);
+    addParameter(p, 'negative_mass_preference_enabled', []);   % legacy alias
+    addParameter(p, 'negative_mass_preference_threshold', []); % legacy alias
     parse(p, varargin{:});
     opt = p.Results;
 
@@ -32,8 +34,20 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     portion = 1;
     evaluate_on_all_unseen = logical(opt.evaluate_on_all_unseen);
     use_role_filter = logical(opt.use_role_filter); % preserve graph direction and filter negatives by role
-    negative_mass_preference_enabled = logical(opt.negative_mass_preference_enabled);
-    negative_mass_preference_threshold = double(opt.negative_mass_preference_threshold);
+    if ~isempty(opt.negative_mass_eligibility_enabled)
+        negative_mass_eligibility_enabled = logical(opt.negative_mass_eligibility_enabled);
+    elseif ~isempty(opt.negative_mass_preference_enabled)
+        negative_mass_eligibility_enabled = logical(opt.negative_mass_preference_enabled);
+    else
+        negative_mass_eligibility_enabled = false;
+    end
+    if ~isempty(opt.negative_mass_eligibility_threshold)
+        negative_mass_eligibility_threshold = double(opt.negative_mass_eligibility_threshold);
+    elseif ~isempty(opt.negative_mass_preference_threshold)
+        negative_mass_eligibility_threshold = double(opt.negative_mass_preference_threshold);
+    else
+        negative_mass_eligibility_threshold = 1.0;
+    end
     use_original_wlnm = false;
     useParallel = logical(opt.encode_parallel);
     compute_ecological_metrics = logical(opt.compute_ecological_metrics);
@@ -52,7 +66,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % ------------------------------------------------------------
     [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg( ...
         htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter, ...
-        mass, negative_mass_preference_enabled, negative_mass_preference_threshold);
+        mass, negative_mass_eligibility_enabled, negative_mass_eligibility_threshold);
 
     % ------------------------------------------------------------
     % Sanity check

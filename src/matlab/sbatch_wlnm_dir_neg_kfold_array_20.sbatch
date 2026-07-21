@@ -30,7 +30,7 @@ export WLNM_NUM_EXPERIMENTS=20
 export WLNM_PARALLEL_WORKERS=20
 export WLNM_FOODWEB_INDEX="${SLURM_ARRAY_TASK_ID}"
 export WLNM_FOODWEB_CSV=data/foodwebs_mat/foodweb_metrics_ecosystem.csv
-export WLNM_OUTPUT_ROOT=data/result_wlnm_dir_neg_kfold_role_constraints_hybrid_20x290_Apocrita
+export WLNM_OUTPUT_ROOT=data/result_wlnm_dir_neg_kfold_20x290_cvK3-5-10_thresh10-90_role_or_mass_randomeligible_Apocrita
 export WLNM_EXPORT_AUXILIARY_CSVS=false
 export WLNM_CV_SAVE_CONFUSION=false
 export WLNM_RUN_DELTA_TTESTS=false
@@ -38,8 +38,8 @@ export WLNM_RUN_DELTA_EQUIVALENCE=false
 export WLNM_COMPUTE_ECOLOGICAL_METRICS=true
 export WLNM_THRESHOLD_SWEEP_ENABLED=true
 export WLNM_THRESHOLD_SWEEP_RANGE=0.10:0.10:0.90
-export WLNM_NEGATIVE_MASS_PREFERENCE_ENABLED=true
-export WLNM_NEGATIVE_MASS_PREFERENCE_THRESHOLD=1.0
+export WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED=true
+export WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD=1.0
 
 echo "Job started at: $(date)"
 echo "Running on node: $(hostname)"
