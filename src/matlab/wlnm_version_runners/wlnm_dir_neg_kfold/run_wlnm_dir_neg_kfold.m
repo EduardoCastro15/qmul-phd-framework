@@ -17,14 +17,21 @@ function results = run_wlnm_dir_neg_kfold(data, K, ~, config)
     if ~isfield(config,'fixedThreshold'), config.fixedThreshold = 0.5; end
     if ~isfield(config,'thresholdSweepEnabled'), config.thresholdSweepEnabled = false; end
     if ~isfield(config,'thresholdSweepRange'), config.thresholdSweepRange = 0.10:0.10:0.90; end
-    if ~isfield(config,'negativeMassPreferenceEnabled'), config.negativeMassPreferenceEnabled = false; end
-    if ~isfield(config,'negativeMassPreferenceThreshold'), config.negativeMassPreferenceThreshold = 1.0; end
+    if ~isfield(config,'negativeMassEligibilityEnabled')
+        config.negativeMassEligibilityEnabled = get_config_bool(config, 'negativeMassPreferenceEnabled', false);
+    end
+    if ~isfield(config,'negativeMassEligibilityThreshold')
+        config.negativeMassEligibilityThreshold = get_config_number(config, 'negativeMassPreferenceThreshold', 1.0);
+    end
     if ~isfield(config,'computeEcologicalMetrics'), config.computeEcologicalMetrics = true; end
     if ~isfield(config,'artifactDir'), config.artifactDir = 'data/result/confusion_matrix_csv/'; end
     if ~isfield(config,'version'), config.version = 'WLNM_dir_neg_kfold'; end
 
     dataname      = data.dataname;
-    net           = sparse(data.net);
+    net           = spones(sparse(data.net));
+    n             = size(net, 1);
+    net           = net - spdiags(diag(net), 0, n, n);
+    net           = spones(net);
     taxonomy      = data.taxonomy;
     mass          = data.mass;
     role          = data.role;
@@ -127,7 +134,7 @@ function rows = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, datana
     encode_parallel = get_config_bool(config, 'useGraphEncodingParallel', false) && ~logical(config.useParallel);
     compute_ecological_metrics = get_config_bool(config, 'computeEcologicalMetrics', true);
 
-    % WLNM_dir_neg owns negative sampling, including role constraints and hybrid top-up.
+    % WLNM_dir_neg owns uniform role-OR-mass eligibility sampling and controlled top-up.
     [roc_auc, pr_auc, thresholds, precisions, recalls, f1_scores, aux_rows] = WLNM_dir_neg( ...
         dataname, train, test, K, taxonomy, mass, role, nodeSelection, ratioTrain, ...
         'cv_tag', cv_tag, ...
@@ -144,8 +151,8 @@ function rows = run_one_cv_experiment(e, f, k, K, ratioTrain, st, config, datana
         'compute_ecological_metrics', compute_ecological_metrics, ...
         'threshold_sweep_enabled', get_config_bool(config, 'thresholdSweepEnabled', false), ...
         'threshold_sweep_range', get_config_number(config, 'thresholdSweepRange', 0.10:0.10:0.90), ...
-        'negative_mass_preference_enabled', get_config_bool(config, 'negativeMassPreferenceEnabled', false), ...
-        'negative_mass_preference_threshold', get_config_number(config, 'negativeMassPreferenceThreshold', 1.0));
+        'negative_mass_eligibility_enabled', get_config_bool(config, 'negativeMassEligibilityEnabled', false), ...
+        'negative_mass_eligibility_threshold', get_config_number(config, 'negativeMassEligibilityThreshold', 1.0));
 
     elapsed_seconds = toc(t0);
     template = make_cv_result_template(K, ratioTrain, k, f, e, seed, st, config);
