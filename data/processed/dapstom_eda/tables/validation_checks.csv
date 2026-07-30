@@ -1,0 +1,11 @@
+check_name,status,observed,expected,detail
+primary_network_positive_prey_tsn,PASS,0,0,Primary sea-decade networks must exclude non-positive prey TSN codes.
+network_metric_bounds,PASS,0,0,"Every graph must satisfy L <= S^2 and both reported density measures must lie in [0, 1]."
+degree_edge_conservation,PASS,0,0,"For each directed network, sum(in-degree) = sum(out-degree) = L."
+prey_record_filter_accounting,PASS,283121 = 230060 + 53061,raw = retained + excluded,The non-positive-TSN filter must reconcile exactly to the raw prey-record total.
+representative_network_count,PASS,3,3,The deterministic high/median/low selection should produce three eligible networks.
+extractor_query_errors,PASS,0,0,All Access extraction queries must complete without recorded errors.
+key_uniqueness_and_referential_integrity,PASS,0,0,Primary identifiers must be unique and HAUL -> PREDATOR -> PREY foreign keys must resolve.
+auxiliary_ices_table_coverage,REVIEW,1,0,The auxiliary ICES table should be reconciled before ICES-specific analyses.
+semantic_count_anomalies,REVIEW,34,0,Flagged rows require source-level review; they are not deleted automatically.
+source_and_working_copy_match,PASS,5a1346cd28e98b73ec2a51819408ccf333b76b108a39d2c3f3d3a3554a6f290e,identical byte content,The original supplied Access file and the read-only working copy must be byte-identical.
