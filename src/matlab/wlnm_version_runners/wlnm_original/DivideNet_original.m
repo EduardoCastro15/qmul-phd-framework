@@ -37,9 +37,18 @@ function [train, test, train_nodes, test_nodes] = DivideNet_original(net, ratioT
 
     %% === Mode 1: Original WLNM logic ===
     if use_original_logic
-        fprintf('[DivideNet] Using WLNM original logic (undirected upper-triangular).\n');
+        fprintf(['[DivideNet] Using WLNM original logic ' ...
+            '(symmetrized undirected upper-triangular).\n']);
 
-        net = triu(net) - diag(diag(net));  % upper triangle, no self-loops
+        % The empirical food webs are directed. The original WLNM baseline is
+        % undirected, so direction must be removed with A OR A' before taking
+        % the upper triangle. Taking triu(A) directly would discard every
+        % directed interaction stored below the diagonal merely because of
+        % the input node ordering.
+        net = spones(sparse(net));
+        net = net - spdiags(diag(net), 0, n, n);
+        net = spones(net + net');
+        net = triu(net, 1);
         [i, j] = find(net);  % Extract link list
         linklist = [i, j];
         num_test = ceil((1 - ratioTrain) * size(linklist, 1));

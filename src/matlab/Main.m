@@ -179,10 +179,8 @@ function Main()
                     continue;
                 end
 
-                load(datapath, 'net', 'taxonomy', 'mass', 'role', 'p_values_mat');
-                if ~exist('p_values_mat', 'var')
-                    p_values_mat = [];
-                end
+                [net, taxonomy, mass, role, p_values_mat] = ...
+                    load_foodweb_fields(datapath);
                 fprintf('[INFO] Processing dataset: %s\n', dataname);
 
                 backbone_mask = []; % CV run in non-backbone mode for now
@@ -247,10 +245,8 @@ function Main()
                     continue;
                 end
 
-                load(datapath, 'net', 'taxonomy', 'mass', 'role', 'p_values_mat');
-                if ~exist('p_values_mat', 'var')
-                    p_values_mat = [];
-                end
+                [net, taxonomy, mass, role, p_values_mat] = ...
+                    load_foodweb_fields(datapath);
                 fprintf('[INFO] Processing dataset: %s\n', dataname);
 
                 % ---- Optional: compute backbone once per dataset (controlled from Main) ----
@@ -350,6 +346,9 @@ function config = apply_runtime_overrides(config)
     config.foodwebCSV = get_env_text('WLNM_FOODWEB_CSV', config.foodwebCSV);
     config.numExperiments = get_env_number('WLNM_NUM_EXPERIMENTS', config.numExperiments);
     config.parallelWorkers = get_env_number('WLNM_PARALLEL_WORKERS', config.parallelWorkers);
+    config.baseSeed = get_env_number('WLNM_BASE_SEED', config.baseSeed);
+    config.resampleSplitsEachExperiment = get_env_bool( ...
+        'WLNM_RESAMPLE_SPLITS_EACH_EXPERIMENT', config.resampleSplitsEachExperiment);
     config.sweepTrainRatios = get_env_bool('WLNM_SWEEP_TRAIN_RATIOS', config.sweepTrainRatios);
     config.ratioTrain = get_env_number('WLNM_RATIO_TRAIN', config.ratioTrain);
     config.trainRatioRange = get_env_number_list('WLNM_TRAIN_RATIO_RANGE', config.trainRatioRange);
@@ -357,6 +356,9 @@ function config = apply_runtime_overrides(config)
     config.adaptiveConnectivity = get_env_bool('WLNM_ADAPTIVE_CONNECTIVITY', config.adaptiveConnectivity);
     config.cvEnabled = get_env_bool('WLNM_CV_ENABLED', config.cvEnabled);
     config.cvKList = get_env_number_list('WLNM_CV_K_LIST', config.cvKList);
+    config.cvSeed = get_env_number('WLNM_CV_SEED', config.cvSeed);
+    config.cvStratifyBackbone = get_env_bool( ...
+        'WLNM_CV_STRATIFY_BACKBONE', config.cvStratifyBackbone);
     config.cvSaveConfusion = get_env_bool('WLNM_CV_SAVE_CONFUSION', config.cvSaveConfusion);
     config.exportAuxiliaryCSVs = get_env_bool('WLNM_EXPORT_AUXILIARY_CSVS', config.exportAuxiliaryCSVs);
     config.thresholdMode = get_env_text('WLNM_THRESHOLD_MODE', config.thresholdMode);
@@ -591,6 +593,22 @@ function value = get_env_number_list(name, default_value)
         if isnan(value(i))
             error('[Main] Environment variable %s must be a numeric list, got "%s".', name, raw);
         end
+    end
+end
+
+function [net, taxonomy, mass, role, p_values_mat] = load_foodweb_fields(datapath)
+    required = load(datapath, 'net', 'taxonomy', 'mass', 'role');
+    net = required.net;
+    taxonomy = required.taxonomy;
+    mass = required.mass;
+    role = required.role;
+
+    available = who('-file', datapath);
+    if any(strcmp(available, 'p_values_mat'))
+        optional = load(datapath, 'p_values_mat');
+        p_values_mat = optional.p_values_mat;
+    else
+        p_values_mat = [];
     end
 end
 
