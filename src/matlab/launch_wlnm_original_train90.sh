@@ -6,7 +6,11 @@ usage() {
     cat <<'USAGE'
 Usage:
   ./launch_wlnm_original_train90.sh smoke
+  ./launch_wlnm_original_train90.sh smoke-seven
   ./launch_wlnm_original_train90.sh full
+
+Optional for the full run:
+  WLNM_ARRAY_CONCURRENCY=8 ./launch_wlnm_original_train90.sh full
 
 The array is submitted in HOLD state. Inspect the manifest and submission
 file, then release the parent job explicitly with scontrol release.
@@ -14,7 +18,7 @@ USAGE
 }
 
 mode="${1:-}"
-if [[ "$mode" != "smoke" && "$mode" != "full" ]]; then
+if [[ "$mode" != "smoke" && "$mode" != "smoke-seven" && "$mode" != "full" ]]; then
     usage >&2
     exit 64
 fi
@@ -23,7 +27,7 @@ template="sbatch_wlnm_original_array_50.sbatch"
 foodweb_csv="data/foodwebs_mat/foodweb_metrics_ecosystem.csv"
 slurm_log_dir="../../slurm_logs"
 source_commit="${WLNM_SOURCE_COMMIT:-$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)}"
-condition_id="original_undirected_symmetrized_train90_thresh0p50"
+condition_id="original_legacy_uppertriangular_train90_thresh0p50"
 
 if [[ ! -f "$template" ]]; then
     echo "ERROR: Missing template: $template" >&2
@@ -44,8 +48,8 @@ fi
 mkdir -p "$slurm_log_dir"
 
 if [[ "$mode" == "smoke" ]]; then
-    output_root="data/result_smoke_wlnm_original_undirected_symmetrized_train90_thresh0p50"
-    job_name="SMK_WLNM_ORIG"
+    output_root="data/result_smoke_wlnm_original_legacy_uppertriangular_train90_thresh0p50"
+    job_name="SMK_ORIG_LEGACY"
     num_experiments=1
     parallel_workers=1
     resource_args=(
@@ -59,16 +63,42 @@ if [[ "$mode" == "smoke" ]]; then
     expected_terminal_logs=1
     expected_rows_per_csv=1
     expected_pool_limited_foodwebs=0
+    array_concurrency=1
+    selected_foodweb_indices="1"
+elif [[ "$mode" == "smoke-seven" ]]; then
+    output_root="data/result_smoke7_wlnm_original_legacy_uppertriangular_train90_thresh0p50"
+    job_name="SMK7_ORIG_LEGACY"
+    num_experiments=1
+    parallel_workers=1
+    resource_args=(
+        --array=98,117,154,156,180,190,206%7
+        --ntasks=2
+        --partition=compute
+        --mem-per-cpu=4G
+        --time=02:00:00
+    )
+    expected_prediction_csvs=7
+    expected_terminal_logs=7
+    expected_rows_per_csv=1
+    expected_pool_limited_foodwebs=0
+    array_concurrency=7
+    selected_foodweb_indices="98,117,154,156,180,190,206"
 else
-    output_root="data/result_wlnm_original_50x290_train90_thresh0p50_undirected_symmetrized_checkconnfalse_adaptivefalse_Apocrita"
-    job_name="WLNM_ORIG_T90"
+    output_root="data/result_wlnm_original_50x290_train90_thresh0p50_legacy_uppertriangular_checkconnfalse_adaptivefalse_Apocrita"
+    job_name="WLNM_ORIG_LEG_T90"
     num_experiments=50
     parallel_workers=50
-    resource_args=(--array=1-290%4)
+    array_concurrency="${WLNM_ARRAY_CONCURRENCY:-4}"
+    if [[ ! "$array_concurrency" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: WLNM_ARRAY_CONCURRENCY must be a positive integer." >&2
+        exit 64
+    fi
+    resource_args=(--array="1-290%${array_concurrency}")
     expected_prediction_csvs=290
     expected_terminal_logs=290
     expected_rows_per_csv=50
-    expected_pool_limited_foodwebs=57
+    expected_pool_limited_foodwebs=0
+    selected_foodweb_indices="1-290"
 fi
 
 if [[ -e "$output_root" ]]; then
@@ -83,9 +113,10 @@ mkdir "$output_root"
     echo "RunMode=${mode}"
     echo "Condition=${condition_id}"
     echo "Version=WLNM_original"
-    echo "GraphMode=undirected_symmetrized"
-    echo "SelfLoops=removed_before_symmetrization"
-    echo "NegativeSampling=uniform_undirected_nonlinks_without_replacement"
+    echo "GraphMode=legacy_upper_triangle_of_directed_input"
+    echo "OriginalCompatibilityMode=true"
+    echo "SelfLoops=removed_during_upper_triangle_projection"
+    echo "NegativeSampling=uniform_upper_triangular_nonlinks_without_replacement"
     echo "TargetNegativePositiveRatio=2"
     echo "NegativePoolPolicy=cap_at_full_pool"
     echo "SubgraphK=10"
@@ -98,7 +129,9 @@ mkdir "$output_root"
     echo "ResampleSplitsEachExperiment=true"
     echo "ComputeEcologicalMetrics=false"
     echo "FoodWebs=${foodweb_count}"
+    echo "SelectedFoodWebIndices=${selected_foodweb_indices}"
     echo "NumExperiments=${num_experiments}"
+    echo "ArrayConcurrency=${array_concurrency}"
     echo "ExpectedPredictionCSVs=${expected_prediction_csvs}"
     echo "ExpectedTerminalLogs=${expected_terminal_logs}"
     echo "ExpectedDataRowsPerCSV=${expected_rows_per_csv}"

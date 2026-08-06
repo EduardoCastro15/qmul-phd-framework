@@ -114,7 +114,9 @@ function v = default_for_column(col, use_backbone)
                 v = 0;
             end
 
-        case {'TimeElapsed', 'ElapsedTime', 'Version', 'ThresholdMode'}
+        case {'TimeElapsed', 'ElapsedTime', 'Version', 'ThresholdMode', ...
+                'NegativeEligibilityMode', 'NegativeSamplingStrategy', ...
+                'NegativeTopupPolicy'}
             v = '';
 
         otherwise

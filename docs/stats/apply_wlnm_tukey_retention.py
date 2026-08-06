@@ -279,12 +279,42 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-name", default=DEFAULT_OUTPUT_NAME)
     parser.add_argument(
+        "--source-metadata",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help=(
+            "Declare missing source-protocol metadata. Repeat for multiple keys. "
+            "Values are recorded in retention_manifest.json and cannot conflict "
+            "with an existing RUN_MANIFEST.txt."
+        ),
+    )
+    parser.add_argument(
         "--max-files",
         type=int,
         default=None,
         help="Testing aid: process only the first N prediction CSVs.",
     )
     return parser.parse_args()
+
+
+def parse_source_metadata(items: Sequence[str]) -> Dict[str, str]:
+    metadata: Dict[str, str] = {}
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f"Invalid --source-metadata value {item!r}; expected KEY=VALUE.")
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or not value:
+            raise ValueError(f"Invalid --source-metadata value {item!r}; key and value are required.")
+        if key in metadata and metadata[key] != value:
+            raise ValueError(
+                f"Conflicting --source-metadata values for {key}: "
+                f"{metadata[key]!r} and {value!r}."
+            )
+        metadata[key] = value
+    return metadata
 
 
 def parse_float(value: object) -> Optional[float]:
@@ -484,7 +514,6 @@ def experiment_key(row: Mapping[str, object]) -> Tuple[str, ...]:
         str(row["CvK"]),
         str(row["Metric"]),
         experiment,
-        str(row.get("Seed", "")),
     )
 
 
@@ -494,6 +523,13 @@ def aggregate_kfold_experiments(rows: Sequence[Dict[str, object]]) -> List[Dict[
         grouped[experiment_key(row)].append(row)
     aggregated: List[Dict[str, object]] = []
     for group in grouped.values():
+        group = sorted(
+            group,
+            key=lambda row: (
+                parse_int(row.get("FoldID")) or 0,
+                parse_int(row.get("Iteration")) or 0,
+            ),
+        )
         first = dict(group[0])
         expected_folds = parse_int(first.get("CvK")) or len(group)
         fold_ids = {str(row.get("FoldID", "")) for row in group if str(row.get("FoldID", ""))}
@@ -504,6 +540,7 @@ def aggregate_kfold_experiments(rows: Sequence[Dict[str, object]]) -> List[Dict[
             {
                 "RunUnit": "repeated_cv_experiment",
                 "Iteration": ";".join(str(row.get("Iteration", "")) for row in group),
+                "Seed": ";".join(str(row.get("Seed", "")) for row in group),
                 "FoldID": "all",
                 "FoldCount": len(group),
                 "ExpectedFoldCount": expected_folds,
@@ -793,6 +830,7 @@ def process_result_root(
     multiplier: float,
     minimum_fraction: float,
     max_files: Optional[int],
+    declared_source_metadata: Mapping[str, str],
 ) -> Path:
     result_root = result_root.resolve()
     if not result_root.is_dir():
@@ -808,7 +846,21 @@ def process_result_root(
         )
     target_parent.mkdir(exist_ok=True)
     temp_dir = Path(tempfile.mkdtemp(prefix=f".{output_name}.", dir=target_parent))
-    manifest = read_key_value_manifest(result_root / "RUN_MANIFEST.txt")
+    source_manifest_path = result_root / "RUN_MANIFEST.txt"
+    file_manifest = read_key_value_manifest(source_manifest_path)
+    conflicts = {
+        key: (file_manifest[key], value)
+        for key, value in declared_source_metadata.items()
+        if key in file_manifest and file_manifest[key] != value
+    }
+    if conflicts:
+        details = ", ".join(
+            f"{key}: file={file_value!r}, declared={declared_value!r}"
+            for key, (file_value, declared_value) in sorted(conflicts.items())
+        )
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise ValueError(f"Declared source metadata conflicts with RUN_MANIFEST.txt: {details}")
+    manifest = {**declared_source_metadata, **file_manifest}
     scenario = manifest.get("Condition", result_root.name)
     is_kfold = "kfold" in manifest.get("Version", "").lower() or "kfold" in result_root.name.lower()
     retained_writer = GzipCsvWriter(temp_dir / "retained_run_metrics.csv.gz", RUN_OUTPUT_FIELDS)
@@ -971,6 +1023,9 @@ def process_result_root(
         "protocol_version": "v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_result_root": str(result_root),
+        "source_manifest_path": str(source_manifest_path) if source_manifest_path.is_file() else None,
+        "source_manifest_file": file_manifest,
+        "declared_source_metadata": dict(sorted(declared_source_metadata.items())),
         "source_manifest": manifest,
         "scenario": scenario,
         "source_csv_count": len(files),
@@ -1018,6 +1073,10 @@ def discover_role_or_mass_roots() -> List[Path]:
 def main() -> int:
     csv.field_size_limit(sys.maxsize)
     args = parse_args()
+    try:
+        declared_source_metadata = parse_source_metadata(args.source_metadata)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     roots = list(args.result_root)
     if args.discover_role_or_mass:
         roots.extend(discover_role_or_mass_roots())
@@ -1044,6 +1103,7 @@ def main() -> int:
                 args.iqr_multiplier,
                 args.minimum_retained_fraction,
                 args.max_files,
+                declared_source_metadata,
             )
         except Exception as exc:
             failures.append((root, exc))
