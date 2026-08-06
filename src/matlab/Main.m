@@ -21,7 +21,8 @@ function Main()
     config = struct( ...
         'useParallel',            true, ...                 % Enable/disable parallel pool
         'version',                'WLNM_dir_neg', ...      % e.g. 'WLNM_dir_neg', 'WLNM_original', 'WLNM_dir_neg_kfold', etc.
-        'numExperiments',         20, ...                   % Repeated experiments per food web
+        'numExperiments',         50, ...                   % Repeated experiments per food web
+        'experimentIDList',       [], ...                   % Optional explicit repeated-run IDs; [] runs 1:numExperiments
         'parallelWorkers',        [], ...                  % [] auto; WLNM runners use useful workers only
         'baseSeed',               12345, ...                % Base seed for repeated holdout experiments
         'resampleSplitsEachExperiment', true, ...           % Resample train/test split for each repeated experiment
@@ -31,7 +32,7 @@ function Main()
         'trainRatioRange',        0.10:0.10:0.90, ...      % Training ratios to test
         'nodeSelection',          'random', ...            % Type of node selection
         'checkConnectivity',      false, ...               % Allow train/test splits even when removing bridge links
-        'adaptiveConnectivity',   true, ...                % Adapt connectivity check based on train ratio
+        'adaptiveConnectivity',   false, ...               % Keep connectivity handling identical across train ratios
         'use_backbone' ,          false, ...               % Enable backbone extraction
         'inverse_backbone',       false, ...               % Use non-backbone edges instead (keeps old semantics)
         'logBackboneStats',       false, ...               % Enable/disable backbone stats CSV logging
@@ -50,11 +51,16 @@ function Main()
         'terminalLogDir',         'data/result/fixed_foodwebs_4/terminal_logs/', ...          % Directory for terminal logs
         'artifactDir',            'data/result/fixed_foodwebs_4/confusion_matrix_csv/', ...   % Directory for auxiliary TP/FP/FN CSVs
         'exportAuxiliaryCSVs',     false, ...                                                        % Set true only for inspection CSVs; false keeps all repeated experiments parallel
+        'auxiliaryExportExperimentID', 1, ...                                                        % Deterministic repeated-run ID used for auxiliary TP/FP/FN exports
         'thresholdMode',          'fixed', ...                                                        % 'fixed' or legacy 'test_f1'
         'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
-        'thresholdSweepEnabled',  true, ...                                                           % WLNM runners: write one result row per threshold
+        'thresholdSweepEnabled',  false, ...                                                          % Primary protocol uses only fixedThreshold
         'thresholdSweepRange',    0.10:0.10:0.90, ...                                                 % Thresholds evaluated when thresholdSweepEnabled=true
-        'negativeMassEligibilityEnabled', true, ...                                                   % WLNM_dir_neg: eligible = role constraint OR body-mass constraint
+        'negativeEligibilityMode', 'role_only', ...                                                   % role_only, role_or_mass, mass_only, or all_nonlinks
+        'negativePositiveRatio',  2, ...                                                             % Requested negative links per observed positive link
+        'negativeSamplingStrategy', 'uniform_without_replacement', ...                                % Uniform draw from the eligible pool
+        'negativeTopupPolicy',    'uniform_remaining_nonlinks', ...                                   % Random top-up when the eligible pool is insufficient
+        'negativeMassEligibilityEnabled', false, ...                                                  % Legacy compatibility flag; canonical mode above wins
         'negativeMassEligibilityThreshold', 1.0, ...                                                  % mass(target) < threshold * mass(source); sampled uniformly in the union pool
         'useGraphEncodingParallel', false, ...                                                        % WLNM runners: only useful when useParallel=false
         'computeEcologicalMetrics', true, ...                                                         % WLNM metric/comparison outputs; required for dir_neg delta t-tests
@@ -77,6 +83,7 @@ function Main()
     );
 
     config = apply_runtime_overrides(config);
+    config = validate_wlnm_dir_neg_protocol(config);
 
     %% === SETUP ===
     if config.sweepTrainRatios
@@ -189,7 +196,7 @@ function Main()
                 log_file = fullfile(config.logDir, sprintf('%s_results_%s_%s_cvK%d.csv', ...
                     dataname, string(config.nodeSelection), version_key, cvK));
 
-                init_log_file(log_file, config.use_backbone, config.inverse_backbone);
+                init_log_file(log_file, config.use_backbone, config.inverse_backbone, config.version);
 
                 data = struct();
                 data.dataname      = dataname;
@@ -276,7 +283,7 @@ function Main()
                 log_file = fullfile(config.logDir, sprintf('%s_results_%s_%s.csv', ...
                     dataname, string(config.nodeSelection), version_key));
 
-                init_log_file(log_file, config.use_backbone, config.inverse_backbone);
+                init_log_file(log_file, config.use_backbone, config.inverse_backbone, config.version);
 
                 % Pack data struct passed to the runner
                 data = struct();                 % scalar
@@ -344,7 +351,10 @@ end
 function config = apply_runtime_overrides(config)
     config.version = get_env_text('WLNM_VERSION', config.version);
     config.foodwebCSV = get_env_text('WLNM_FOODWEB_CSV', config.foodwebCSV);
+    config.useParallel = get_env_bool('WLNM_USE_PARALLEL', config.useParallel);
     config.numExperiments = get_env_number('WLNM_NUM_EXPERIMENTS', config.numExperiments);
+    config.experimentIDList = get_env_number_list( ...
+        'WLNM_EXPERIMENT_ID_LIST', config.experimentIDList);
     config.parallelWorkers = get_env_number('WLNM_PARALLEL_WORKERS', config.parallelWorkers);
     config.baseSeed = get_env_number('WLNM_BASE_SEED', config.baseSeed);
     config.resampleSplitsEachExperiment = get_env_bool( ...
@@ -361,10 +371,20 @@ function config = apply_runtime_overrides(config)
         'WLNM_CV_STRATIFY_BACKBONE', config.cvStratifyBackbone);
     config.cvSaveConfusion = get_env_bool('WLNM_CV_SAVE_CONFUSION', config.cvSaveConfusion);
     config.exportAuxiliaryCSVs = get_env_bool('WLNM_EXPORT_AUXILIARY_CSVS', config.exportAuxiliaryCSVs);
+    config.auxiliaryExportExperimentID = get_env_number( ...
+        'WLNM_AUXILIARY_EXPORT_EXPERIMENT_ID', config.auxiliaryExportExperimentID);
     config.thresholdMode = get_env_text('WLNM_THRESHOLD_MODE', config.thresholdMode);
     config.fixedThreshold = get_env_number('WLNM_FIXED_THRESHOLD', config.fixedThreshold);
     config.thresholdSweepEnabled = get_env_bool('WLNM_THRESHOLD_SWEEP_ENABLED', config.thresholdSweepEnabled);
     config.thresholdSweepRange = get_env_number_list('WLNM_THRESHOLD_SWEEP_RANGE', config.thresholdSweepRange);
+    config.negativeEligibilityMode = get_env_text( ...
+        'WLNM_NEGATIVE_ELIGIBILITY_MODE', config.negativeEligibilityMode);
+    config.negativePositiveRatio = get_env_number( ...
+        'WLNM_NEGATIVE_POSITIVE_RATIO', config.negativePositiveRatio);
+    config.negativeSamplingStrategy = get_env_text( ...
+        'WLNM_NEGATIVE_SAMPLING_STRATEGY', config.negativeSamplingStrategy);
+    config.negativeTopupPolicy = get_env_text( ...
+        'WLNM_NEGATIVE_TOPUP_POLICY', config.negativeTopupPolicy);
     % Backward-compatible aliases are read first; MASS_ELIGIBILITY is canonical and wins.
     config.negativeMassEligibilityEnabled = get_env_bool('WLNM_NEGATIVE_MASS_PREFERENCE_ENABLED', config.negativeMassEligibilityEnabled);
     config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_PREFERENCE_THRESHOLD', config.negativeMassEligibilityThreshold);
@@ -386,6 +406,65 @@ function config = apply_runtime_overrides(config)
         config.deltaEquivalenceMarginsFile = fullfile(output_root, 'statistical_tests', 'wlnm_dir_neg_delta_equivalence_margins.csv');
         config.backboneStatsFile = fullfile(output_root, 'backbone_stats', 'backbone_overview_per_foodweb.csv');
     end
+end
+
+function config = validate_wlnm_dir_neg_protocol(config)
+    version_key = strtrim(char(string(config.version)));
+    if ~strcmpi(version_key, 'wlnm_dir_neg')
+        return;
+    end
+
+    mode = normalize_protocol_option(config.negativeEligibilityMode);
+    allowed_modes = {'role_only', 'role_or_mass', 'mass_only', 'all_nonlinks'};
+    if ~any(strcmp(mode, allowed_modes))
+        error('[Main] negativeEligibilityMode must be one of: %s. Got "%s".', ...
+            strjoin(allowed_modes, ', '), char(string(config.negativeEligibilityMode)));
+    end
+    config.negativeEligibilityMode = mode;
+
+    ratio = double(config.negativePositiveRatio);
+    if ~isscalar(ratio) || ~isfinite(ratio) || ratio <= 0
+        error('[Main] negativePositiveRatio must be one positive finite scalar.');
+    end
+    config.negativePositiveRatio = ratio;
+
+    strategy = normalize_protocol_option(config.negativeSamplingStrategy);
+    if strcmp(strategy, 'random_eligible_pool')
+        strategy = 'uniform_without_replacement';
+    end
+    if ~strcmp(strategy, 'uniform_without_replacement')
+        error(['[Main] negativeSamplingStrategy currently supports only ' ...
+            '"uniform_without_replacement". Got "%s".'], ...
+            char(string(config.negativeSamplingStrategy)));
+    end
+    config.negativeSamplingStrategy = strategy;
+
+    topup_policy = normalize_protocol_option(config.negativeTopupPolicy);
+    if any(strcmp(topup_policy, {'random', 'random_topup', 'uniform_random'}))
+        topup_policy = 'uniform_remaining_nonlinks';
+    end
+    if ~any(strcmp(topup_policy, {'uniform_remaining_nonlinks', 'error'}))
+        error(['[Main] negativeTopupPolicy must be "uniform_remaining_nonlinks" ' ...
+            'or "error". Got "%s".'], char(string(config.negativeTopupPolicy)));
+    end
+    config.negativeTopupPolicy = topup_policy;
+
+    if any(strcmp(mode, {'role_only', 'all_nonlinks'})) && ...
+            logical(config.negativeMassEligibilityEnabled)
+        error(['[Main] Conflicting negative-sampling configuration: ' ...
+            'negativeEligibilityMode=%s but mass eligibility was enabled by a legacy flag ' ...
+            'or environment variable. Disable WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED.'], mode);
+    end
+
+    fprintf(['[Main] Negative protocol: eligibility=%s ratio=%g strategy=%s ' ...
+        'topup=%s mass_threshold=%.4g\n'], ...
+        mode, ratio, strategy, topup_policy, config.negativeMassEligibilityThreshold);
+end
+
+function value = normalize_protocol_option(value)
+    value = lower(strtrim(char(string(value))));
+    value = strrep(value, '-', '_');
+    value = regexprep(value, '\s+', '_');
 end
 
 function indices = resolve_foodweb_indices(n)

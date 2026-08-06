@@ -96,6 +96,21 @@ def validate_original(root: Path, manifest: dict[str, str]) -> None:
     expected_rows = int(manifest["ExpectedDataRowsPerCSV"])
     expected_pool_limited = int(manifest["ExpectedNegativePoolLimitedFoodWebs"])
     base_seed = int(manifest["BaseSeed"])
+    graph_mode = manifest.get("GraphMode", "")
+    split_log_patterns = {
+        "undirected_symmetrized": (
+            r"\[DivideNet\] Using WLNM original logic "
+            r"\(symmetrized undirected upper-triangular\)\."
+        ),
+        "legacy_upper_triangle_of_directed_input": (
+            r"\[DivideNet\] Using WLNM original logic "
+            r"\(legacy upper-triangular\)\."
+        ),
+    }
+    require(
+        graph_mode in split_log_patterns,
+        f"Unsupported WLNM_original GraphMode={graph_mode!r}",
+    )
 
     csvs = sorted((root / "prediction_scores_logs").glob("*.csv"))
     logs = sorted((root / "terminal_logs").glob("*.txt"))
@@ -135,6 +150,14 @@ def validate_original(root: Path, manifest: dict[str, str]) -> None:
     shortfall_logs = 0
     for path in logs:
         text = path.read_text(encoding="utf-8", errors="replace")
+        split_records = re.findall(split_log_patterns[graph_mode], text)
+        require(
+            len(split_records) == expected_rows,
+            (
+                f"{path.name}: expected {expected_rows} GraphMode={graph_mode} "
+                f"split records, found {len(split_records)}"
+            ),
+        )
         records = re.findall(r"\[NegPool\] mode=undirected_uniform\b", text)
         require(
             len(records) == expected_rows,

@@ -109,8 +109,10 @@ for index in "${!condition_ids[@]}"; do
         echo "TauMass=${thresholds[$index]}"
         echo "CheckConnectivity=${connectivity[$index]}"
         echo "AdaptiveConnectivity=false"
-        echo "NegativeSampling=random_eligible_pool"
+        echo "NegativeSampling=uniform_without_replacement"
         echo "Eligibility=role_or_mass"
+        echo "TargetNegativePositiveRatio=2"
+        echo "NegativeTopupPolicy=uniform_remaining_nonlinks"
         echo "PrioritySampling=false"
         echo "BaseSeed=12345"
         echo "SourceCommit=${source_commit}"
@@ -146,6 +148,10 @@ for index in "${!condition_ids[@]}"; do
     fi
 
     export_spec="ALL,WLNM_CONDITION_ID=${condition_id}"
+    export_spec+=",WLNM_NEGATIVE_ELIGIBILITY_MODE=role_or_mass"
+    export_spec+=",WLNM_NEGATIVE_POSITIVE_RATIO=2"
+    export_spec+=",WLNM_NEGATIVE_SAMPLING_STRATEGY=uniform_without_replacement"
+    export_spec+=",WLNM_NEGATIVE_TOPUP_POLICY=uniform_remaining_nonlinks"
     export_spec+=",WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD=${thresholds[$index]}"
     export_spec+=",WLNM_CHECK_CONNECTIVITY=${connectivity[$index]}"
     export_spec+=",WLNM_ADAPTIVE_CONNECTIVITY=false"

@@ -16,6 +16,21 @@ SPEC.loader.exec_module(MODULE)
 
 
 class TukeyRetentionTests(unittest.TestCase):
+    def test_source_metadata_parsing(self):
+        metadata = MODULE.parse_source_metadata(
+            ["Condition=role_only", "NumExperiments=50"]
+        )
+        self.assertEqual(
+            metadata,
+            {"Condition": "role_only", "NumExperiments": "50"},
+        )
+
+    def test_source_metadata_rejects_conflicting_duplicates(self):
+        with self.assertRaises(ValueError):
+            MODULE.parse_source_metadata(
+                ["NumExperiments=50", "NumExperiments=20"]
+            )
+
     def test_linear_percentiles_and_fences(self):
         fences = MODULE.tukey_fences([1.0, 2.0, 3.0, 4.0], 1.5)
         self.assertAlmostEqual(fences["Q1"], 1.75)
@@ -75,7 +90,7 @@ class TukeyRetentionTests(unittest.TestCase):
                     "CvK": "3",
                     "Metric": "ROC_AUC",
                     "ExperimentID": "1",
-                    "Seed": "123",
+                    "Seed": str(122 + fold),
                     "Iteration": str(fold),
                     "FoldID": str(fold),
                     "Value": value,
@@ -89,6 +104,7 @@ class TukeyRetentionTests(unittest.TestCase):
         self.assertTrue(aggregated[0]["ValidBeforeTukey"])
         self.assertAlmostEqual(aggregated[0]["Value"], 0.7)
         self.assertEqual(aggregated[0]["FoldCount"], 3)
+        self.assertEqual(aggregated[0]["Seed"], "123;124;125")
 
 
 if __name__ == "__main__":

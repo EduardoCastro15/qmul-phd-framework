@@ -23,6 +23,10 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'encode_parallel', false);
     addParameter(p, 'compute_ecological_metrics', true);
     addParameter(p, 'use_role_filter', true);
+    addParameter(p, 'negative_eligibility_mode', '');
+    addParameter(p, 'negative_positive_ratio', 2);
+    addParameter(p, 'negative_sampling_strategy', 'uniform_without_replacement');
+    addParameter(p, 'negative_topup_policy', 'uniform_remaining_nonlinks');
     addParameter(p, 'negative_mass_eligibility_enabled', []);
     addParameter(p, 'negative_mass_eligibility_threshold', []);
     addParameter(p, 'negative_mass_preference_enabled', []);   % legacy alias
@@ -30,10 +34,9 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     parse(p, varargin{:});
     opt = p.Results;
 
-    a = 2;                      % negative sampling multiplier for training
     portion = 1;
     evaluate_on_all_unseen = logical(opt.evaluate_on_all_unseen);
-    use_role_filter = logical(opt.use_role_filter); % preserve graph direction and filter negatives by role
+    legacy_use_role_filter = logical(opt.use_role_filter);
     if ~isempty(opt.negative_mass_eligibility_enabled)
         negative_mass_eligibility_enabled = logical(opt.negative_mass_eligibility_enabled);
     elseif ~isempty(opt.negative_mass_preference_enabled)
@@ -48,6 +51,13 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     else
         negative_mass_eligibility_threshold = 1.0;
     end
+    negative_protocol = resolve_negative_sampling_protocol( ...
+        opt.negative_eligibility_mode, opt.negative_positive_ratio, ...
+        opt.negative_sampling_strategy, opt.negative_topup_policy, ...
+        legacy_use_role_filter, negative_mass_eligibility_enabled);
+    a = negative_protocol.negative_positive_ratio;
+    use_role_filter = negative_protocol.use_role_filter;
+    negative_mass_eligibility_enabled = negative_protocol.use_mass_constraint;
     use_original_wlnm = false;
     useParallel = logical(opt.encode_parallel);
     compute_ecological_metrics = logical(opt.compute_ecological_metrics);
@@ -64,9 +74,13 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % ------------------------------------------------------------
     % Sample negative links
     % ------------------------------------------------------------
-    [train_pos, train_neg, test_pos, test_neg] = sample_neg_dir_neg( ...
+    fprintf('[NegativeProtocol] eligibility=%s ratio=%g strategy=%s topup_policy=%s\n', ...
+        negative_protocol.eligibility_mode, negative_protocol.negative_positive_ratio, ...
+        negative_protocol.sampling_strategy, negative_protocol.topup_policy);
+    [train_pos, train_neg, test_pos, test_neg, negative_sampling] = sample_neg_dir_neg( ...
         htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter, ...
-        mass, negative_mass_eligibility_enabled, negative_mass_eligibility_threshold);
+        mass, negative_mass_eligibility_enabled, negative_mass_eligibility_threshold, ...
+        negative_protocol.topup_policy, negative_protocol.sampling_strategy);
 
     % ------------------------------------------------------------
     % Sanity check
@@ -84,7 +98,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         best_precision  = NaN(size(best_threshold));
         best_recall     = NaN(size(best_threshold));
         best_f1_score   = NaN(size(best_threshold));
-        aux = repmat(struct(), numel(best_threshold), 1);
+        aux = repmat(struct('negative_sampling', negative_sampling), ...
+            numel(best_threshold), 1);
         return;
     end
 
@@ -243,6 +258,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         aux(t).NumPredictedNovelLinks = size(predicted_links_t, 1);
         aux(t).NumTrueNovelLinks      = size(true_links, 1);
         aux(t).EvaluateOnAllUnseen    = evaluate_on_all_unseen;
+        aux(t).negative_sampling      = negative_sampling;
     end
 
     % ------------------------------------------------------------
