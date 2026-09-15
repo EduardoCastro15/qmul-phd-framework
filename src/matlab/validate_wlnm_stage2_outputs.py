@@ -182,7 +182,8 @@ def validate_kfold(root: Path, manifest: dict[str, str]) -> None:
     expected_logs = int(manifest["ExpectedTerminalLogs"])
     experiments = int(manifest["NumExperimentsPerFold"])
     cv_seed = int(manifest["CvSeed"])
-    expected_tau = float(manifest["TauMass"])
+    eligibility = manifest.get("Eligibility", "role_or_mass")
+    expected_tau = float(manifest["TauMass"]) if eligibility == "role_or_mass" else None
     expected_by_k = {
         3: int(manifest["ExpectedDataRowsCvK3"]),
         5: int(manifest["ExpectedDataRowsCvK5"]),
@@ -202,6 +203,41 @@ def validate_kfold(root: Path, manifest: dict[str, str]) -> None:
         require(expected_rows > 0, f"Unexpected CvK={cv_k} output: {path.name}")
 
         rows = validate_common_csv(path, "WLNM_dir_neg_kfold")
+        if eligibility == "role_only":
+            required_protocol = {
+                "TrophicLevelProtocol",
+                "NegativeEligibilityMode",
+                "NegativePositiveRatio",
+                "NegativeSamplingStrategy",
+                "NegativeTopupPolicy",
+                "MassPoolSize",
+            }
+            missing = required_protocol - set(rows[0])
+            require(not missing, f"{path.name}: missing protocol columns {sorted(missing)}")
+            require(
+                all(row["TrophicLevelProtocol"] == "validated_v2" for row in rows),
+                f"{path.name}: expected TrophicLevelProtocol=validated_v2",
+            )
+            require(
+                all(row["NegativeEligibilityMode"] == "role_only" for row in rows),
+                f"{path.name}: expected role_only negatives",
+            )
+            require(
+                all(float(row["NegativePositiveRatio"]) == 2 for row in rows),
+                f"{path.name}: expected negative-positive ratio 2",
+            )
+            require(
+                all(row["NegativeSamplingStrategy"] == "uniform_without_replacement" for row in rows),
+                f"{path.name}: unexpected negative sampling strategy",
+            )
+            require(
+                all(row["NegativeTopupPolicy"] == "uniform_remaining_nonlinks" for row in rows),
+                f"{path.name}: unexpected negative top-up policy",
+            )
+            require(
+                all(float(row["MassPoolSize"]) == 0 for row in rows),
+                f"{path.name}: mass eligibility was not disabled",
+            )
         require(len(rows) == expected_rows, f"{path.name}: expected {expected_rows} rows, found {len(rows)}")
         require(all(int(row["CvK"]) == cv_k for row in rows), f"{path.name}: incorrect CvK values")
         expected_train_ratio = 100.0 * (cv_k - 1) / cv_k
@@ -235,25 +271,26 @@ def validate_kfold(root: Path, manifest: dict[str, str]) -> None:
         expected_records = expected_by_k[cv_k]
         text = path.read_text(encoding="utf-8", errors="replace")
         negpool_records = re.findall(
-            r"\[NegPool\].*eligibility=role_or_mass",
-            text,
-        )
-        mass_records = re.findall(
-            r"\[NegMassPref\].*priority_sampling=0.*threshold=([0-9.]+)",
+            rf"\[NegPool\].*mass_filter={'0' if eligibility == 'role_only' else '1'}.*eligibility={eligibility}",
             text,
         )
         require(
             len(negpool_records) == expected_records,
-            f"{path.name}: expected {expected_records} role-or-mass records, found {len(negpool_records)}",
+            f"{path.name}: expected {expected_records} {eligibility} records, found {len(negpool_records)}",
         )
-        require(
-            len(mass_records) == expected_records
-            and all(abs(float(value) - expected_tau) < 1e-12 for value in mass_records),
-            (
-                f"{path.name}: expected {expected_records} tau={expected_tau:.2f} "
-                f"records, found {len(mass_records)}"
-            ),
-        )
+        if expected_tau is not None:
+            mass_records = re.findall(
+                r"\[NegMassPref\].*priority_sampling=0.*threshold=([0-9.]+)",
+                text,
+            )
+            require(
+                len(mass_records) == expected_records
+                and all(abs(float(value) - expected_tau) < 1e-12 for value in mass_records),
+                (
+                    f"{path.name}: expected {expected_records} tau={expected_tau:.2f} "
+                    f"records, found {len(mass_records)}"
+                ),
+            )
 
 
 def main() -> None:

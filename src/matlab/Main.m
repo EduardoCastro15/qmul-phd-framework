@@ -62,6 +62,9 @@ function Main()
         'negativeTopupPolicy',    'uniform_remaining_nonlinks', ...                                   % Random top-up when the eligible pool is insufficient
         'negativeMassEligibilityEnabled', false, ...                                                  % Legacy compatibility flag; canonical mode above wins
         'negativeMassEligibilityThreshold', 1.0, ...                                                  % mass(target) < threshold * mass(source); sampled uniformly in the union pool
+        'trophicLevelProtocol', 'validated_v2', ...                                                   % Shared trophic-level protocol for dir-neg holdout and k-fold
+        'trophicHighPrecision', 'auto', ...                                                           % off, auto, or required
+        'trophicSnapshotDir', '', ...                                                                 % Optional snapshot directory; empty disables snapshots
         'useGraphEncodingParallel', false, ...                                                        % WLNM runners: only useful when useParallel=false
         'computeEcologicalMetrics', true, ...                                                         % WLNM metric/comparison outputs; required for dir_neg delta t-tests
         'runDeltaTTests',         false, ...                                                          % WLNM_dir_neg: paired-difference t-tests on food-web metric deltas
@@ -392,6 +395,9 @@ function config = apply_runtime_overrides(config)
     config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_DIAGNOSTIC_THRESHOLD', config.negativeMassEligibilityThreshold);
     config.negativeMassEligibilityEnabled = get_env_bool('WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED', config.negativeMassEligibilityEnabled);
     config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD', config.negativeMassEligibilityThreshold);
+    config.trophicLevelProtocol = get_env_text('WLNM_TROPHIC_LEVEL_PROTOCOL', config.trophicLevelProtocol);
+    config.trophicHighPrecision = get_env_text('WLNM_TROPHIC_HIGH_PRECISION', config.trophicHighPrecision);
+    config.trophicSnapshotDir = get_env_text('WLNM_TROPHIC_SNAPSHOT_DIR', config.trophicSnapshotDir);
     config.computeEcologicalMetrics = get_env_bool('WLNM_COMPUTE_ECOLOGICAL_METRICS', config.computeEcologicalMetrics);
     config.runDeltaTTests = get_env_bool('WLNM_RUN_DELTA_TTESTS', config.runDeltaTTests);
     config.runDeltaEquivalenceTests = get_env_bool('WLNM_RUN_DELTA_EQUIVALENCE', config.runDeltaEquivalenceTests);
@@ -410,7 +416,7 @@ end
 
 function config = validate_wlnm_dir_neg_protocol(config)
     version_key = strtrim(char(string(config.version)));
-    if ~strcmpi(version_key, 'wlnm_dir_neg')
+    if ~any(strcmpi(version_key, {'wlnm_dir_neg', 'wlnm_dir_neg_kfold'}))
         return;
     end
 
@@ -449,6 +455,20 @@ function config = validate_wlnm_dir_neg_protocol(config)
     end
     config.negativeTopupPolicy = topup_policy;
 
+    trophic_protocol = normalize_protocol_option(config.trophicLevelProtocol);
+    if ~any(strcmp(trophic_protocol, {'legacy_v1', 'validated_v2'}))
+        error('[Main] trophicLevelProtocol must be legacy_v1 or validated_v2. Got "%s".', ...
+            char(string(config.trophicLevelProtocol)));
+    end
+    config.trophicLevelProtocol = trophic_protocol;
+
+    trophic_precision = normalize_protocol_option(config.trophicHighPrecision);
+    if ~any(strcmp(trophic_precision, {'off', 'auto', 'required'}))
+        error('[Main] trophicHighPrecision must be off, auto, or required. Got "%s".', ...
+            char(string(config.trophicHighPrecision)));
+    end
+    config.trophicHighPrecision = trophic_precision;
+
     if any(strcmp(mode, {'role_only', 'all_nonlinks'})) && ...
             logical(config.negativeMassEligibilityEnabled)
         error(['[Main] Conflicting negative-sampling configuration: ' ...
@@ -457,8 +477,9 @@ function config = validate_wlnm_dir_neg_protocol(config)
     end
 
     fprintf(['[Main] Negative protocol: eligibility=%s ratio=%g strategy=%s ' ...
-        'topup=%s mass_threshold=%.4g\n'], ...
-        mode, ratio, strategy, topup_policy, config.negativeMassEligibilityThreshold);
+        'topup=%s mass_threshold=%.4g | trophic=%s precision=%s metrics=%d\n'], ...
+        mode, ratio, strategy, topup_policy, config.negativeMassEligibilityThreshold, ...
+        trophic_protocol, trophic_precision, logical(config.computeEcologicalMetrics));
 end
 
 function value = normalize_protocol_option(value)

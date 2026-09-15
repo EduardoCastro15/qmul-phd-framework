@@ -106,6 +106,11 @@ end
 % ============================================================
 function v = default_for_column(col, use_backbone)
 
+    if endsWith(col, 'TrophicV2FailureReason')
+        v = '';
+        return;
+    end
+
     switch col
         case {'CvK', 'FoldID', 'NumFolds', 'ExperimentID', 'Seed'}
             if use_backbone
@@ -114,7 +119,8 @@ function v = default_for_column(col, use_backbone)
                 v = 0;
             end
 
-        case {'TimeElapsed', 'ElapsedTime', 'Version', 'ThresholdMode', ...
+        case {'TimeElapsed', 'ElapsedTime', 'Version', 'ThresholdMode', 'TrophicLevelProtocol', ...
+                'TrophicSnapshotFile', ...
                 'NegativeEligibilityMode', 'NegativeSamplingStrategy', ...
                 'NegativeTopupPolicy'}
             v = '';

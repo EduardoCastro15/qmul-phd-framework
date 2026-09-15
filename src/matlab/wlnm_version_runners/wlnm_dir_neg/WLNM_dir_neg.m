@@ -22,6 +22,11 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'threshold_sweep_range', 0.10:0.10:0.90);
     addParameter(p, 'encode_parallel', false);
     addParameter(p, 'compute_ecological_metrics', true);
+    addParameter(p, 'trophic_protocol', 'legacy_v1');
+    addParameter(p, 'trophic_high_precision', 'auto');
+    addParameter(p, 'trophic_snapshot_dir', '');
+    addParameter(p, 'trophic_metadata', struct());
+    addParameter(p, 'model_version', 'WLNM_dir_neg');
     addParameter(p, 'use_role_filter', true);
     addParameter(p, 'negative_eligibility_mode', '');
     addParameter(p, 'negative_positive_ratio', 2);
@@ -33,6 +38,16 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'negative_mass_preference_threshold', []); % legacy alias
     parse(p, varargin{:});
     opt = p.Results;
+    validate_dir_neg_trophic_scope(dataname,opt.model_version,opt.trophic_protocol,opt.trophic_high_precision);
+    if strcmp(opt.trophic_protocol,'validated_v2') && opt.compute_ecological_metrics && ...
+            ~isempty(opt.trophic_snapshot_dir)
+        required = {'ExperimentID','Seed'};
+        for k = 1:numel(required)
+            if ~isfield(opt.trophic_metadata,required{k})
+                error('WLNM:TrophicConfiguration','Missing snapshot metadata: %s',required{k});
+            end
+        end
+    end
 
     portion = 1;
     evaluate_on_all_unseen = logical(opt.evaluate_on_all_unseen);
@@ -220,8 +235,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Ecological / structural metrics
     % ------------------------------------------------------------
     if compute_ecological_metrics
-        emp_metrics = compute_foodweb_metrics(empirical_full);
-        train_metrics = compute_foodweb_metrics(train_full);
+        emp_metrics = compute_dir_neg_foodweb_metrics(empirical_full, opt.trophic_protocol, opt.trophic_high_precision);
+        train_metrics = compute_dir_neg_foodweb_metrics(train_full, opt.trophic_protocol, opt.trophic_high_precision);
     else
         emp_metrics = struct();
         train_metrics = struct();
@@ -239,7 +254,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
 
         if compute_ecological_metrics
             pseudo_full = build_pseudo_full(train, predicted_links_t);
-            pseudo_metrics = compute_foodweb_metrics(pseudo_full);
+            pseudo_metrics = compute_dir_neg_foodweb_metrics(pseudo_full, opt.trophic_protocol, opt.trophic_high_precision);
             cmp_metrics = compare_empirical_pseudo_webs_sparse(empirical_full, pseudo_full);
         else
             pseudo_metrics = struct();
@@ -259,6 +274,18 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         aux(t).NumTrueNovelLinks      = size(true_links, 1);
         aux(t).EvaluateOnAllUnseen    = evaluate_on_all_unseen;
         aux(t).negative_sampling      = negative_sampling;
+        if strcmp(opt.trophic_protocol,'validated_v2') && ~isempty(opt.trophic_snapshot_dir)
+            metadata = opt.trophic_metadata;
+            metadata.Foodweb = dataname; metadata.K = K; metadata.TrainRatio = ratioTrain;
+            metadata.Threshold = best_threshold(t); metadata.Protocol = opt.trophic_protocol;
+            metadata.HighPrecision = opt.trophic_high_precision;
+            metadata.NodeIDs = (1:n)'; metadata.Taxonomy = taxonomy;
+            metadata.NegativeProtocol = negative_protocol;
+            metadata.NodeSelection = nodeSelection;
+            metrics = struct('empirical',emp_metrics,'train',train_metrics,'pseudo',pseudo_metrics);
+            aux(t).TrophicSnapshotFile = save_dir_neg_trophic_snapshot( ...
+                opt.trophic_snapshot_dir,empirical_full,train_full,pseudo_full,metadata,metrics);
+        end
     end
 
     % ------------------------------------------------------------

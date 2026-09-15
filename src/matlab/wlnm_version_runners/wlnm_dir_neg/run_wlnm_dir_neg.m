@@ -1,6 +1,11 @@
 function results = run_wlnm_dir_neg(data, K, ratioTrain, config)
 %RUN_WLNM_DIR_NEG Runner for WLNM with directed + negative sampling.
 
+    validate_dir_neg_trophic_scope(data.dataname, ...
+        get_config_text(config,'version','WLNM_dir_neg'), ...
+        get_config_text(config,'trophicLevelProtocol','legacy_v1'), ...
+        get_config_text(config,'trophicHighPrecision','auto'));
+
     % ---- Minimal required config fields (controlled from Main) ----
     required_fields = { ...
         'useParallel', ...
@@ -246,6 +251,11 @@ function rows = one_experiment_dir_neg(expID, base_seed, dataname, net, K, ratio
         'fixed_threshold', fixed_threshold, ...
         'encode_parallel', encode_parallel, ...
         'compute_ecological_metrics', compute_ecological_metrics, ...
+        'model_version', version, ...
+        'trophic_protocol', get_config_text(config,'trophicLevelProtocol','legacy_v1'), ...
+        'trophic_high_precision', get_config_text(config,'trophicHighPrecision','auto'), ...
+        'trophic_snapshot_dir', get_config_text(config,'trophicSnapshotDir',''), ...
+        'trophic_metadata', struct('ExperimentID',expID,'Seed',seed,'Version',version), ...
         'threshold_sweep_enabled', get_config_bool(config, 'thresholdSweepEnabled', false), ...
         'threshold_sweep_range', get_config_number(config, 'thresholdSweepRange', 0.10:0.10:0.90), ...
         'negative_eligibility_mode', get_config_text(config, 'negativeEligibilityMode', 'role_only'), ...
@@ -418,6 +428,20 @@ function out = make_result_template(K, ratioTrain, rb, split_stats, config, expI
     out = add_networkx_trophic_diagnostic_defaults(out, 'Empirical');
     out = add_networkx_trophic_diagnostic_defaults(out, 'Train');
     out = add_networkx_trophic_diagnostic_defaults(out, 'Pseudo');
+    if strcmp(get_config_text(config,'trophicLevelProtocol','legacy_v1'),'validated_v2')
+        out.TrophicLevelProtocol = 'validated_v2';
+        out.TrophicSnapshotFile = '';
+        [~,diagnostics] = compute_networkx_trophic_levels_v2(sparse(0,0),'off');
+        diagnostics.LegacyMean = NaN; diagnostics.LegacyStatusCode = NaN;
+        for prefix = {'Empirical','Train','Pseudo'}
+            fields = fieldnames(diagnostics);
+            for j = 1:numel(fields)
+                value = NaN;
+                if ischar(diagnostics.(fields{j})), value = 'not_computed'; end
+                out.([prefix{1} 'TrophicV2' fields{j}]) = value;
+            end
+        end
+    end
 end
 
 % ============================================================
@@ -450,6 +474,18 @@ function out = populate_result_row(out, roc_auc, pr_auc, thr, prec, rec, f1, ela
     out.Recall      = rec;
     out.F1Score     = f1;
 
+    if isfield(out,'TrophicLevelProtocol') && isfield(aux,'TrophicSnapshotFile')
+        out.TrophicSnapshotFile = aux.TrophicSnapshotFile;
+        sources = {'empirical_metrics','train_metrics','pseudo_metrics'};
+        prefixes = {'Empirical','Train','Pseudo'};
+        for j = 1:3
+            d = aux.(sources{j}).TrophicV2Diagnostics;
+            fields = fieldnames(d);
+            for k = 1:numel(fields)
+                out.([prefixes{j} 'TrophicV2' fields{k}]) = d.(fields{k});
+            end
+        end
+    end
     flat = flatten_aux_metrics(aux);
     fn = fieldnames(flat);
     for k = 1:numel(fn)

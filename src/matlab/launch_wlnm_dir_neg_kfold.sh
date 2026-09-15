@@ -19,11 +19,14 @@ if [[ "$mode" != "smoke" && "$mode" != "full" ]]; then
     exit 64
 fi
 
+matlab_dir="$(pwd -P)"
+project_root="$(cd ../.. && pwd -P)"
 template="sbatch_wlnm_dir_neg_kfold_array_20.sbatch"
 foodweb_csv="data/foodwebs_mat/foodweb_metrics_ecosystem.csv"
-slurm_log_dir="../../slurm_logs"
+slurm_log_dir="${project_root}/slurm_logs"
 source_commit="${WLNM_SOURCE_COMMIT:-$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)}"
-condition_id="kfold_cvK3-5-10_roleormass_tau0p80_thresh0p50"
+condition_id="kfold_cvK3-5-10_roleonly_thresh0p50_trophicv2"
+result_base="${WLNM_RESULT_BASE:-data}"
 
 if [[ ! -f "$template" ]]; then
     echo "ERROR: Missing template: $template" >&2
@@ -44,7 +47,7 @@ fi
 mkdir -p "$slurm_log_dir"
 
 if [[ "$mode" == "smoke" ]]; then
-    output_root="data/result_smoke_wlnm_dir_neg_kfold_cvK3_roleormass_tau0p80_thresh0p50"
+    output_root="${result_base}/result_smoke_wlnm_dir_neg_kfold_cvK3_roleonly_thresh0p50_trophicv2"
     job_name="SMK_WLNM_DN_KF3"
     cv_k_list=3
     cv_k_manifest=3
@@ -63,8 +66,8 @@ if [[ "$mode" == "smoke" ]]; then
     expected_rows_k5=0
     expected_rows_k10=0
 else
-    output_root="data/result_wlnm_dir_neg_kfold_20x290_cvK3-5-10_thresh0p50_randomeligible_roleormass_tau0p80_Apocrita"
-    job_name="WLNM_DN_KF_T080"
+    output_root="${result_base}/result_wlnm_dir_neg_kfold_20x290_cvK3-5-10_roleonly_thresh0p50_trophicv2_Apocrita"
+    job_name="WLNM_DN_KF_ROLE"
     # Slurm parses commas in --export as variable separators, so pass this
     # numeric list to MATLAB with spaces and keep commas only in the manifest.
     cv_k_list="3 5 10"
@@ -79,6 +82,7 @@ else
     expected_rows_k10=200
 fi
 
+mkdir -p "$result_base"
 if [[ -e "$output_root" ]]; then
     echo "ERROR: Output root already exists; no job was submitted:" >&2
     echo "  $output_root" >&2
@@ -91,23 +95,26 @@ mkdir "$output_root"
     echo "RunMode=${mode}"
     echo "Condition=${condition_id}"
     echo "Version=WLNM_dir_neg_kfold"
+    echo "UseParallel=true"
     echo "CvKList=${cv_k_manifest}"
     echo "CvSeed=12345"
     echo "CvStratifyBackbone=false"
     echo "FoldConnectivityConstraint=not_applicable"
-    echo "TauMass=0.80"
-    echo "MassEligibilityEnabled=true"
-    echo "Eligibility=role_or_mass"
-    echo "NegativeSampling=random_eligible_pool"
-    echo "PrioritySampling=false"
+    echo "MassEligibilityEnabled=false"
+    echo "Eligibility=role_only"
+    echo "NegativeSampling=uniform_without_replacement"
     echo "TargetNegativePositiveRatio=2"
+    echo "NegativeTopupPolicy=uniform_remaining_nonlinks"
     echo "SubgraphK=10"
     echo "ClassificationThreshold=0.50"
     echo "ThresholdSweep=false"
     echo "BaseSeed=12345"
+    echo "TrophicLevelProtocol=validated_v2"
+    echo "TrophicHighPrecision=auto"
     echo "ComputeEcologicalMetrics=false"
     echo "FoodWebs=${foodweb_count}"
     echo "NumExperimentsPerFold=${num_experiments}"
+    echo "ParallelWorkers=${parallel_workers}"
     echo "ExpectedPredictionCSVs=${expected_prediction_csvs}"
     echo "ExpectedTerminalLogs=${expected_terminal_logs}"
     echo "ExpectedDataRowsCvK3=${expected_rows_k3}"
@@ -129,12 +136,22 @@ export_spec+=",WLNM_CV_SEED=12345"
 export_spec+=",WLNM_NUM_EXPERIMENTS=${num_experiments}"
 export_spec+=",WLNM_PARALLEL_WORKERS=${parallel_workers}"
 export_spec+=",WLNM_BASE_SEED=12345"
-export_spec+=",WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD=0.80"
+export_spec+=",WLNM_NEGATIVE_ELIGIBILITY_MODE=role_only"
+export_spec+=",WLNM_NEGATIVE_POSITIVE_RATIO=2"
+export_spec+=",WLNM_NEGATIVE_SAMPLING_STRATEGY=uniform_without_replacement"
+export_spec+=",WLNM_NEGATIVE_TOPUP_POLICY=uniform_remaining_nonlinks"
+export_spec+=",WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED=false"
+export_spec+=",WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD=1.0"
+export_spec+=",WLNM_TROPHIC_LEVEL_PROTOCOL=validated_v2"
+export_spec+=",WLNM_TROPHIC_HIGH_PRECISION=auto"
 export_spec+=",WLNM_FIXED_THRESHOLD=0.50"
 
 submission_output=$(sbatch \
     --parsable \
     --hold \
+    --chdir="$matlab_dir" \
+    --output="${slurm_log_dir}/%x.%A_%a.out" \
+    --error="${slurm_log_dir}/%x.%A_%a.err" \
     --job-name="$job_name" \
     --export="$export_spec" \
     "${resource_args[@]}" \

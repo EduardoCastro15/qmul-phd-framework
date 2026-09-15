@@ -20,12 +20,15 @@ if [[ "$mode" != "smoke" && "$mode" != "full" ]]; then
     exit 64
 fi
 
+matlab_dir="$(pwd -P)"
+project_root="$(cd ../.. && pwd -P)"
 template="sbatch_wlnm_dir_neg_roleonly_array_50.sbatch"
 foodweb_csv="data/foodwebs_mat/foodweb_metrics_ecosystem.csv"
 pool_audit_csv="data/foodwebs_mat/foodweb_negative_constraint_pool_status.csv"
-slurm_log_dir="../../slurm_logs"
+slurm_log_dir="${project_root}/slurm_logs"
 source_commit="${WLNM_SOURCE_COMMIT:-$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)}"
 condition_id="roleonly_topup_train10-90_thresh0p50_checkconnfalse_adaptivefalse"
+result_base="${WLNM_RESULT_BASE:-data}"
 
 for required_file in "$template" "$foodweb_csv" "$pool_audit_csv"; do
     if [[ ! -f "$required_file" ]]; then
@@ -58,7 +61,7 @@ fi
 mkdir -p "$slurm_log_dir"
 
 if [[ "$mode" == "smoke" ]]; then
-    output_root="data/result_smoke_wlnm_dir_neg_roleonly_topup_train60_thresh0p50_checkconnfalse_adaptivefalse"
+    output_root="${result_base}/result_smoke_wlnm_dir_neg_roleonly_topup_train60_thresh0p50_checkconnfalse_adaptivefalse"
     job_name="SMK_DN_ROLE"
     num_experiments=1
     parallel_workers=1
@@ -78,7 +81,7 @@ if [[ "$mode" == "smoke" ]]; then
     expected_topup_foodwebs=1
     expected_no_topup_foodwebs=1
 else
-    output_root="data/result_wlnm_dir_neg_roleonly_topup_50x290_train10-90_thresh0p50_checkconnfalse_adaptivefalse_Apocrita"
+    output_root="${result_base}/result_wlnm_dir_neg_roleonly_topup_50x290_train10-90_thresh0p50_checkconnfalse_adaptivefalse_Apocrita"
     job_name="WLNM_DN_ROLE"
     num_experiments=50
     parallel_workers=50
@@ -93,6 +96,7 @@ else
     expected_no_topup_foodwebs=207
 fi
 
+mkdir -p "$result_base"
 if [[ -e "$output_root" ]]; then
     echo "ERROR: Output root already exists; no job was submitted:" >&2
     echo "  $output_root" >&2
@@ -106,6 +110,7 @@ mkdir "${output_root}/completion_markers"
     echo "RunMode=${mode}"
     echo "Condition=${condition_id}"
     echo "Version=WLNM_dir_neg"
+    echo "UseParallel=true"
     echo "Eligibility=role_only"
     echo "RoleConstraints=5"
     echo "MassEligibilityEnabled=false"
@@ -121,10 +126,13 @@ mkdir "${output_root}/completion_markers"
     echo "AdaptiveConnectivity=false"
     echo "BaseSeed=12345"
     echo "ResampleSplitsEachExperiment=true"
+    echo "TrophicLevelProtocol=validated_v2"
+    echo "TrophicHighPrecision=auto"
     echo "ComputeEcologicalMetrics=true"
     echo "FoodWebs=${foodweb_count}"
     echo "ArraySpec=${array_spec}"
     echo "NumExperimentsPerTrainRatio=${num_experiments}"
+    echo "ParallelWorkers=${parallel_workers}"
     echo "ExpectedPredictionCSVs=${expected_prediction_csvs}"
     echo "ExpectedTerminalLogs=${expected_terminal_logs}"
     echo "ExpectedCompletionMarkers=${expected_completion_markers}"
@@ -149,6 +157,9 @@ export_spec+=",WLNM_TRAIN_RATIO_RANGE=${train_ratio_range}"
 submission_output=$(sbatch \
     --parsable \
     --hold \
+    --chdir="$matlab_dir" \
+    --output="${slurm_log_dir}/%x.%A_%a.out" \
+    --error="${slurm_log_dir}/%x.%A_%a.err" \
     --job-name="$job_name" \
     --export="$export_spec" \
     "${resource_args[@]}" \

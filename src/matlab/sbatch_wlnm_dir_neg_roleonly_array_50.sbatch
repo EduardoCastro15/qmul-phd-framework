@@ -1,8 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=WLNM_DN_ROLE
-#SBATCH --chdir=/data/home/acw792/PhD/Stage2/Code/qmul-phd-framework-dir-neg/src/matlab
-#SBATCH --output=/data/home/acw792/PhD/Stage2/Code/qmul-phd-framework-dir-neg/slurm_logs/%x.%A_%a.out
-#SBATCH --error=/data/home/acw792/PhD/Stage2/Code/qmul-phd-framework-dir-neg/slurm_logs/%x.%A_%a.err
+# Working directory and log paths are supplied by the launcher.
 #SBATCH --array=1-290%4
 #SBATCH --nodes=1
 #SBATCH --ntasks=51
@@ -30,6 +28,7 @@ export WLNM_MATLAB_JOB_STORAGE="${TMPDIR:-/tmp}/wlnm_matlab_jobs/${SLURM_JOB_ID}
 mkdir -p "$WLNM_MATLAB_JOB_STORAGE"
 
 export WLNM_VERSION=WLNM_dir_neg
+export WLNM_USE_PARALLEL=true
 export WLNM_CV_ENABLED=false
 export WLNM_SWEEP_TRAIN_RATIOS=true
 export WLNM_THRESHOLD_MODE=fixed
@@ -41,6 +40,8 @@ export WLNM_NEGATIVE_SAMPLING_STRATEGY=uniform_without_replacement
 export WLNM_NEGATIVE_TOPUP_POLICY=uniform_remaining_nonlinks
 export WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED=false
 export WLNM_NEGATIVE_MASS_ELIGIBILITY_THRESHOLD=1.0
+export WLNM_TROPHIC_LEVEL_PROTOCOL=validated_v2
+export WLNM_TROPHIC_HIGH_PRECISION=auto
 export WLNM_CHECK_CONNECTIVITY=false
 export WLNM_ADAPTIVE_CONNECTIVITY=false
 export WLNM_BASE_SEED=12345
