@@ -78,6 +78,41 @@ class TukeyRetentionTests(unittest.TestCase):
         self.assertTrue(summary["MeetsMinimumRetainedRuns"])
         self.assertEqual(len(flagged), 50)
 
+    def test_standard_minimum_can_remain_25_of_100(self):
+        group = []
+        for index in range(100):
+            group.append(
+                {
+                    "Scenario": "test",
+                    "Foodweb": "web",
+                    "Version": "WLNM_dir_neg",
+                    "TrainRatio": "90",
+                    "Threshold": "0.5",
+                    "K": "10",
+                    "CvK": "0",
+                    "Metric": "Precision",
+                    "MetricLabel": "Precision",
+                    "MetricFamily": "predictive",
+                    "SourceColumn": "Precision",
+                    "ReferenceColumn": "",
+                    "Value": 0.8 + index / 1000,
+                    "ReferenceValue": None,
+                    "ValidBeforeTukey": True,
+                    "InvalidReason": "",
+                }
+            )
+        flagged, summary = MODULE.process_retention_group(
+            group,
+            {"NumExperiments": "100"},
+            False,
+            1.5,
+            0.25,
+        )
+        self.assertEqual(summary["ExpectedRuns"], 100)
+        self.assertEqual(summary["MinimumRetainedRuns"], 25)
+        self.assertTrue(summary["MeetsMinimumRetainedRuns"])
+        self.assertEqual(len(flagged), 100)
+
     def test_kfold_experiment_is_mean_of_complete_folds(self):
         rows = []
         for fold, value in enumerate((0.6, 0.7, 0.8), start=1):

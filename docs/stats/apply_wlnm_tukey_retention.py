@@ -275,7 +275,10 @@ def parse_args() -> argparse.Namespace:
         "--minimum-retained-fraction",
         type=float,
         default=0.5,
-        help="Minimum retained fraction; 0.5 gives 25/50 standard runs and 10/20 repeated CV experiments.",
+        help=(
+            "Minimum retained fraction. The absolute minimum is calculated "
+            "from NumExperiments in each source manifest."
+        ),
     )
     parser.add_argument("--output-name", default=DEFAULT_OUTPUT_NAME)
     parser.add_argument(
@@ -1019,6 +1022,18 @@ def process_result_root(
         validation_rows,
     )
 
+    standard_expected = parse_int(manifest.get("NumExperiments"))
+    standard_minimum_example = (
+        f"{math.ceil(standard_expected * minimum_fraction)} of {standard_expected}"
+        if standard_expected is not None and standard_expected > 0
+        else "derived from each group when NumExperiments is unavailable"
+    )
+    kfold_expected = parse_int(manifest.get("NumExperimentsPerFold"))
+    kfold_minimum_example = (
+        f"{math.ceil(kfold_expected * minimum_fraction)} of {kfold_expected} repeated-CV experiments"
+        if kfold_expected is not None and kfold_expected > 0
+        else "derived from each group when NumExperimentsPerFold is unavailable"
+    )
     manifest_output = {
         "protocol_version": "v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -1036,8 +1051,8 @@ def process_result_root(
         "threshold_tolerance": THRESHOLD_TOLERANCE,
         "tukey_iqr_multiplier": multiplier,
         "minimum_retained_fraction": minimum_fraction,
-        "standard_minimum_example": "25 of 50",
-        "kfold_minimum_example": "10 of 20 repeated-CV experiments",
+        "standard_minimum_example": standard_minimum_example,
+        "kfold_minimum_example": kfold_minimum_example,
         "kfold_analysis_unit": "mean across complete folds within each repeated-CV experiment",
         "fence_grouping": ["Foodweb", "Version", "TrainRatio", "Threshold", "K", "CvK", "Metric"],
         "metric_specific_retention": True,

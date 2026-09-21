@@ -89,7 +89,10 @@ def main() -> None:
             require(row["TrophicLevelProtocol"] == "validated_v2", f"{path.name}: wrong trophic protocol")
             require(row["NegativeEligibilityMode"] == "role_only", f"{path.name}: wrong negative mode")
             require(float(row["MassPoolSize"]) == 0, f"{path.name}: mass pool is active")
-            require(Path(row["TrophicSnapshotFile"]).is_file(), f"{path.name}: missing snapshot")
+            snapshot_name = Path(row["TrophicSnapshotFile"]).name
+            local_snapshot = root / "ecological_snapshots" / snapshot_name
+            require(local_snapshot.is_file(),
+                    f"{path.name}: missing local snapshot {snapshot_name}")
 
     if run_mode == "smoke":
         require(observed == SMOKE_TARGETS, f"Unexpected food webs: {sorted(observed)}")
