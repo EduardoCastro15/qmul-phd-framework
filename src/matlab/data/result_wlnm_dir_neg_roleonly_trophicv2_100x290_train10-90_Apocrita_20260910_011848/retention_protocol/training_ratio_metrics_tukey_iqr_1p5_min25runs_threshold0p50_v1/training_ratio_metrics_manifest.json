@@ -1,0 +1,82 @@
+{
+  "classification_threshold": 0.5,
+  "created_at_utc": "2026-09-23T22:25:54.455928+00:00",
+  "excluded_training_ratio_observations": 13587,
+  "expected_runs_per_group": 100,
+  "foodweb_trainratio_metric_groups": 5220,
+  "metric_family": "training_ratio",
+  "metric_specific_retention": true,
+  "minimum_retained_runs": 25,
+  "outputs": [
+    "retained_run_training_ratio_metrics.csv.gz",
+    "excluded_run_training_ratio_metrics.csv.gz",
+    "training_ratio_retention_by_foodweb_metric.csv",
+    "figure_inputs/training_ratio_metric_means_after_tukey.csv",
+    "validation_report.csv"
+  ],
+  "protocol_version": "v1",
+  "ratio_definitions": [
+    {
+      "denominator": "TrainMeanVulnerability",
+      "label": "Resource-to-consumer ratio",
+      "name": "ResourceToConsumerRatio",
+      "numerator": "TrainMeanGenerality",
+      "reference_denominator": "EmpiricalMeanVulnerability",
+      "reference_numerator": "EmpiricalMeanGenerality"
+    },
+    {
+      "denominator": "TrainMeanGenerality",
+      "label": "Consumer-to-resource ratio",
+      "name": "ConsumerToResourceRatio",
+      "numerator": "TrainMeanVulnerability",
+      "reference_denominator": "EmpiricalMeanGenerality",
+      "reference_numerator": "EmpiricalMeanVulnerability"
+    }
+  ],
+  "reciprocal_identity_max_error": 2.220446049250313e-16,
+  "retained_training_ratio_observations": 508413,
+  "source_csv_count": 290,
+  "source_files_modified": false,
+  "source_manifest": {
+    "ClassificationThreshold": "0.50",
+    "ComputeEcologicalMetrics": "true",
+    "CreatedAt": "2026-09-10T01:18:48+0100",
+    "Eligibility": "role_only",
+    "FoodWebIndices": "1-290",
+    "FoodWebs": "290",
+    "JobID": "26266631",
+    "MassEligibilityEnabled": "false",
+    "MinimumRetainedAfterTukey": "25",
+    "NegativePositiveRatio": "2",
+    "NegativeSampling": "uniform_without_replacement",
+    "NegativeTopupPolicy": "uniform_remaining_nonlinks",
+    "NumExperiments": "100",
+    "ParallelWorkers": "50",
+    "RunMode": "full",
+    "SourceCommit": "c994db4ff469+local-snapshot-sweepfix-20260910",
+    "SubgraphK": "10",
+    "SweepTrainRatios": "true",
+    "Template": "sbatch_wlnm_dir_neg_trophic100_array.sbatch",
+    "TrainRatioRange": "10,20,30,40,50,60,70,80,90",
+    "TrophicHighPrecision": "auto",
+    "TrophicLevelProtocol": "validated_v2",
+    "Version": "WLNM_dir_neg"
+  },
+  "source_manifest_path": "/Users/acw792/Developer/qmul-phd-framework/src/matlab/data/result_wlnm_dir_neg_roleonly_trophicv2_100x290_train10-90_Apocrita_20260910_011848/RUN_MANIFEST.txt",
+  "source_result_root": "/Users/acw792/Developer/qmul-phd-framework/src/matlab/data/result_wlnm_dir_neg_roleonly_trophicv2_100x290_train10-90_Apocrita_20260910_011848",
+  "source_rows_at_threshold": 261000,
+  "source_rows_read": 261000,
+  "train_ratios": [
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90
+  ],
+  "training_ratio_observations": 522000,
+  "tukey_iqr_multiplier": 1.5
+}
