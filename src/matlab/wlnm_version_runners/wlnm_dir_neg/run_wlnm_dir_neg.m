@@ -425,6 +425,10 @@ function out = make_result_template(K, ratioTrain, rb, split_stats, config, expI
     out = add_extended_metric_defaults(out, 'Train');
     out = add_extended_metric_defaults(out, 'Pseudo');
     out = add_extended_metric_defaults(out, 'Delta');
+    out = add_normalized_gv_metric_defaults(out, 'Empirical');
+    out = add_normalized_gv_metric_defaults(out, 'Train');
+    out = add_normalized_gv_metric_defaults(out, 'Pseudo');
+    out = add_normalized_gv_metric_defaults(out, 'Delta');
     out = add_networkx_trophic_diagnostic_defaults(out, 'Empirical');
     out = add_networkx_trophic_diagnostic_defaults(out, 'Train');
     out = add_networkx_trophic_diagnostic_defaults(out, 'Pseudo');
@@ -577,6 +581,10 @@ function flat = flatten_aux_metrics(aux)
     flat = add_extended_metric_defaults(flat, 'Train');
     flat = add_extended_metric_defaults(flat, 'Pseudo');
     flat = add_extended_metric_defaults(flat, 'Delta');
+    flat = add_normalized_gv_metric_defaults(flat, 'Empirical');
+    flat = add_normalized_gv_metric_defaults(flat, 'Train');
+    flat = add_normalized_gv_metric_defaults(flat, 'Pseudo');
+    flat = add_normalized_gv_metric_defaults(flat, 'Delta');
     flat = add_networkx_trophic_diagnostic_defaults(flat, 'Empirical');
     flat = add_networkx_trophic_diagnostic_defaults(flat, 'Train');
     flat = add_networkx_trophic_diagnostic_defaults(flat, 'Pseudo');
@@ -646,6 +654,12 @@ function flat = flatten_aux_metrics(aux)
     flat.DeltaPropIntermediate  = flat.PseudoPropIntermediate - flat.EmpiricalPropIntermediate;
     flat.DeltaPropTop           = flat.PseudoPropTop          - flat.EmpiricalPropTop;
     flat = compute_extended_metric_deltas(flat);
+    normalized_gv = flatten_wlnm_dir_neg_normalized_gv_metrics(aux);
+    normalized_fields = fieldnames(normalized_gv);
+    for i = 1:numel(normalized_fields)
+        field = normalized_fields{i};
+        flat.(field) = normalized_gv.(field);
+    end
 
     % ---- test-set classification metrics ----
     if isfield(aux, 'test_metrics') && ~isempty(aux.test_metrics)
@@ -729,6 +743,13 @@ function s = add_extended_metric_defaults(s, prefix)
     end
 end
 
+function s = add_normalized_gv_metric_defaults(s, prefix)
+    suffixes = normalized_gv_metric_suffixes();
+    for i = 1:numel(suffixes)
+        s.([prefix suffixes{i}]) = NaN;
+    end
+end
+
 function s = add_networkx_trophic_diagnostic_defaults(s, prefix)
     suffixes = networkx_trophic_diagnostic_suffixes();
     for i = 1:numel(suffixes)
@@ -782,6 +803,16 @@ function suffixes = extended_metric_suffixes()
         'NumTriangles', ...
         'TriangleDensity', ...
         'MeanDietOverlap' ...
+    };
+end
+
+function suffixes = normalized_gv_metric_suffixes()
+    suffixes = { ...
+        'LinkageDensity', ...
+        'MeanNormalizedGeneralityConsumersOnly', ...
+        'MeanNormalizedVulnerabilityResourcesOnly', ...
+        'NormalizedGeneralityStdAllSpecies', ...
+        'NormalizedVulnerabilityStdAllSpecies' ...
     };
 end
 

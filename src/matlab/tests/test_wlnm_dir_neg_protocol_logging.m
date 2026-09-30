@@ -38,6 +38,8 @@ function testKfoldProtocolColumnsAreWritten(testCase)
     verifyEqual(testCase, output.NegativePositiveRatio, 2);
     verifyEqual(testCase, output.MassPoolSize, 0);
     verifyEqual(testCase, output.CvK, 5);
+    verifyFalse(testCase, any(ismember( ...
+        expected_normalized_gv_columns(), output.Properties.VariableNames)));
 end
 
 function testRoleOnlyProtocolColumnsAreWritten(testCase)
@@ -78,6 +80,15 @@ function testRoleOnlyProtocolColumnsAreWritten(testCase)
         'TrainNegativeCount', 24, ...
         'TestNegativeCount', 16 ...
     );
+
+    normalized_cols = expected_normalized_gv_columns();
+    normalized_values = (1:numel(normalized_cols)) / 10;
+    for i = 1:numel(normalized_cols)
+        result.(normalized_cols{i}) = normalized_values(i);
+    end
+
+    % Reopening a current-schema log is allowed and leaves it unchanged.
+    init_log_file(log_file, false, false, 'WLNM_dir_neg');
     append_results(log_file, result, false);
 
     output = readtable(log_file, 'VariableNamingRule', 'preserve');
@@ -94,4 +105,60 @@ function testRoleOnlyProtocolColumnsAreWritten(testCase)
     verifyEqual(testCase, output.PseudoTrophicV2LegacyMean, 2.5);
     verifyEqual(testCase, output.RandomTopupCount, 12);
     verifyEqual(testCase, output.TopupProportion, 0.30, 'AbsTol', 1e-12);
+    verifyEqual(testCase, output.Properties.VariableNames(end-19:end), normalized_cols);
+    verifyEqual(testCase, output{1, normalized_cols}, normalized_values, 'AbsTol', 1e-12);
+end
+
+function testNormalizedColumnsAreAbsentFromOriginal(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup = onCleanup(@() rmdir(output_dir, 's')); %#ok<NASGU>
+    log_file = fullfile(output_dir, 'original.csv');
+
+    init_log_file(log_file, false, false, 'WLNM_original');
+    output = readtable(log_file, 'VariableNamingRule', 'preserve');
+
+    verifyFalse(testCase, any(ismember( ...
+        expected_normalized_gv_columns(), output.Properties.VariableNames)));
+end
+
+function testOldStandardLogSchemaIsRejectedWithoutRewrite(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup = onCleanup(@() rmdir(output_dir, 's')); %#ok<NASGU>
+    log_file = fullfile(output_dir, 'old_standard.csv');
+
+    fid = fopen(log_file, 'w');
+    assert(fid ~= -1, 'Could not create test log.');
+    fprintf(fid, 'Iteration,Version\n');
+    fclose(fid);
+
+    verifyError(testCase, ...
+        @() init_log_file(log_file, false, false, 'WLNM_dir_neg'), ...
+        'init_log_file:WLNMDirNegSchemaMismatch');
+
+    fid = fopen(log_file, 'r');
+    assert(fid ~= -1, 'Could not reopen test log.');
+    cleanup_fid = onCleanup(@() fclose(fid)); %#ok<NASGU>
+    verifyEqual(testCase, fgetl(fid), 'Iteration,Version');
+end
+
+function cols = expected_normalized_gv_columns()
+    prefixes = {'Empirical', 'Train', 'Pseudo', 'Delta'};
+    suffixes = { ...
+        'LinkageDensity', ...
+        'MeanNormalizedGeneralityConsumersOnly', ...
+        'MeanNormalizedVulnerabilityResourcesOnly', ...
+        'NormalizedGeneralityStdAllSpecies', ...
+        'NormalizedVulnerabilityStdAllSpecies' ...
+    };
+
+    cols = cell(1, numel(prefixes) * numel(suffixes));
+    k = 0;
+    for i = 1:numel(prefixes)
+        for j = 1:numel(suffixes)
+            k = k + 1;
+            cols{k} = [prefixes{i} suffixes{j}];
+        end
+    end
 end

@@ -2,9 +2,9 @@ function init_log_file(log_file, use_backbone, inverse_backbone, version)
 %INIT_LOG_FILE Create CSV header if missing.
 %
 % IMPORTANT:
-% If an old log file already exists with a previous header schema, this
-% function will NOT overwrite it. Use a fresh log directory or delete the
-% old CSV first.
+% Existing log files are never overwritten. Standard WLNM_dir_neg logs are
+% also checked for the current normalized generality/vulnerability schema
+% so new fields cannot be silently dropped by the header-driven writer.
 
     if nargin < 2
         use_backbone = false;
@@ -16,14 +16,17 @@ function init_log_file(log_file, use_backbone, inverse_backbone, version)
         version = '';
     end
 
-    if ~isfile(log_file)
-        fid = fopen(log_file, 'w');
-        assert(fid ~= -1, 'Cannot open %s for writing.', log_file);
-        c = onCleanup(@() fclose(fid));
-
-        header = build_header(use_backbone, inverse_backbone, version);
-        fprintf(fid, '%s\n', strjoin(header, ','));
+    if isfile(log_file)
+        validate_existing_wlnm_dir_neg_schema(log_file, version);
+        return;
     end
+
+    fid = fopen(log_file, 'w');
+    assert(fid ~= -1, 'Cannot open %s for writing.', log_file);
+    c = onCleanup(@() fclose(fid));
+
+    header = build_header(use_backbone, inverse_backbone, version);
+    fprintf(fid, '%s\n', strjoin(header, ','));
 end
 
 % ============================================================
@@ -174,6 +177,60 @@ function header = build_header(use_backbone, inverse_backbone, version)
     cv_cols = {'CvK', 'FoldID', 'NumFolds'};
 
     header = [base_cols, ecological_cols, trophic_v2_cols, cv_cols];
+    if is_standard_wlnm_dir_neg(version)
+        % Append-only: preserve every existing column name and position.
+        header = [header, normalized_gv_cols()];
+    end
+end
+
+function validate_existing_wlnm_dir_neg_schema(log_file, version)
+    if ~is_standard_wlnm_dir_neg(version)
+        return;
+    end
+
+    fid = fopen(log_file, 'r');
+    assert(fid ~= -1, 'Cannot open %s for reading.', log_file);
+    c = onCleanup(@() fclose(fid));
+    header_line = fgetl(fid);
+
+    if ischar(header_line)
+        existing_cols = strsplit(strtrim(header_line), ',');
+    else
+        existing_cols = {};
+    end
+
+    required_cols = normalized_gv_cols();
+    missing_cols = setdiff(required_cols, existing_cols, 'stable');
+    if ~isempty(missing_cols)
+        error('init_log_file:WLNMDirNegSchemaMismatch', ...
+            ['Existing WLNM_dir_neg log uses an older schema and is missing: %s. ' ...
+             'Use a fresh result directory or log file; the existing CSV was not modified.'], ...
+            strjoin(missing_cols, ', '));
+    end
+end
+
+function tf = is_standard_wlnm_dir_neg(version)
+    tf = strcmpi(strtrim(char(string(version))), 'WLNM_dir_neg');
+end
+
+function cols = normalized_gv_cols()
+    prefixes = {'Empirical', 'Train', 'Pseudo', 'Delta'};
+    suffixes = { ...
+        'LinkageDensity', ...
+        'MeanNormalizedGeneralityConsumersOnly', ...
+        'MeanNormalizedVulnerabilityResourcesOnly', ...
+        'NormalizedGeneralityStdAllSpecies', ...
+        'NormalizedVulnerabilityStdAllSpecies' ...
+    };
+
+    cols = cell(1, numel(prefixes) * numel(suffixes));
+    k = 0;
+    for i = 1:numel(prefixes)
+        for j = 1:numel(suffixes)
+            k = k + 1;
+            cols{k} = [prefixes{i} suffixes{j}];
+        end
+    end
 end
 
 function cols = trophic_v2_diagnostic_cols(prefix)
