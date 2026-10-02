@@ -4,7 +4,10 @@ import sys, copy, math, time, pdb
 import pickle
 import scipy.io as sio
 import scipy.sparse as ssp
+import os
 import os.path
+import platform
+import socket
 import random
 import argparse
 import csv
@@ -15,6 +18,13 @@ PYTHON_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.append('%s/pytorch_DGCNN' % PYTHON_DIR)
 from main import *
 from util_functions_directed import *
+from seal_run_artifacts import (
+    node_order_hash,
+    pairs_to_array,
+    sparse_to_arrays,
+    split_hash,
+    write_run_bundle,
+)
 
 # python src/python/seal_directed/run_foodweb_seal_directed.py \
 #   --foodweb-csv src/matlab/data/foodwebs_mat/foodweb_metrics_ecosystem.csv \
@@ -506,7 +516,7 @@ def build_ecological_metric_row(net, observed_train, test_pos, test_neg, labels,
         'NumTrueNovelLinks': int(np.sum(np.asarray(labels) == 1)),
         'EvaluateOnAllUnseen': 0,
     }
-    return row
+    return row, pseudo_full, predicted_links
 
 
 def predict_graph_scores(classifier, graphs, batch_size):
@@ -782,368 +792,513 @@ def write_metrics_csv(row, result_dir, data_name):
     return result_file
 
 
-parser = argparse.ArgumentParser(description='Link Prediction with SEAL')
-# general settings
-parser.add_argument('--data-name', default=None, help='network name')
-parser.add_argument('--mat-folder', default=None,
-                    help='folder containing <data-name>.mat; defaults to ./data')
-parser.add_argument('--result-dir', default=None,
-                    help='directory for SEAL result CSVs; defaults to ./data/result')
-parser.add_argument('--train-name', default=None, help='train name')
-parser.add_argument('--test-name', default=None, help='test name')
-parser.add_argument('--only-predict', action='store_true', default=False,
-                    help='if True, will load the saved model and output predictions\
-                    for links in test-name; you still need to specify train-name\
-                    in order to build the observed network and extract subgraphs')
-parser.add_argument('--batch-size', type=int, default=50)
-parser.add_argument('--max-train-num', type=int, default=100000, 
-                    help='set maximum number of train links (to fit into memory)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--experiment-id', type=int, default=1,
-                    help='experiment id written to the result CSV')
-parser.add_argument('--test-ratio', type=float, default=0.1,
-                    help='ratio of test links')
-parser.add_argument('--num-epochs', type=int, default=50,
-                    help='number of SEAL/DGCNN training epochs')
-parser.add_argument('--threshold', type=float, default=0.5,
-                    help='fixed threshold for precision/recall/F1')
-parser.add_argument('--no-parallel', action='store_true', default=False,
-                    help='if True, use single thread for subgraph extraction; \
-                    by default use all cpu cores to extract subgraphs in parallel')
-parser.add_argument('--all-unknown-as-negative', action='store_true', default=False,
-                    help='if True, regard all unknown links as negative test data; \
-                    sample a portion from them as negative training data. Otherwise,\
-                    train negative and test negative data are both sampled from \
-                    unknown links without overlap.')
-parser.add_argument('--no-role-filter', action='store_true', default=False,
-                    help='disable directed ecological role filtering for negative links')
-# model settings
-parser.add_argument('--hop', default=1, metavar='S', 
-                    help='enclosing subgraph hop number, \
-                    options: 1, 2,..., "auto"')
-parser.add_argument('--max-nodes-per-hop', default=None, 
-                    help='if > 0, upper bound the # nodes per hop by subsampling')
-parser.add_argument('--use-embedding', action='store_true', default=False,
-                    help='whether to use node2vec node embeddings')
-parser.add_argument('--use-attribute', action='store_true', default=False,
-                    help='whether to use node attributes')
-parser.add_argument('--save-model', action='store_true', default=False,
-                    help='save the final model')
-args = parser.parse_args()
-run_start_time = time.time()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
-print(args)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Link Prediction with SEAL')
+    # general settings
+    parser.add_argument('--data-name', default=None, help='network name')
+    parser.add_argument('--mat-folder', default=None,
+                        help='folder containing <data-name>.mat; defaults to ./data')
+    parser.add_argument('--result-dir', default=None,
+                        help='directory for SEAL result CSVs; defaults to ./data/result')
+    parser.add_argument('--train-name', default=None, help='train name')
+    parser.add_argument('--test-name', default=None, help='test name')
+    parser.add_argument('--only-predict', action='store_true', default=False,
+                        help='if True, will load the saved model and output predictions\
+                        for links in test-name; you still need to specify train-name\
+                        in order to build the observed network and extract subgraphs')
+    parser.add_argument('--batch-size', type=int, default=50)
+    parser.add_argument('--max-train-num', type=int, default=100000,
+                        help='set maximum number of train links (to fit into memory)')
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                        help='legacy alias for --device cpu')
+    parser.add_argument('--device', choices=('auto', 'cpu', 'cuda'), default='auto',
+                        help='execution device; production GPU jobs must use cuda')
+    parser.add_argument('--require-cuda', action='store_true', default=False,
+                        help='fail instead of silently falling back when CUDA is unavailable')
+    parser.add_argument('--deterministic', action='store_true', default=False,
+                        help='request deterministic PyTorch/CUDA algorithms')
+    parser.add_argument('--quiet', action='store_true', default=False,
+                        help='disable per-batch progress and reduce epoch logging')
+    parser.add_argument('--log-every', type=int, default=10,
+                        help='epoch logging interval when --quiet is active')
+    parser.add_argument('--num-workers', type=int, default=1,
+                        help='spawn workers used for enclosing-subgraph extraction')
+    parser.add_argument('--seed', type=int, default=1, metavar='S',
+                        help='random seed (default: 1)')
+    parser.add_argument('--experiment-id', type=int, default=1,
+                        help='experiment id written to the result CSV')
+    parser.add_argument('--foodweb-index', type=int, default=0,
+                        help='one-based frozen food-web index from the run manifest')
+    parser.add_argument('--test-ratio', type=float, default=0.1,
+                        help='ratio of test links')
+    parser.add_argument('--requested-train-ratio', type=float, default=None,
+                        help='requested train percentage recorded separately from realised ratio')
+    parser.add_argument('--num-epochs', type=int, default=50,
+                        help='number of SEAL/DGCNN training epochs')
+    parser.add_argument('--threshold', type=float, default=0.5,
+                        help='fixed threshold for precision/recall/F1')
+    parser.add_argument('--no-parallel', action='store_true', default=False,
+                        help='if True, use single thread for subgraph extraction; \
+                        by default use all cpu cores to extract subgraphs in parallel')
+    parser.add_argument('--all-unknown-as-negative', action='store_true', default=False,
+                        help='if True, regard all unknown links as negative test data; \
+                        sample a portion from them as negative training data. Otherwise,\
+                        train negative and test negative data are both sampled from \
+                        unknown links without overlap.')
+    parser.add_argument('--no-role-filter', action='store_true', default=False,
+                        help='disable directed ecological role filtering for negative links')
+    # model settings
+    parser.add_argument('--hop', default=1, metavar='S',
+                        help='enclosing subgraph hop number, \
+                        options: 1, 2,..., "auto"')
+    parser.add_argument('--max-nodes-per-hop', default=None,
+                        help='if > 0, upper bound the # nodes per hop by subsampling')
+    parser.add_argument('--use-embedding', action='store_true', default=False,
+                        help='whether to use node2vec node embeddings')
+    parser.add_argument('--use-attribute', action='store_true', default=False,
+                        help='whether to use node attributes')
+    parser.add_argument('--save-model', action='store_true', default=False,
+                        help='save the final model')
+    parser.add_argument('--run-dir', default=None,
+                        help='atomic per-run output directory; disables legacy shared CSV append')
+    parser.add_argument('--config-hash', default=None,
+                        help='immutable RUN_CONFIG hash required with --run-dir')
+    parser.add_argument('--source-commit', default='unknown',
+                        help='source Git commit recorded in run provenance')
+    args = parser.parse_args(argv)
+    run_start_time = time.time()
+    if args.num_workers < 1:
+        parser.error('--num-workers must be at least 1')
+    if args.log_every < 1:
+        parser.error('--log-every must be at least 1')
+    if args.run_dir and not args.config_hash:
+        parser.error('--config-hash is required with --run-dir')
+    if args.no_cuda and args.device == 'cuda':
+        parser.error('--no-cuda cannot be combined with --device cuda')
+    requested_device = 'cpu' if args.no_cuda else args.device
+    if requested_device == 'auto':
+        requested_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if requested_device == 'cuda' and not torch.cuda.is_available():
+        raise RuntimeError(
+            'CUDA was requested but torch.cuda.is_available() is False. '
+            'Install a CUDA PyTorch wheel and run inside a Slurm GPU allocation.'
+        )
+    if args.require_cuda and requested_device != 'cuda':
+        raise RuntimeError('--require-cuda requires --device cuda and an available GPU')
+    args.torch_device = torch.device('cuda:0' if requested_device == 'cuda' else 'cpu')
+    args.cuda = args.torch_device.type == 'cuda'
+    if args.deterministic:
+        os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
+        torch.use_deterministic_algorithms(True)
+        if hasattr(torch.backends, 'cudnn'):
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+    torch.manual_seed(args.seed)
+    if args.cuda:
+        torch.cuda.manual_seed_all(args.seed)
+    print(args)
+    print('[DEVICE] requested={} resolved={} cuda_available={}'.format(
+        args.device, args.torch_device, torch.cuda.is_available()
+    ))
 
-cmd_args.seed = args.seed
-random.seed(args.seed)
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-if args.hop != 'auto':
-    args.hop = int(args.hop)
-if args.max_nodes_per_hop is not None:
-    args.max_nodes_per_hop = int(args.max_nodes_per_hop)
+    cmd_args.seed = args.seed
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if args.hop != 'auto':
+        args.hop = int(args.hop)
+    if args.max_nodes_per_hop is not None:
+        args.max_nodes_per_hop = int(args.max_nodes_per_hop)
 
 
-'''Prepare data'''
-args.file_dir = SCRIPT_DIR
+    '''Prepare data'''
+    args.file_dir = SCRIPT_DIR
+    timings = {}
+    data_start_time = time.time()
 
-# check whether train and test links are provided
-train_pos, test_pos = None, None
-if args.train_name is not None:
-    args.train_dir = os.path.join(args.file_dir, 'data/{}'.format(args.train_name))
-    train_idx = np.loadtxt(args.train_dir, dtype=int)
-    train_pos = (train_idx[:, 0], train_idx[:, 1])
-if args.test_name is not None:
-    args.test_dir = os.path.join(args.file_dir, 'data/{}'.format(args.test_name))
-    test_idx = np.loadtxt(args.test_dir, dtype=int)
-    test_pos = (test_idx[:, 0], test_idx[:, 1])
-
-# build observed network
-if args.data_name is not None:  # use .mat network
-    mat_folder = resolve_path(args.mat_folder, args.file_dir)
-    if mat_folder is None:
-        mat_folder = os.path.join(args.file_dir, 'data')
-    args.data_dir = os.path.join(mat_folder, '{}.mat'.format(args.data_name))
-    data = sio.loadmat(args.data_dir)
-    net = binarize_adjacency(data['net'])
-    if 'group' in data:
-        # load node attributes (here a.k.a. node classes)
-        group = data['group']
-        if hasattr(group, 'toarray'):
-            attributes = group.toarray().astype('float32')
-        else:
-            attributes = np.asarray(group).astype('float32')
-    else:
-        attributes = None
-    role_code = role_vector_to_code(data['role'], net.shape[0]) if 'role' in data else None
-    # check whether net is symmetric (for small nets only)
-    if False:
-        net_ = net.toarray()
-        assert(np.allclose(net_, net_.T, atol=1e-8))
-else:  # build network from train links
-    assert (args.train_name is not None), "must provide train links if not using .mat"
-    if args.train_name.endswith('_train.txt'):
-        args.data_name = args.train_name[:-10] 
-    else:
-        args.data_name = args.train_name.split('.')[0]
-    max_idx = np.max(train_idx)
+    # check whether train and test links are provided
+    train_pos, test_pos = None, None
+    if args.train_name is not None:
+        args.train_dir = os.path.join(args.file_dir, 'data/{}'.format(args.train_name))
+        train_idx = np.loadtxt(args.train_dir, dtype=int)
+        train_pos = (train_idx[:, 0], train_idx[:, 1])
     if args.test_name is not None:
-        max_idx = max(max_idx, np.max(test_idx))
-    net = ssp.csc_matrix(
-        (np.ones(len(train_idx)), (train_idx[:, 0], train_idx[:, 1])), 
-        shape=(max_idx+1, max_idx+1)
-    )
-    net = binarize_adjacency(net)
-    attributes = None
-    role_code = None
+        args.test_dir = os.path.join(args.file_dir, 'data/{}'.format(args.test_name))
+        test_idx = np.loadtxt(args.test_dir, dtype=int)
+        test_pos = (test_idx[:, 0], test_idx[:, 1])
 
-# sample train and test links
-if args.train_name is None and args.test_name is None:
-    # sample both positive and negative train/test links from net
-    train_pos, train_neg, test_pos, test_neg = sample_neg(
-        net,
-        args.test_ratio,
-        max_train_num=args.max_train_num,
-        all_unknown_as_negative=args.all_unknown_as_negative,
-        role_code=role_code,
-        use_role_filter=not args.no_role_filter,
-    )
-else:
-    # use provided train/test positive links, sample negative from net
-    train_pos, train_neg, test_pos, test_neg = sample_neg(
-        net, 
-        train_pos=train_pos, 
-        test_pos=test_pos, 
-        max_train_num=args.max_train_num,
-        all_unknown_as_negative=args.all_unknown_as_negative,
-        role_code=role_code,
-        use_role_filter=not args.no_role_filter,
-    )
-
-'''Train and apply classifier'''
-A = net.copy()  # the observed network
-A[test_pos[0], test_pos[1]] = 0  # mask test links
-A.eliminate_zeros()  # make sure the links are masked when using the sparse matrix in scipy-1.3.x
-
-if args.use_attribute:
-    if attributes is None:
-        raise ValueError(
-            '--use-attribute was requested, but "{}" does not contain a `group` '
-            'node feature matrix. Use the SEAL_directed attributed MAT folder '
-            'or regenerate it with src/python/seal_directed/build_node_attribute_mats.py.'.format(
-                args.data_dir if hasattr(args, 'data_dir') else args.data_name
-            )
+    # build observed network
+    if args.data_name is not None:  # use .mat network
+        mat_folder = resolve_path(args.mat_folder, args.file_dir)
+        if mat_folder is None:
+            mat_folder = os.path.join(args.file_dir, 'data')
+        args.data_dir = os.path.join(mat_folder, '{}.mat'.format(args.data_name))
+        data = sio.loadmat(args.data_dir)
+        net = binarize_adjacency(data['net'])
+        if 'group' in data:
+            # load node attributes (here a.k.a. node classes)
+            group = data['group']
+            if hasattr(group, 'toarray'):
+                attributes = group.toarray().astype('float32')
+            else:
+                attributes = np.asarray(group).astype('float32')
+        else:
+            attributes = None
+        role_code = role_vector_to_code(data['role'], net.shape[0]) if 'role' in data else None
+        # check whether net is symmetric (for small nets only)
+        if False:
+            net_ = net.toarray()
+            assert(np.allclose(net_, net_.T, atol=1e-8))
+    else:  # build network from train links
+        assert (args.train_name is not None), "must provide train links if not using .mat"
+        if args.train_name.endswith('_train.txt'):
+            args.data_name = args.train_name[:-10]
+        else:
+            args.data_name = args.train_name.split('.')[0]
+        max_idx = np.max(train_idx)
+        if args.test_name is not None:
+            max_idx = max(max_idx, np.max(test_idx))
+        net = ssp.csc_matrix(
+            (np.ones(len(train_idx)), (train_idx[:, 0], train_idx[:, 1])),
+            shape=(max_idx+1, max_idx+1)
         )
-    if attributes.shape[0] != net.shape[0]:
-        raise ValueError(
-            '`group` row count ({}) does not match number of nodes ({}) for {}.'.format(
-                attributes.shape[0],
-                net.shape[0],
-                args.data_name,
-            )
-        )
+        net = binarize_adjacency(net)
+        attributes = None
+        role_code = None
 
-node_information = None
-if args.use_embedding:
-    embeddings = generate_node2vec_embeddings(A, 128, True, train_neg)
-    node_information = embeddings
-if args.use_attribute and attributes is not None:
-    if node_information is not None:
-        node_information = np.concatenate([node_information, attributes], axis=1)
+    # sample train and test links
+    if args.train_name is None and args.test_name is None:
+        # sample both positive and negative train/test links from net
+        train_pos, train_neg, test_pos, test_neg, negative_sampling_metadata = sample_neg(
+            net,
+            args.test_ratio,
+            max_train_num=args.max_train_num,
+            all_unknown_as_negative=args.all_unknown_as_negative,
+            role_code=role_code,
+            use_role_filter=not args.no_role_filter,
+            return_metadata=True,
+        )
     else:
-        node_information = attributes
+        # use provided train/test positive links, sample negative from net
+        train_pos, train_neg, test_pos, test_neg, negative_sampling_metadata = sample_neg(
+            net,
+            train_pos=train_pos,
+            test_pos=test_pos,
+            max_train_num=args.max_train_num,
+            all_unknown_as_negative=args.all_unknown_as_negative,
+            role_code=role_code,
+            use_role_filter=not args.no_role_filter,
+            return_metadata=True,
+        )
 
-if args.only_predict:  # no need to use negatives
-    _, test_graphs, max_n_label = links2subgraphs(
-        A, 
-        None, 
-        None, 
-        test_pos, # test_pos is a name only, we don't actually know their labels
-        None, 
-        args.hop, 
-        args.max_nodes_per_hop, 
-        node_information, 
-        args.no_parallel
-    )
-    print('# test: %d' % (len(test_graphs)))
-else:
-    train_graphs, test_graphs, max_n_label = links2subgraphs(
-        A, 
-        train_pos, 
-        train_neg, 
-        test_pos, 
-        test_neg, 
-        args.hop, 
-        args.max_nodes_per_hop, 
-        node_information, 
-        args.no_parallel
-    )
-    print('# train: %d, # test: %d' % (len(train_graphs), len(test_graphs)))
+    timings['data_and_sampling_seconds'] = time.time() - data_start_time
 
-# DGCNN configurations
-if args.only_predict:
-    with open('data/{}_hyper.pkl'.format(args.data_name), 'rb') as hyperparameters_name:
-        saved_cmd_args = pickle.load(hyperparameters_name)
-    for key, value in vars(saved_cmd_args).items(): # replace with saved cmd_args
-        vars(cmd_args)[key] = value
+    '''Train and apply classifier'''
+    A = net.copy()  # the observed network
+    A[test_pos[0], test_pos[1]] = 0  # mask test links
+    A.eliminate_zeros()  # make sure the links are masked when using the sparse matrix in scipy-1.3.x
+
+    if args.use_attribute:
+        if attributes is None:
+            raise ValueError(
+                '--use-attribute was requested, but "{}" does not contain a `group` '
+                'node feature matrix. Use the SEAL_directed attributed MAT folder '
+                'or regenerate it with src/python/seal_directed/build_node_attribute_mats.py.'.format(
+                    args.data_dir if hasattr(args, 'data_dir') else args.data_name
+                )
+            )
+        if attributes.shape[0] != net.shape[0]:
+            raise ValueError(
+                '`group` row count ({}) does not match number of nodes ({}) for {}.'.format(
+                    attributes.shape[0],
+                    net.shape[0],
+                    args.data_name,
+                )
+            )
+
+    node_information = None
+    if args.use_embedding:
+        embeddings = generate_node2vec_embeddings(A, 128, True, train_neg)
+        node_information = embeddings
+    if args.use_attribute and attributes is not None:
+        if node_information is not None:
+            node_information = np.concatenate([node_information, attributes], axis=1)
+        else:
+            node_information = attributes
+
+    subgraph_start_time = time.time()
+    if args.only_predict:  # no need to use negatives
+        _, test_graphs, max_n_label = links2subgraphs(
+            A,
+            None,
+            None,
+            test_pos, # test_pos is a name only, we don't actually know their labels
+            None,
+            args.hop,
+            args.max_nodes_per_hop,
+            node_information,
+            args.no_parallel,
+            args.num_workers,
+        )
+        print('# test: %d' % (len(test_graphs)))
+    else:
+        train_graphs, test_graphs, max_n_label = links2subgraphs(
+            A,
+            train_pos,
+            train_neg,
+            test_pos,
+            test_neg,
+            args.hop,
+            args.max_nodes_per_hop,
+            node_information,
+            args.no_parallel,
+            args.num_workers,
+        )
+        print('# train: %d, # test: %d' % (len(train_graphs), len(test_graphs)))
+    timings['subgraph_extraction_seconds'] = time.time() - subgraph_start_time
+
+    # DGCNN configurations
+    if args.only_predict:
+        with open('data/{}_hyper.pkl'.format(args.data_name), 'rb') as hyperparameters_name:
+            saved_cmd_args = pickle.load(hyperparameters_name)
+        for key, value in vars(saved_cmd_args).items(): # replace with saved cmd_args
+            vars(cmd_args)[key] = value
+        classifier = Classifier()
+        if cmd_args.mode == 'gpu':
+            classifier = classifier.to(args.torch_device)
+        model_name = 'data/{}_model.pth'.format(args.data_name)
+        classifier.load_state_dict(torch.load(model_name))
+        classifier.eval()
+        predictions = []
+        batch_graph = []
+        for i, graph in enumerate(test_graphs):
+            batch_graph.append(graph)
+            if len(batch_graph) == cmd_args.batch_size or i == (len(test_graphs)-1):
+                predictions.append(classifier(batch_graph)[0][:, 1].exp().cpu().detach())
+                batch_graph = []
+        predictions = torch.cat(predictions, 0).unsqueeze(1).numpy()
+        test_idx_and_pred = np.concatenate([test_idx, predictions], 1)
+        pred_name = 'data/' + args.test_name.split('.')[0] + '_pred.txt'
+        np.savetxt(pred_name, test_idx_and_pred, fmt=['%d', '%d', '%1.2f'])
+        print('Predictions for {} are saved in {}'.format(args.test_name, pred_name))
+        exit()
+
+
+    cmd_args.gm = 'DGCNN'
+    cmd_args.sortpooling_k = 0.6
+    cmd_args.latent_dim = [32, 32, 32, 1]
+    cmd_args.hidden = 128
+    cmd_args.out_dim = 0
+    cmd_args.dropout = True
+    cmd_args.num_class = 2
+    cmd_args.mode = 'gpu' if args.cuda else 'cpu'
+    cmd_args.device = str(args.torch_device)
+    cmd_args.num_epochs = args.num_epochs
+    cmd_args.learning_rate = 1e-4
+    cmd_args.printAUC = True
+    cmd_args.quiet = args.quiet
+    cmd_args.feat_dim = max_n_label + 1
+    cmd_args.attr_dim = 0
+    if node_information is not None:
+        cmd_args.attr_dim = node_information.shape[1]
+    if cmd_args.sortpooling_k <= 1:
+        num_nodes_list = sorted([g.num_nodes for g in train_graphs + test_graphs])
+        k_ = int(math.ceil(cmd_args.sortpooling_k * len(num_nodes_list))) - 1
+        cmd_args.sortpooling_k = max(10, num_nodes_list[k_])
+        print('k used in SortPooling is: ' + str(cmd_args.sortpooling_k))
+
     classifier = Classifier()
     if cmd_args.mode == 'gpu':
-        classifier = classifier.cuda()
-    model_name = 'data/{}_model.pth'.format(args.data_name)
-    classifier.load_state_dict(torch.load(model_name))
-    classifier.eval()
-    predictions = []
-    batch_graph = []
-    for i, graph in enumerate(test_graphs):
-        batch_graph.append(graph)
-        if len(batch_graph) == cmd_args.batch_size or i == (len(test_graphs)-1):
-            predictions.append(classifier(batch_graph)[0][:, 1].exp().cpu().detach())
-            batch_graph = []
-    predictions = torch.cat(predictions, 0).unsqueeze(1).numpy()
-    test_idx_and_pred = np.concatenate([test_idx, predictions], 1)
-    pred_name = 'data/' + args.test_name.split('.')[0] + '_pred.txt'
-    np.savetxt(pred_name, test_idx_and_pred, fmt=['%d', '%d', '%1.2f'])
-    print('Predictions for {} are saved in {}'.format(args.test_name, pred_name))
-    exit()
+        classifier = classifier.to(args.torch_device)
 
+    optimizer = optim.Adam(classifier.parameters(), lr=cmd_args.learning_rate)
 
-cmd_args.gm = 'DGCNN'
-cmd_args.sortpooling_k = 0.6
-cmd_args.latent_dim = [32, 32, 32, 1]
-cmd_args.hidden = 128
-cmd_args.out_dim = 0
-cmd_args.dropout = True
-cmd_args.num_class = 2
-cmd_args.mode = 'gpu' if args.cuda else 'cpu'
-cmd_args.num_epochs = args.num_epochs
-cmd_args.learning_rate = 1e-4
-cmd_args.printAUC = True
-cmd_args.feat_dim = max_n_label + 1
-cmd_args.attr_dim = 0
-if node_information is not None:
-    cmd_args.attr_dim = node_information.shape[1]
-if cmd_args.sortpooling_k <= 1:
-    num_nodes_list = sorted([g.num_nodes for g in train_graphs + test_graphs])
-    k_ = int(math.ceil(cmd_args.sortpooling_k * len(num_nodes_list))) - 1
-    cmd_args.sortpooling_k = max(10, num_nodes_list[k_])
-    print('k used in SortPooling is: ' + str(cmd_args.sortpooling_k))
+    random.shuffle(train_graphs)
+    val_num = max(1, int(0.1 * len(train_graphs))) if len(train_graphs) > 1 else 0
+    val_graphs = train_graphs[:val_num]
+    train_graphs = train_graphs[val_num:]
+    loop_batch_size = min(args.batch_size, max(1, len(train_graphs)))
 
-classifier = Classifier()
-if cmd_args.mode == 'gpu':
-    classifier = classifier.cuda()
-
-optimizer = optim.Adam(classifier.parameters(), lr=cmd_args.learning_rate)
-
-random.shuffle(train_graphs)
-val_num = max(1, int(0.1 * len(train_graphs))) if len(train_graphs) > 1 else 0
-val_graphs = train_graphs[:val_num]
-train_graphs = train_graphs[val_num:]
-loop_batch_size = min(args.batch_size, max(1, len(train_graphs)))
-
-train_idxes = list(range(len(train_graphs)))
-best_loss = None
-best_epoch = None
-best_test_metrics = None
-best_val_loss = None
-best_test_loss = None
-for epoch in range(cmd_args.num_epochs):
-    random.shuffle(train_idxes)
-    classifier.train()
-    avg_loss = loop_dataset(
-        train_graphs, classifier, train_idxes, optimizer=optimizer, bsize=loop_batch_size
-    )
-    if not cmd_args.printAUC:
-        avg_loss[2] = 0.0
-    print('\033[92maverage training of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
-        epoch, avg_loss[0], avg_loss[1], avg_loss[2]))
-
-    classifier.eval()
-    val_loss = loop_dataset(
-        val_graphs, classifier, list(range(len(val_graphs))), bsize=loop_batch_size
-    )
-    if not cmd_args.printAUC:
-        val_loss[2] = 0.0
-    print('\033[93maverage validation of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
-        epoch, val_loss[0], val_loss[1], val_loss[2]))
-    if best_loss is None:
-        best_loss = val_loss
-    if val_loss[0] <= best_loss[0]:
-        best_loss = val_loss
-        best_epoch = epoch
-        test_loss = loop_dataset(
-            test_graphs, classifier, list(range(len(test_graphs))), bsize=loop_batch_size
+    train_idxes = list(range(len(train_graphs)))
+    best_loss = None
+    best_epoch = None
+    best_state_dict = None
+    best_val_loss = None
+    training_start_time = time.time()
+    for epoch in range(cmd_args.num_epochs):
+        random.shuffle(train_idxes)
+        classifier.train()
+        avg_loss = loop_dataset(
+            train_graphs, classifier, train_idxes, optimizer=optimizer, bsize=loop_batch_size
         )
         if not cmd_args.printAUC:
-            test_loss[2] = 0.0
-        print('\033[94maverage test of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
-            epoch, test_loss[0], test_loss[1], test_loss[2]))
-        test_labels, test_scores = predict_graph_scores(classifier, test_graphs, loop_batch_size)
-        best_test_metrics = compute_link_prediction_metrics(test_labels, test_scores, threshold=args.threshold)
-        best_val_loss = val_loss.copy()
-        best_test_loss = test_loss.copy()
+            avg_loss[2] = 0.0
+        log_epoch = (
+            not args.quiet
+            or epoch == 0
+            or (epoch + 1) % args.log_every == 0
+            or epoch == cmd_args.num_epochs - 1
+        )
+        if log_epoch:
+            print('\033[92maverage training of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+                epoch, avg_loss[0], avg_loss[1], avg_loss[2]))
 
-print('\033[95mFinal test performance: epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
-    best_epoch, test_loss[0], test_loss[1], test_loss[2]))
+        classifier.eval()
+        val_loss = loop_dataset(
+            val_graphs, classifier, list(range(len(val_graphs))), bsize=loop_batch_size
+        )
+        if not cmd_args.printAUC:
+            val_loss[2] = 0.0
+        if log_epoch:
+            print('\033[93maverage validation of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+                epoch, val_loss[0], val_loss[1], val_loss[2]))
+        if best_loss is None:
+            best_loss = val_loss
+        if val_loss[0] <= best_loss[0]:
+            best_loss = val_loss
+            best_epoch = epoch
+            best_state_dict = copy.deepcopy(classifier.state_dict())
+            best_val_loss = val_loss.copy()
 
-if best_test_metrics is None:
+    if best_state_dict is None:
+        raise RuntimeError('Training did not produce a valid validation checkpoint')
+    classifier.load_state_dict(best_state_dict)
+    classifier.eval()
+    test_loss = loop_dataset(
+        test_graphs, classifier, list(range(len(test_graphs))), bsize=loop_batch_size
+    )
+    if not cmd_args.printAUC:
+        test_loss[2] = 0.0
     test_labels, test_scores = predict_graph_scores(classifier, test_graphs, loop_batch_size)
-    best_test_metrics = compute_link_prediction_metrics(test_labels, test_scores, threshold=args.threshold)
-    best_val_loss = val_loss.copy()
+    best_test_metrics = compute_link_prediction_metrics(
+        test_labels, test_scores, threshold=args.threshold
+    )
     best_test_loss = test_loss.copy()
+    timings['training_and_inference_seconds'] = time.time() - training_start_time
 
-result_dir = resolve_path(args.result_dir, args.file_dir)
-if result_dir is None:
-    result_dir = os.path.join(args.file_dir, 'data', 'result', 'prediction_scores_logs')
-train_ratio = safe_divide(len(train_pos[0]), len(train_pos[0]) + len(test_pos[0])) * 100
-total_links = int(binarize_adjacency(net).nnz)
-train_links = len(train_pos[0])
-test_links = len(test_pos[0])
-ecological_row = build_ecological_metric_row(
-    net,
-    A,
-    test_pos,
-    test_neg,
-    test_labels,
-    test_scores,
-    args.threshold,
-)
-metrics_row = {
-    'Version': 'SEAL_directed',
-    'TimeElapsed': format_elapsed_time(time.time() - run_start_time),
-    'K': args.hop,
-    'TrainRatio': train_ratio,
-    'ExperimentID': args.experiment_id,
-    'Seed': args.seed,
-    'ThresholdMode': 'fixed',
-    'TotalLinks': total_links,
-    'TrainLinks': train_links,
-    'TestLinks': test_links,
-    'BackboneTotal': 0,
-    'NonBackboneTotal': total_links,
-    'BackboneTrainLinks': 0,
-    'NonBackboneTrainLinks': train_links,
-    'BackboneTestLinks': 0,
-    'NonBackboneTestLinks': test_links,
-    'CvK': 0,
-    'FoldID': 0,
-    'NumFolds': 0,
-}
-metrics_row.update(best_test_metrics)
-metrics_row.update(ecological_row)
-metrics_file = write_metrics_csv(metrics_row, result_dir, args.data_name)
-print('SEAL metrics appended to {}'.format(metrics_file))
-        
-if args.save_model:
-    model_name = 'data/{}_model.pth'.format(args.data_name)
-    print('Saving final model states to {}...'.format(model_name))
-    torch.save(classifier.state_dict(), model_name)
-    hyper_name = 'data/{}_hyper.pkl'.format(args.data_name)
-    with open(hyper_name, 'wb') as hyperparameters_file:
-        pickle.dump(cmd_args, hyperparameters_file)
-        print('Saving hyperparameters to {}...'.format(hyper_name))
+    print('\033[95mFinal test performance at best validation epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+        best_epoch, test_loss[0], test_loss[1], test_loss[2]))
+
+    result_dir = resolve_path(args.result_dir, args.file_dir)
+    if result_dir is None:
+        result_dir = os.path.join(args.file_dir, 'data', 'result', 'prediction_scores_logs')
+    train_ratio = safe_divide(len(train_pos[0]), len(train_pos[0]) + len(test_pos[0])) * 100
+    total_links = int(binarize_adjacency(net).nnz)
+    train_links = len(train_pos[0])
+    test_links = len(test_pos[0])
+    ecological_row, pseudo_full, predicted_links = build_ecological_metric_row(
+        net,
+        A,
+        test_pos,
+        test_neg,
+        test_labels,
+        test_scores,
+        args.threshold,
+    )
+    requested_train_ratio = (
+        float(args.requested_train_ratio)
+        if args.requested_train_ratio is not None
+        else (1.0 - float(args.test_ratio)) * 100.0
+    )
+    timings['total_seconds'] = time.time() - run_start_time
+    metrics_row = {
+        'Version': 'SEAL_directed',
+        'TimeElapsed': format_elapsed_time(timings['total_seconds']),
+        'TimeElapsedSeconds': timings['total_seconds'],
+        'K': args.hop,
+        'TrainRatio': train_ratio,
+        'RequestedTrainRatio': requested_train_ratio,
+        'RealizedTrainRatio': train_ratio,
+        'ExperimentID': args.experiment_id,
+        'FoodwebIndex': args.foodweb_index,
+        'Foodweb': args.data_name,
+        'Seed': args.seed,
+        'Device': str(args.torch_device),
+        'DeterministicAlgorithms': int(args.deterministic),
+        'NumWorkers': args.num_workers,
+        'ConfigHash': args.config_hash or 'legacy',
+        'ThresholdMode': 'fixed',
+        'TotalLinks': total_links,
+        'TrainLinks': train_links,
+        'TestLinks': test_links,
+        'BackboneTotal': 0,
+        'NonBackboneTotal': total_links,
+        'BackboneTrainLinks': 0,
+        'NonBackboneTrainLinks': train_links,
+        'BackboneTestLinks': 0,
+        'NonBackboneTestLinks': test_links,
+        'CvK': 0,
+        'FoldID': 0,
+        'NumFolds': 0,
+        'BestEpoch': best_epoch,
+        'BestValidationLoss': float(best_val_loss[0]),
+        'TestLoss': float(best_test_loss[0]),
+    }
+    metrics_row.update(best_test_metrics)
+    metrics_row.update(ecological_row)
+    metrics_row.update({
+        'RoleFilterRequested': int(negative_sampling_metadata['role_filter_requested']),
+        'RoleConstrainedPoolSize': negative_sampling_metadata['role_constrained_pool_size'],
+        'SelectedNegativePoolSize': negative_sampling_metadata['selected_pool_size'],
+        'RequiredNegativeCount': negative_sampling_metadata['required_negative_count'],
+        'RolePoolFallbackUsed': int(negative_sampling_metadata['role_pool_fallback_used']),
+        'NegativeFallbackPolicy': negative_sampling_metadata['fallback_policy'],
+        'NegativePositiveRatio': negative_sampling_metadata['negative_positive_ratio'],
+        'TrainNegativeCount': negative_sampling_metadata['train_negative_count'],
+        'TestNegativeCount': negative_sampling_metadata['test_negative_count'],
+    })
+
+    if args.run_dir:
+        taxonomy = data.get('taxonomy') if isinstance(data, dict) else None
+        artifact_arrays = {
+            'train_pos': pairs_to_array(train_pos),
+            'train_neg': pairs_to_array(train_neg),
+            'test_pos': pairs_to_array(test_pos),
+            'test_neg': pairs_to_array(test_neg),
+            'test_labels': np.asarray(test_labels, dtype=np.int8),
+            'test_scores': np.asarray(test_scores, dtype=np.float64),
+            'predicted_links': np.asarray(predicted_links, dtype=np.int64).reshape(-1, 2),
+        }
+        artifact_arrays.update(sparse_to_arrays(pseudo_full, prefix='pseudo'))
+        provenance = {
+            'schema_version': 'seal-directed-provenance-v1',
+            'source_commit': args.source_commit,
+            'python_version': platform.python_version(),
+            'torch_version': torch.__version__,
+            'torch_cuda_version': torch.version.cuda,
+            'cuda_available': torch.cuda.is_available(),
+            'device': str(args.torch_device),
+            'gpu_name': torch.cuda.get_device_name(0) if args.cuda else None,
+            'gpu_total_memory': (
+                int(torch.cuda.get_device_properties(0).total_memory) if args.cuda else None
+            ),
+            'hostname': socket.gethostname(),
+            'split_hash': split_hash(train_pos, train_neg, test_pos, test_neg),
+            'node_order_hash': node_order_hash(taxonomy, net),
+            'negative_sampling': negative_sampling_metadata,
+            'timings': timings,
+        }
+        metrics_file = write_run_bundle(
+            args.run_dir,
+            metrics_row,
+            artifact_arrays,
+            provenance,
+            args.config_hash,
+        ) / 'metrics.json'
+        print('SEAL atomic run bundle written to {}'.format(args.run_dir))
+    else:
+        metrics_file = write_metrics_csv(metrics_row, result_dir, args.data_name)
+        print('SEAL metrics appended to {}'.format(metrics_file))
+
+    if args.save_model:
+        model_name = 'data/{}_model.pth'.format(args.data_name)
+        print('Saving final model states to {}...'.format(model_name))
+        torch.save(classifier.state_dict(), model_name)
+        hyper_name = 'data/{}_hyper.pkl'.format(args.data_name)
+        with open(hyper_name, 'wb') as hyperparameters_file:
+            pickle.dump(cmd_args, hyperparameters_file)
+            print('Saving hyperparameters to {}...'.format(hyper_name))
+
+
+if __name__ == "__main__":
+    main()

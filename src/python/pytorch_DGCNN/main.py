@@ -31,7 +31,7 @@ class Classifier(nn.Module):
                             output_dim=cmd_args.out_dim,
                             num_node_feats=cmd_args.feat_dim+cmd_args.attr_dim,
                             num_edge_feats=cmd_args.edge_feat_dim,
-                            k=cmd_args.sortpooling_k, 
+                            k=cmd_args.sortpooling_k,
                             conv1d_activation=cmd_args.conv1d_activation)
         out_dim = cmd_args.out_dim
         if out_dim == 0:
@@ -98,15 +98,16 @@ class Classifier(nn.Module):
             pass
         else:
             node_feat = torch.ones(n_nodes, 1)  # use all-one vector as node features
-        
+
         if edge_feat_flag == True:
             edge_feat = torch.cat(concat_edge_feat, 0)
 
-        if cmd_args.mode == 'gpu':
-            node_feat = node_feat.cuda()
-            labels = labels.cuda()
+        device = next(self.parameters()).device
+        if device.type == 'cuda':
+            node_feat = node_feat.to(device)
+            labels = labels.to(device)
             if edge_feat_flag == True:
-                edge_feat = edge_feat.cuda()
+                edge_feat = edge_feat.to(device)
 
         if edge_feat_flag == True:
             return node_feat, edge_feat, labels
@@ -131,12 +132,16 @@ class Classifier(nn.Module):
             node_feat, edge_feat, labels = feature_label
         embed = self.gnn(batch_graph, node_feat, edge_feat)
         return embed, labels
-        
+
 
 def loop_dataset(g_list, classifier, sample_idxes, optimizer=None, bsize=cmd_args.batch_size):
     total_loss = []
     total_iters = (len(sample_idxes) + (bsize - 1) * (optimizer is None)) // bsize
-    pbar = tqdm(range(total_iters), unit='batch')
+    pbar = tqdm(
+        range(total_iters),
+        unit='batch',
+        disable=bool(getattr(cmd_args, 'quiet', False)),
+    )
     all_targets = []
     all_scores = []
 
@@ -147,12 +152,14 @@ def loop_dataset(g_list, classifier, sample_idxes, optimizer=None, bsize=cmd_arg
         batch_graph = [g_list[idx] for idx in selected_idx]
         targets = [g_list[idx].label for idx in selected_idx]
         all_targets += targets
-        if classifier.regression:
-            pred, mae, loss = classifier(batch_graph)
-            all_scores.append(pred.cpu().detach())  # for binary classification
-        else:
-            logits, loss, acc = classifier(batch_graph)
-            all_scores.append(logits[:, 1].cpu().detach())  # for binary classification
+        grad_context = torch.enable_grad() if optimizer is not None else torch.no_grad()
+        with grad_context:
+            if classifier.regression:
+                pred, mae, loss = classifier(batch_graph)
+                all_scores.append(pred.cpu().detach())  # for binary classification
+            else:
+                logits, loss, acc = classifier(batch_graph)
+                all_scores.append(logits[:, 1].cpu().detach())  # for binary classification
 
         if optimizer is not None:
             optimizer.zero_grad()
@@ -174,9 +181,9 @@ def loop_dataset(g_list, classifier, sample_idxes, optimizer=None, bsize=cmd_arg
     total_loss = np.array(total_loss)
     avg_loss = np.sum(total_loss, 0) / n_samples
     all_scores = torch.cat(all_scores).cpu().numpy()
-    
+
     # np.savetxt('test_scores.txt', all_scores)  # output test predictions
-    
+
     if not classifier.regression and cmd_args.printAUC:
         all_targets = np.array(all_targets)
         fpr, tpr, _ = metrics.roc_curve(all_targets, all_scores, pos_label=1)
@@ -184,7 +191,7 @@ def loop_dataset(g_list, classifier, sample_idxes, optimizer=None, bsize=cmd_arg
         avg_loss = np.concatenate((avg_loss, [auc]))
     else:
         avg_loss = np.concatenate((avg_loss, [0.0]))
-    
+
     return avg_loss
 
 
@@ -205,7 +212,7 @@ if __name__ == '__main__':
 
     classifier = Classifier()
     if cmd_args.mode == 'gpu':
-        classifier = classifier.cuda()
+        classifier = classifier.to(torch.device('cuda:0'))
 
     optimizer = optim.Adam(classifier.parameters(), lr=cmd_args.learning_rate)
 

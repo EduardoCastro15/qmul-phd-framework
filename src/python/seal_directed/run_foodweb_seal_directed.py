@@ -1,277 +1,324 @@
+#!/usr/bin/env python3
+"""Run one manifest shard of the reproducible SEAL-directed GPU campaign."""
+
+from __future__ import annotations
+
 import argparse
 import csv
+import json
 import os
+import platform
+import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-# conda activate Foodweb
-# python src/python/seal_directed/run_foodweb_seal_directed.py \
-#   --foodweb-csv src/matlab/data/foodwebs_mat/foodweb_metrics_ecosystem.csv \
-#   --mat-folder src/python/seal_directed/data/foodwebs_mat_seal_attrs \
-#   --train-ratio 0.9 \
-#   --num-experiments 1 \
-#   --hop 1 \
-#   --no-parallel
-
-# ---
+from seal_run_artifacts import (
+    configuration_hash,
+    file_sha256,
+    is_valid_complete_run,
+    run_directory,
+    safe_file_stem,
+)
 
 
-# Comando para correr SEAL dirigido con atributos:
-
-# python src/python/seal_directed/run_foodweb_seal_directed.py \
-#   --foodweb-csv src/matlab/data/foodwebs_mat/foodweb_metrics_ecosystem.csv \
-#   --train-ratio 0.9 \
-#   --num-experiments 3 \
-#   --hop 1 \
-#   --base-seed 12345 \
-#   --use-attribute \
-#   --continue-on-error \
-#   --no-parallel
-
-
-def safe_file_stem(value):
-    value = os.path.splitext(os.path.basename(str(value or 'seal')))[0]
-    return ''.join(c if c.isalnum() or c in ('-', '_', '.') else '_' for c in value)
+def read_manifest(path):
+    with open(path, newline="", encoding="utf-8-sig") as handle:
+        rows = list(csv.DictReader(handle))
+    required = {
+        "FoodwebIndex", "Foodweb", "ExperimentID", "Seed", "MatPath",
+        "MatSHA256", "ConfigHash",
+    }
+    if not rows:
+        raise ValueError("Manifest is empty: {}".format(path))
+    missing = required.difference(rows[0])
+    if missing:
+        raise ValueError("Manifest is missing columns: {}".format(", ".join(sorted(missing))))
+    return rows
 
 
-def read_foodweb_names(foodweb_csv):
-    with open(foodweb_csv, newline='') as f:
-        reader = csv.DictReader(f)
-        if 'Foodweb' not in reader.fieldnames:
-            raise ValueError('CSV must contain a Foodweb column: {}'.format(foodweb_csv))
-        return [row['Foodweb'].strip() for row in reader if row.get('Foodweb', '').strip()]
+def load_config(path):
+    with open(path, encoding="utf-8") as handle:
+        config = json.load(handle)
+    return config, configuration_hash(config)
 
 
-def build_command(args, script_dir, foodweb, seed, experiment_id, test_ratio):
-    cmd = [
-        str(args.python_executable),
-        str(script_dir / 'Main_directed.py'),
-        '--data-name',
-        foodweb,
-        '--mat-folder',
-        str(args.mat_folder),
-        '--result-dir',
-        str(args.result_dir),
-        '--hop',
-        str(args.hop),
-        '--test-ratio',
-        str(test_ratio),
-        '--seed',
-        str(seed),
-        '--experiment-id',
-        str(experiment_id),
-        '--batch-size',
-        str(args.batch_size),
-        '--max-train-num',
-        str(args.max_train_num),
-        '--num-epochs',
-        str(args.num_epochs),
-        '--threshold',
-        str(args.threshold),
-    ]
-
-    if not args.cuda:
-        cmd.append('--no-cuda')
-    if args.no_parallel:
-        cmd.append('--no-parallel')
-    if args.all_unknown_as_negative:
-        cmd.append('--all-unknown-as-negative')
-    if args.no_role_filter:
-        cmd.append('--no-role-filter')
-    if args.max_nodes_per_hop is not None:
-        cmd.extend(['--max-nodes-per-hop', str(args.max_nodes_per_hop)])
-    if args.use_embedding:
-        cmd.append('--use-embedding')
-    if args.use_attribute:
-        cmd.append('--use-attribute')
-
-    return cmd
-
-
-def parse_args():
-    script_dir = Path(__file__).resolve().parent
-    default_foodweb_csv = script_dir / '../../matlab/data/foodwebs_mat/foodweb_metrics_ecosystem.csv'
-    default_mat_folder = script_dir / 'data/foodwebs_mat_seal_attrs'
-    default_result_dir = script_dir / 'data/result/prediction_scores_logs'
-    default_terminal_log_dir = script_dir / 'data/result/terminal_logs'
-
-    parser = argparse.ArgumentParser(
-        description='Run directed SEAL over food webs listed in a CSV file.'
+def resolve_experiment_id(value):
+    if value is not None:
+        return int(value)
+    slurm_value = os.environ.get("SLURM_ARRAY_TASK_ID")
+    if slurm_value:
+        return int(slurm_value)
+    raise ValueError(
+        "Provide --experiment-id or run as a Slurm array with SLURM_ARRAY_TASK_ID"
     )
-    parser.add_argument('--foodweb-csv', type=Path, default=default_foodweb_csv,
-                        help='CSV containing a Foodweb column')
-    parser.add_argument('--mat-folder', type=Path, default=default_mat_folder,
-                        help='folder containing <Foodweb>.mat files')
-    parser.add_argument('--result-dir', type=Path, default=default_result_dir,
-                        help='directory where result CSVs are written')
-    parser.add_argument('--terminal-log-dir', type=Path, default=default_terminal_log_dir,
-                        help='directory where terminal logs are written')
-    parser.add_argument('--python-executable', type=Path, default=Path(sys.executable),
-                        help='Python executable used to launch Main_directed.py')
-    parser.add_argument('--hop', default=1,
-                        help='SEAL enclosing subgraph hop number, e.g. 1, 2, or auto')
-    parser.add_argument('--train-ratio', type=float, default=0.9,
-                        help='fraction of positive links used for training')
-    parser.add_argument('--num-experiments', type=int, default=5,
-                        help='number of repeated SEAL runs per food web')
-    parser.add_argument('--only-foodweb', action='append', default=[],
-                        help='run only this food-web name; can be provided multiple times')
-    parser.add_argument('--limit', type=int, default=None,
-                        help='run only the first N food webs after filtering')
-    parser.add_argument('--base-seed', type=int, default=12345,
-                        help='first seed; experiment i uses base_seed + i - 1')
-    parser.add_argument('--batch-size', type=int, default=50)
-    parser.add_argument('--max-train-num', type=int, default=100000)
-    parser.add_argument('--num-epochs', type=int, default=50)
-    parser.add_argument('--threshold', type=float, default=0.5)
-    parser.add_argument('--max-nodes-per-hop', type=int, default=None)
-    parser.add_argument('--cuda', action='store_true',
-                        help='allow CUDA if torch can use it; default is CPU')
-    parser.add_argument('--no-parallel', action='store_true',
-                        help='disable multiprocessing subgraph extraction')
-    parser.add_argument('--all-unknown-as-negative', action='store_true')
-    parser.add_argument('--no-role-filter', action='store_true',
-                        help='disable directed ecological role filtering for negative links')
-    parser.add_argument('--use-embedding', action='store_true')
-    parser.add_argument('--use-attribute', action='store_true')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='print commands without running them')
-    parser.add_argument('--continue-on-error', action='store_true',
-                        help='keep running remaining food webs after a failed run')
-    parser.add_argument('--overwrite-results', action='store_true',
-                        help='remove existing <Foodweb>_results_SEAL_directed.csv files before running')
-    return parser.parse_args()
 
 
-def validate_python_environment(python_executable):
-    required_modules = [
-        'torch',
-        'numpy',
-        'scipy',
-        'sklearn',
-        'networkx',
-        'gensim',
-    ]
-    code = 'import ' + ', '.join(required_modules)
+def detect_source_commit(repo_root):
     completed = subprocess.run(
-        [str(python_executable), '-c', code],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
+        ["git", "rev-parse", "HEAD"], cwd=str(repo_root), text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    return completed.stdout.strip() if completed.returncode == 0 else "unknown"
+
+
+def validate_python_environment(python_executable, device, require_cuda):
+    code = (
+        "import json, numpy, scipy, sklearn, networkx, torch; "
+        "print(json.dumps({'python': __import__('sys').version.split()[0], "
+        "'torch': torch.__version__, 'torch_cuda': torch.version.cuda, "
+        "'cuda_available': torch.cuda.is_available(), "
+        "'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}))"
+    )
+    completed = subprocess.run(
+        [str(python_executable), "-c", code], text=True, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, check=False,
     )
     if completed.returncode != 0:
-        raise RuntimeError(
-            'Python executable "{}" cannot import the SEAL dependencies. '
-            'Run from the Foodweb conda environment or pass '
-            '--python-executable /Users/acw792/miniconda3/envs/Foodweb/bin/python. '
-            'Original error:\n{}'.format(
-                python_executable,
-                completed.stderr.strip() or completed.stdout.strip(),
+        raise RuntimeError("SEAL environment validation failed:\n{}".format(completed.stderr))
+    environment = json.loads(completed.stdout.strip().splitlines()[-1])
+    if device == "cuda" and require_cuda and not environment["cuda_available"]:
+        raise RuntimeError("CUDA is required but unavailable: {}".format(environment))
+    print("[ENV] {}".format(json.dumps(environment, sort_keys=True)))
+    return environment
+
+
+def validate_native_library(script_dir):
+    library = script_dir.parent / "pytorch_DGCNN" / "lib" / "build" / "dll" / "libgnn.so"
+    if not library.is_file():
+        raise FileNotFoundError(
+            "Missing native DGCNN library {}. Run `make clean && make` in its lib directory.".format(
+                library
             )
         )
+    with open(library, "rb") as handle:
+        magic = handle.read(4)
+    if platform.system() == "Linux" and magic != b"\x7fELF":
+        raise RuntimeError("{} is not an ELF Linux library".format(library))
+    return library
 
 
-def main():
-    args = parse_args()
-    script_dir = Path(__file__).resolve().parent
-    args.foodweb_csv = args.foodweb_csv.resolve()
-    args.mat_folder = args.mat_folder.resolve()
-    args.result_dir = args.result_dir.resolve()
-    args.terminal_log_dir = args.terminal_log_dir.resolve()
+def stage_mat_file(mat_path, scratch_root, expected_hash, experiment_id):
+    """Copy one immutable MAT input to task-local storage and verify the copy."""
+    task_token = "{}_{}".format(
+        os.environ.get("SLURM_JOB_ID", "local"),
+        os.environ.get("SLURM_ARRAY_TASK_ID", experiment_id),
+    )
+    stage_dir = Path(scratch_root) / "seal_directed_{}".format(task_token) / "mats"
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    staged_path = stage_dir / mat_path.name
+    if staged_path.is_file() and file_sha256(staged_path) == expected_hash:
+        return staged_path
+
+    temporary_path = staged_path.with_name(
+        ".{}.{}.tmp".format(staged_path.name, os.getpid())
+    )
+    if temporary_path.exists():
+        temporary_path.unlink()
+    shutil.copy2(str(mat_path), str(temporary_path))
+    if file_sha256(temporary_path) != expected_hash:
+        temporary_path.unlink()
+        raise RuntimeError("Staged MAT checksum mismatch: {}".format(mat_path))
+    os.replace(str(temporary_path), str(staged_path))
+    return staged_path
+
+
+def build_command(args, config, row, run_dir, source_commit, script_dir, mat_path):
+    command = [
+        str(args.python_executable), str(script_dir / "Main_directed.py"),
+        "--data-name", row["Foodweb"],
+        "--mat-folder", str(mat_path.parent),
+        "--run-dir", str(run_dir),
+        "--config-hash", row["ConfigHash"],
+        "--source-commit", source_commit,
+        "--foodweb-index", row["FoodwebIndex"],
+        "--experiment-id", row["ExperimentID"],
+        "--seed", row["Seed"],
+        "--device", args.device,
+        "--num-workers", str(args.num_workers),
+        "--test-ratio", str(config["test_ratio"]),
+        "--requested-train-ratio", str(config["requested_train_ratio"]),
+        "--hop", str(config["hop"]),
+        "--batch-size", str(config["batch_size"]),
+        "--max-train-num", str(config["max_train_num"]),
+        "--num-epochs", str(config["num_epochs"]),
+        "--threshold", str(config["threshold"]),
+        "--quiet", "--log-every", "10",
+    ]
+    if args.require_cuda:
+        command.append("--require-cuda")
+    if config.get("deterministic_algorithms", True):
+        command.append("--deterministic")
+    if config.get("use_attribute"):
+        command.append("--use-attribute")
+    if config.get("use_embedding"):
+        command.append("--use-embedding")
+    if not config.get("role_filter", True):
+        command.append("--no-role-filter")
+    if config.get("all_unknown_as_negative"):
+        command.append("--all-unknown-as-negative")
+    if args.num_workers == 1:
+        command.append("--no-parallel")
+    return command
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--result-root", type=Path, required=True)
+    parser.add_argument("--experiment-id", type=int, default=None)
+    parser.add_argument("--only-foodweb", action="append", default=[])
+    parser.add_argument("--python-executable", type=Path, default=Path(sys.executable))
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
+    parser.add_argument("--require-cuda", action="store_true")
+    parser.add_argument("--num-workers", type=int, default=1)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument("--skip-input-hash-check", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--source-commit", default=None)
+    parser.add_argument(
+        "--scratch-root", type=Path, default=None,
+        help="task-local staging directory, normally Slurm's TMPDIR",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    if args.num_workers < 1:
+        raise ValueError("--num-workers must be at least 1")
+    args.manifest = args.manifest.resolve()
+    args.config = args.config.resolve()
+    args.result_root = args.result_root.resolve()
     args.python_executable = args.python_executable.resolve()
+    if args.scratch_root is not None:
+        args.scratch_root = args.scratch_root.resolve()
+    script_dir = Path(__file__).resolve().parent
+    repo_root = script_dir.parents[2]
+    experiment_id = resolve_experiment_id(args.experiment_id)
 
-    if not args.foodweb_csv.is_file():
-        raise FileNotFoundError(args.foodweb_csv)
-    if not args.mat_folder.is_dir():
-        raise FileNotFoundError(args.mat_folder)
-    if not args.python_executable.is_file():
-        raise FileNotFoundError(args.python_executable)
-    if not 0 < args.train_ratio < 1:
-        raise ValueError('--train-ratio must be between 0 and 1')
-    if not args.dry_run:
-        validate_python_environment(args.python_executable)
-
-    foodwebs = read_foodweb_names(args.foodweb_csv)
+    config, config_hash = load_config(args.config)
+    rows = read_manifest(args.manifest)
+    manifest_hashes = {row["ConfigHash"] for row in rows}
+    if manifest_hashes != {config_hash}:
+        raise ValueError(
+            "RUN_CONFIG hash does not match manifest: config={}, manifest={}".format(
+                config_hash, sorted(manifest_hashes)
+            )
+        )
+    rows = [row for row in rows if int(row["ExperimentID"]) == experiment_id]
     if args.only_foodweb:
-        requested = set(args.only_foodweb)
-        foodwebs = [foodweb for foodweb in foodwebs if foodweb in requested]
-        missing = requested.difference(foodwebs)
+        selected = set(args.only_foodweb)
+        rows = [row for row in rows if row["Foodweb"] in selected]
+        missing = selected.difference(row["Foodweb"] for row in rows)
         if missing:
-            raise ValueError('Requested food webs not found in CSV: {}'.format(
-                ', '.join(sorted(missing))
-            ))
-    if args.limit is not None:
-        foodwebs = foodwebs[:args.limit]
+            raise ValueError("Food webs absent from shard: {}".format(", ".join(sorted(missing))))
+    if not rows:
+        raise ValueError("No manifest rows selected for ExperimentID={}".format(experiment_id))
 
-    if not foodwebs:
-        raise ValueError('No food webs selected to run.')
-    args.result_dir.mkdir(parents=True, exist_ok=True)
-    log_dir = args.terminal_log_dir
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.overwrite_results:
-        for foodweb in foodwebs:
-            result_file = args.result_dir / '{}_results_SEAL_directed.csv'.format(
-                safe_file_stem(foodweb)
+    source_commit = args.source_commit or detect_source_commit(repo_root)
+    frozen_commit = config.get("source_commit", "unspecified")
+    if frozen_commit not in ("", "unspecified", source_commit):
+        raise ValueError(
+            "Source commit mismatch: RUN_CONFIG={}, checkout={}".format(
+                frozen_commit, source_commit
             )
-            if result_file.exists():
-                result_file.unlink()
+        )
+    args.result_root.mkdir(parents=True, exist_ok=True)
+    log_root = args.result_root / "task_logs" / "experiment_{:03d}".format(experiment_id)
+    log_root.mkdir(parents=True, exist_ok=True)
 
-    test_ratio = 1.0 - args.train_ratio
+    if not args.dry_run:
+        validate_python_environment(args.python_executable, args.device, args.require_cuda)
+        library = validate_native_library(script_dir)
+        print("[NATIVE] {}".format(library))
+
     failures = []
-
-    for foodweb in foodwebs:
-        mat_file = args.mat_folder / '{}.mat'.format(foodweb)
-        if not mat_file.is_file():
-            message = 'Missing MAT file for "{}": {}'.format(foodweb, mat_file)
-            if args.continue_on_error:
-                print('[WARN] ' + message)
-                failures.append((foodweb, message))
+    skipped = 0
+    verified_mat_hashes = {}
+    task_start = time.time()
+    for row in rows:
+        mat_path = Path(row["MatPath"])
+        if not mat_path.is_file():
+            failures.append((row["Foodweb"], "missing MAT {}".format(mat_path)))
+            if args.fail_fast:
+                break
+            continue
+        if not args.skip_input_hash_check:
+            observed_hash = verified_mat_hashes.setdefault(str(mat_path), file_sha256(mat_path))
+            if observed_hash != row["MatSHA256"]:
+                failures.append((row["Foodweb"], "MAT checksum mismatch"))
+                if args.fail_fast:
+                    break
                 continue
-            raise FileNotFoundError(message)
 
-        for experiment_id in range(1, args.num_experiments + 1):
-            seed = args.base_seed + experiment_id - 1
-            cmd = build_command(args, script_dir, foodweb, seed, experiment_id, test_ratio)
-            log_file = log_dir / '{}_SEAL_exp{:03d}_seed{}.log'.format(
-                safe_file_stem(foodweb), experiment_id, seed
+        run_dir = run_directory(
+            args.result_root, row["Foodweb"], row["ExperimentID"], row["Seed"]
+        )
+        if run_dir.exists():
+            if args.resume and is_valid_complete_run(run_dir, row["ConfigHash"]):
+                print("[SKIP] valid completed run {}".format(run_dir))
+                skipped += 1
+                continue
+            failures.append(
+                (row["Foodweb"], "existing run is invalid or resume was not requested: {}".format(run_dir))
             )
+            if args.fail_fast:
+                break
+            continue
 
-            print('[SEAL_directed] {} | experiment {}/{} | seed {} | log {}'.format(
-                foodweb, experiment_id, args.num_experiments, seed, log_file
-            ))
-            if args.dry_run:
-                print(' '.join('"{}"'.format(part) if ' ' in part else part for part in cmd))
+        command_mat_path = mat_path
+        if args.scratch_root is not None:
+            try:
+                command_mat_path = stage_mat_file(
+                    mat_path, args.scratch_root, row["MatSHA256"], experiment_id
+                )
+            except Exception as error:
+                failures.append((row["Foodweb"], "input staging failed: {}".format(error)))
+                if args.fail_fast:
+                    break
                 continue
+        command = build_command(
+            args, config, row, run_dir, source_commit, script_dir, command_mat_path
+        )
+        log_path = log_root / "{}_seed_{}.log".format(
+            safe_file_stem(row["Foodweb"]), row["Seed"]
+        )
+        print(
+            "[RUN] experiment={} foodweb_index={} seed={} foodweb={!r}".format(
+                row["ExperimentID"], row["FoodwebIndex"], row["Seed"], row["Foodweb"]
+            )
+        )
+        if args.dry_run:
+            print(subprocess.list2cmdline(command))
+            continue
+        with open(log_path, "w", encoding="utf-8") as log_handle:
+            completed = subprocess.run(
+                command, cwd=str(script_dir), stdout=log_handle,
+                stderr=subprocess.STDOUT, check=False,
+                env=dict(os.environ, PYTHONHASHSEED=row["Seed"]),
+            )
+        if completed.returncode != 0 or not is_valid_complete_run(run_dir, row["ConfigHash"]):
+            failures.append(
+                (row["Foodweb"], "exit={} log={}".format(completed.returncode, log_path))
+            )
+            if args.fail_fast:
+                break
 
-            with open(log_file, 'w') as log:
-                completed = subprocess.run(
-                    cmd,
-                    cwd=script_dir,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    check=False,
-                )
-
-            if completed.returncode != 0:
-                message = 'SEAL_directed failed for "{}" experiment {}. See {}'.format(
-                    foodweb, experiment_id, log_file
-                )
-                if args.continue_on_error:
-                    print('[WARN] ' + message)
-                    failures.append((foodweb, message))
-                    continue
-                raise RuntimeError(message)
-
+    elapsed = time.time() - task_start
+    print(
+        "[SUMMARY] selected={} skipped={} failed={} elapsed_seconds={:.1f}".format(
+            len(rows), skipped, len(failures), elapsed
+        )
+    )
+    for foodweb, message in failures:
+        print("[FAILED] {}: {}".format(foodweb, message), file=sys.stderr)
     if failures:
-        print('[SEAL_directed] Completed with {} failure(s).'.format(len(failures)))
-        for foodweb, message in failures:
-            print('[SEAL_directed] {}: {}'.format(foodweb, message))
-    else:
-        print('[SEAL_directed] Completed all requested food-web runs.')
+        raise SystemExit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

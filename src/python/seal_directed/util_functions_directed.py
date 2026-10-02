@@ -8,15 +8,12 @@ import argparse
 import scipy.io as sio
 import scipy.sparse as ssp
 from sklearn import metrics
-from gensim.models import Word2Vec
 import warnings
 warnings.simplefilter('ignore', ssp.SparseEfficiencyWarning)
 cur_dir = os.path.dirname(os.path.realpath(__file__))
 python_dir = os.path.dirname(cur_dir)
 sys.path.append('%s/pytorch_DGCNN' % python_dir)
-sys.path.append('%s/software/node2vec/src' % python_dir)
 from util import GNNGraph
-import node2vec
 import multiprocessing as mp
 from itertools import islice
 
@@ -93,7 +90,8 @@ def enumerate_negative_links_directed(net, role_code=None, use_role_filter=False
 
 
 def sample_neg(net, test_ratio=0.1, train_pos=None, test_pos=None, max_train_num=None,
-               all_unknown_as_negative=False, role_code=None, use_role_filter=False):
+               all_unknown_as_negative=False, role_code=None, use_role_filter=False,
+               return_metadata=False):
     net = binarize_adjacency(net)
     row, col, _ = ssp.find(net)
     keep = row != col
@@ -121,11 +119,14 @@ def sample_neg(net, test_ratio=0.1, train_pos=None, test_pos=None, max_train_num
     neg_row, neg_col = enumerate_negative_links_directed(
         net, role_code=role_code, use_role_filter=use_role_filter
     )
+    constrained_pool_size = len(neg_row)
+    fallback_used = False
     if len(neg_row) < need_num and use_role_filter:
         print('role-constrained negative pool too small; falling back to all directed unknown links')
         neg_row, neg_col = enumerate_negative_links_directed(
             net, role_code=role_code, use_role_filter=False
         )
+        fallback_used = True
 
     if not all_unknown_as_negative:
         if len(neg_row) < need_num:
@@ -148,11 +149,27 @@ def sample_neg(net, test_ratio=0.1, train_pos=None, test_pos=None, max_train_num
         train_perm = np.random.permutation(len(neg_row))[:train_num]
         train_neg = (neg_row[train_perm], neg_col[train_perm])
         test_neg = (neg_row, neg_col)
-    return train_pos, train_neg, test_pos, test_neg
+    metadata = {
+        'negative_sampling': 'uniform_without_replacement',
+        'negative_positive_ratio': 1,
+        'role_filter_requested': bool(use_role_filter),
+        'role_constrained_pool_size': int(constrained_pool_size),
+        'selected_pool_size': int(len(neg_row)),
+        'required_negative_count': int(need_num),
+        'role_pool_fallback_used': bool(fallback_used),
+        'fallback_policy': 'replace_with_all_directed_nonlinks',
+        'train_negative_count': int(len(train_neg[0])),
+        'test_negative_count': int(len(test_neg[0])),
+    }
+    result = (train_pos, train_neg, test_pos, test_neg)
+    if return_metadata:
+        return result + (metadata,)
+    return result
 
-    
-def links2subgraphs(A, train_pos, train_neg, test_pos, test_neg, h=1, 
-                    max_nodes_per_hop=None, node_information=None, no_parallel=False):
+
+def links2subgraphs(A, train_pos, train_neg, test_pos, test_neg, h=1,
+                    max_nodes_per_hop=None, node_information=None, no_parallel=False,
+                    num_workers=None):
     # automatically select h from {1, 2}
     if h == 'auto':
         # split train into val_train and val_test
@@ -172,10 +189,19 @@ def links2subgraphs(A, train_pos, train_neg, test_pos, test_neg, h=1,
 
     # extract enclosing subgraphs
     max_n_label = {'value': 0}
+    workers = 1 if no_parallel else int(num_workers or 1)
+    pool = None
+    if workers > 1:
+        pool = mp.get_context('spawn').Pool(processes=workers)
+
     def helper(A, links, g_label):
         g_list = []
-        if no_parallel:
-            for i, j in tqdm(zip(links[0], links[1])):
+        if workers <= 1:
+            for i, j in tqdm(
+                zip(links[0], links[1]),
+                total=len(links[0]),
+                disable=not sys.stderr.isatty(),
+            ):
                 g, n_labels, n_features = subgraph_extraction_labeling(
                     (i, j), A, h, max_nodes_per_hop, node_information
                 )
@@ -185,38 +211,37 @@ def links2subgraphs(A, train_pos, train_neg, test_pos, test_neg, h=1,
         else:
             # the parallel extraction code
             start = time.time()
-            ctx = mp.get_context('fork')
-            pool = ctx.Pool(mp.cpu_count())
-            results = pool.map_async(
-                parallel_worker, 
-                [((i, j), A, h, max_nodes_per_hop, node_information) for i, j in zip(links[0], links[1])]
-            )
-            remaining = results._number_left
-            pbar = tqdm(total=remaining)
-            while True:
-                pbar.update(remaining - results._number_left)
-                if results.ready(): break
-                remaining = results._number_left
-                time.sleep(1)
-            results = results.get()
-            pool.close()
-            pbar.close()
+            work_items = [
+                ((i, j), A, h, max_nodes_per_hop, node_information)
+                for i, j in zip(links[0], links[1])
+            ]
+            results = list(tqdm(
+                pool.imap(parallel_worker, work_items),
+                total=len(work_items),
+                disable=not sys.stderr.isatty(),
+            ))
             g_list = [GNNGraph(g, g_label, n_labels, n_features) for g, n_labels, n_features in results]
-            max_n_label['value'] = max(
-                max([max(n_labels) for _, n_labels, _ in results]), max_n_label['value']
-            )
+            if results:
+                max_n_label['value'] = max(
+                    max([max(n_labels) for _, n_labels, _ in results]), max_n_label['value']
+                )
             end = time.time()
             print("Time eplased for subgraph extraction: {}s".format(end-start))
             return g_list
 
     print('Enclosing subgraph extraction begins...')
     train_graphs, test_graphs = None, None
-    if train_pos and train_neg:
-        train_graphs = helper(A, train_pos, 1) + helper(A, train_neg, 0)
-    if test_pos and test_neg:
-        test_graphs = helper(A, test_pos, 1) + helper(A, test_neg, 0)
-    elif test_pos:
-        test_graphs = helper(A, test_pos, 1)
+    try:
+        if train_pos and train_neg:
+            train_graphs = helper(A, train_pos, 1) + helper(A, train_neg, 0)
+        if test_pos and test_neg:
+            test_graphs = helper(A, test_pos, 1) + helper(A, test_neg, 0)
+        elif test_pos:
+            test_graphs = helper(A, test_pos, 1)
+    finally:
+        if pool is not None:
+            pool.close()
+            pool.join()
     return train_graphs, test_graphs, max_n_label['value']
 
 def parallel_worker(x):
@@ -244,7 +269,7 @@ def subgraph_extraction_labeling(ind, A, h=1, max_nodes_per_hop=None,
     # move target nodes to top
     nodes.remove(ind[0])
     nodes.remove(ind[1])
-    nodes = [ind[0], ind[1]] + list(nodes) 
+    nodes = [ind[0], ind[1]] + list(nodes)
     subgraph = A[nodes, :][:, nodes].tolil()
     subgraph[0, 1] = 0
     subgraph = subgraph.tocsr()
@@ -311,8 +336,15 @@ def node_label(subgraph):
     labels = np.concatenate((np.array([1, 1]), labels))
     return labels
 
-    
+
 def generate_node2vec_embeddings(A, emd_size=128, negative_injection=False, train_neg=None):
+    from gensim.models import Word2Vec
+
+    node2vec_path = '%s/software/node2vec/src' % python_dir
+    if node2vec_path not in sys.path:
+        sys.path.append(node2vec_path)
+    import node2vec
+
     if negative_injection:
         row, col = train_neg
         A = A.copy()
@@ -325,7 +357,7 @@ def generate_node2vec_embeddings(A, emd_size=128, negative_injection=False, trai
     G.preprocess_transition_probs()
     walks = G.simulate_walks(num_walks=10, walk_length=80)
     walks = [list(map(str, walk)) for walk in walks]
-    model = Word2Vec(walks, size=emd_size, window=10, min_count=0, sg=1, 
+    model = Word2Vec(walks, size=emd_size, window=10, min_count=0, sg=1,
             workers=8, iter=1)
     wv = model.wv
     embeddings = np.zeros([A.shape[0], emd_size], dtype='float32')
@@ -350,8 +382,8 @@ def AA(A, test_pos, test_neg):
     A_[np.isinf(A_)] = 0
     sim = A.dot(A_)
     return CalcAUC(sim, test_pos, test_neg)
-    
-        
+
+
 def CN(A, test_pos, test_neg):
     # Common Neighbor score
     A = weak_projection(A)
