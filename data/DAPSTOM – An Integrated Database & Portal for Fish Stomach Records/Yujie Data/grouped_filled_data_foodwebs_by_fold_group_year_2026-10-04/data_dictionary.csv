@@ -1,0 +1,19 @@
+field,type,definition,allowed_values
+edge_status,nullable integer,Final edge state after filling,"1, 0, or NA"
+evidence_class,string,Original/imputed/unresolved interpretation,five documented classes
+edge_status_before_imputation,nullable integer,Grouped state before filling,"1, 0, or NA"
+edge_status_original_grouped,nullable integer,Canonical original grouped state,"1, 0, or NA"
+was_spatiotemporally_imputed,boolean,Whether final state was filled,true or false
+imputation_stage,string,Stage that supplied the final state,canonical stage labels
+spatiotemporal_independent_source_count,nullable integer,Independent donor group-year count,>=3 for imputed rows
+spatiotemporal_donor_ones,nullable integer,Number of donor states equal to 1,>=0
+spatiotemporal_donor_zeros,nullable integer,Number of donor states equal to 0,>=0
+spatiotemporal_proportion_ones,nullable float,Fraction of donor states equal to 1,0-1
+nearest_spatiotemporal_year_gap,nullable integer,Nearest donor absolute year gap,0-2
+max_spatiotemporal_year_gap,nullable integer,Maximum donor absolute year gap,0-2
+nearest_spatiotemporal_distance_km,nullable float,Nearest donor distance,>=0
+max_spatiotemporal_distance_km,nullable float,Maximum donor distance,<=200
+spatiotemporal_donor_sources,nullable string,Semicolon-separated donor group:year list,audit text
+source,string,Energy-flow edge origin in positive view,equals prey
+target,string,Energy-flow edge destination in positive view,equals predator
+edge_origin,string,Provenance in positive view,original or imputed
