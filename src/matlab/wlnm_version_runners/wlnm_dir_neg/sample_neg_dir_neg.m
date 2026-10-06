@@ -1,10 +1,12 @@
 function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_dir_neg( ...
         train, test, role, a, portion, evaluate_on_all_unseen, use_role_filter, ...
-        mass, use_mass_constraint, mass_constraint_threshold, topup_policy, sampling_strategy)
+        mass, use_mass_constraint, mass_constraint_threshold, topup_policy, sampling_strategy, ...
+        eligibility_mode, observed_negative_mask, candidate_mask)
     %SAMPLE_NEG_DIR_NEG Sample directed negative links for WLNM_dir_neg.
     %
-    % The eligibility pool can be role-only, role-or-mass, mass-only, or all
-    % non-links. Candidates are sampled uniformly without replacement. If
+    % The eligibility pool can be role-only, role-or-mass, mass-only, all
+    % non-links, or explicit observed zeroes. Candidates are sampled uniformly
+    % without replacement. If
     % the selected eligibility pool is too small and top-up is enabled, all
     % eligible links are retained and the deficit is sampled uniformly from
     % the remaining non-links.
@@ -19,14 +21,18 @@ function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_di
     if nargin < 10 || isempty(mass_constraint_threshold), mass_constraint_threshold = 1.0; end
     if nargin < 11 || isempty(topup_policy), topup_policy = 'uniform_remaining_nonlinks'; end
     if nargin < 12 || isempty(sampling_strategy), sampling_strategy = 'uniform_without_replacement'; end
+    if nargin < 13, eligibility_mode = ''; end
+    if nargin < 14, observed_negative_mask = []; end
+    if nargin < 15, candidate_mask = []; end
 
-    protocol = resolve_negative_sampling_protocol('', a, sampling_strategy, ...
+    protocol = resolve_negative_sampling_protocol(eligibility_mode, a, sampling_strategy, ...
         topup_policy, use_role_filter, use_mass_constraint);
     a = protocol.negative_positive_ratio;
     topup_policy = protocol.topup_policy;
     sampling_strategy = protocol.sampling_strategy;
     use_role_filter = protocol.use_role_filter;
     use_mass_constraint = protocol.use_mass_constraint;
+    observed_zero_mode = strcmp(protocol.eligibility_mode, 'observed_zero');
 
     train = sparse(train);
     test = sparse(test);
@@ -65,9 +71,15 @@ function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_di
     role_code = encode_roles(role, n);
     requested_role_filter = logical(use_role_filter);
 
-    [full_pool, role_mask, mass_mask, eligible_mask, eligibility_mode] = ...
-        build_negative_candidate_pool(net, role_code, requested_role_filter, ...
-            mass, mass_constraint_threshold, mass_constraint_active);
+    if observed_zero_mode
+        [full_pool, role_mask, mass_mask, eligible_mask, eligibility_mode, candidate_pair_count] = ...
+            build_observed_zero_pool(net, observed_negative_mask, candidate_mask);
+    else
+        [full_pool, role_mask, mass_mask, eligible_mask, eligibility_mode] = ...
+            build_negative_candidate_pool(net, role_code, requested_role_filter, ...
+                mass, mass_constraint_threshold, mass_constraint_active);
+        candidate_pair_count = NaN;
+    end
 
     pos_total = train_size + test_size;
     need_total_requested = floor(a * pos_total);
@@ -77,7 +89,21 @@ function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_di
     full_pool_size = size(full_pool, 1);
     eligibility_filter_active = requested_role_filter || mass_constraint_active;
 
-    if ~eligibility_filter_active
+    if observed_zero_mode && evaluate_on_all_unseen
+        error('sample_neg_dir_neg:ObservedZeroEvaluateAllUnsupported', ...
+            ['evaluate_on_all_unseen is incompatible with observed_zero: the test ' ...
+             'set must preserve the configured exact negative-positive ratio.']);
+    end
+    if observed_zero_mode && full_pool_size < need_total_requested
+        error('sample_neg_dir_neg:ObservedZeroPoolShortfall', ...
+            ['Observed-zero pool has %d links but %d are required. Missing/NA and ' ...
+             'out-of-domain pairs cannot be used as negative top-up.'], ...
+            full_pool_size, need_total_requested);
+    end
+
+    if observed_zero_mode
+        sampling_mode = 'observed_zero';
+    elseif ~eligibility_filter_active
         sampling_mode = 'all_nonlinks';
     elseif eligible_pool_size < need_total_requested
         sampling_mode = 'hybrid';
@@ -106,6 +132,10 @@ function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_di
             role_pool_size, mass_pool_size, eligible_pool_size, full_pool_size, ...
             need_total_requested, 0, 0, max(0, need_total_requested), ...
             full_pool_shortfall, 0, 0, 0);
+        diagnostics.CandidatePairCount = double(candidate_pair_count);
+        diagnostics.ObservedZeroPoolSize = observed_zero_pool_size(observed_zero_mode, full_pool_size);
+        diagnostics = attach_endpoint_visibility( ...
+            diagnostics, train, train_neg, test_neg, test_pos);
         return;
     end
 
@@ -169,6 +199,10 @@ function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_di
         need_total_requested, selected_negative_count, eligible_neg_count, ...
         eligible_shortfall, full_pool_shortfall, random_topup_count, ...
         size(train_neg, 1), size(test_neg, 1));
+    diagnostics.CandidatePairCount = double(candidate_pair_count);
+    diagnostics.ObservedZeroPoolSize = observed_zero_pool_size(observed_zero_mode, full_pool_size);
+    diagnostics = attach_endpoint_visibility( ...
+        diagnostics, train, train_neg, test_neg, test_pos);
 
     % --- logging ---
     fprintf(['[NegPool] mode=%s strategy=%s legacy_strategy=random_eligible_pool topup_policy=%s ' ...
@@ -195,6 +229,91 @@ function [train_pos, train_neg, test_pos, test_neg, diagnostics] = sample_neg_di
     fprintf('    Train Negative: %d\n', size(train_neg, 1));
     fprintf('    Test  Positive: %d\n', size(test_pos, 1));
     fprintf('    Test  Negative: %d\n', size(test_neg, 1));
+end
+
+function [full_pool, role_mask, mass_mask, eligible_mask, eligibility_mode, candidate_pair_count] = ...
+        build_observed_zero_pool(net, observed_negative_mask, candidate_mask)
+
+    n = size(net, 1);
+    if isempty(observed_negative_mask) || isempty(candidate_mask)
+        error('sample_neg_dir_neg:ObservedZeroMasksRequired', ...
+            'observed_zero requires observed_negative_mask and candidate_mask.');
+    end
+    if ~isequal(size(observed_negative_mask), [n n]) || ~isequal(size(candidate_mask), [n n])
+        error('sample_neg_dir_neg:ObservedZeroMaskSize', ...
+            'Observed-zero and candidate masks must both be %d-by-%d.', n, n);
+    end
+
+    observed = spones(sparse(observed_negative_mask));
+    candidate = spones(sparse(candidate_mask));
+    if nnz(diag(observed)) || nnz(diag(candidate))
+        error('sample_neg_dir_neg:ObservedZeroSelfLoop', ...
+            'Observed-zero and candidate masks must not contain self-loops.');
+    end
+    if nnz(observed - observed .* candidate)
+        error('sample_neg_dir_neg:ObservedZeroOutsideCandidateMask', ...
+            'Every observed zero must be inside candidate_mask.');
+    end
+    if nnz(net - net .* candidate)
+        error('sample_neg_dir_neg:PositiveOutsideCandidateMask', ...
+            'Every empirical positive must be inside candidate_mask.');
+    end
+    if nnz(net .* observed)
+        error('sample_neg_dir_neg:ObservedZeroPositiveOverlap', ...
+            'observed_negative_mask overlaps an empirical positive.');
+    end
+
+    [src, tgt] = find(observed);
+    full_pool = [src, tgt];
+    role_mask = false(size(full_pool, 1), 1);
+    mass_mask = false(size(full_pool, 1), 1);
+    eligible_mask = true(size(full_pool, 1), 1);
+    eligibility_mode = 'observed_zero';
+    candidate_pair_count = nnz(candidate);
+end
+
+function diagnostics = attach_endpoint_visibility( ...
+        diagnostics, train, train_neg, test_neg, test_pos)
+
+    visible = full((sum(train, 1)' + sum(train, 2)) > 0);
+    train_counts = endpoint_visibility_counts(train_neg, visible);
+    test_neg_counts = endpoint_visibility_counts(test_neg, visible);
+    test_pos_counts = endpoint_visibility_counts(test_pos, visible);
+
+    diagnostics.TrainNegativeBothEndpointsVisible = train_counts(1);
+    diagnostics.TrainNegativeOneEndpointVisible = train_counts(2);
+    diagnostics.TrainNegativeNeitherEndpointVisible = train_counts(3);
+    diagnostics.TestNegativeBothEndpointsVisible = test_neg_counts(1);
+    diagnostics.TestNegativeOneEndpointVisible = test_neg_counts(2);
+    diagnostics.TestNegativeNeitherEndpointVisible = test_neg_counts(3);
+    diagnostics.TestPositiveBothEndpointsVisible = test_pos_counts(1);
+    diagnostics.TestPositiveOneEndpointVisible = test_pos_counts(2);
+    diagnostics.TestPositiveNeitherEndpointVisible = test_pos_counts(3);
+    diagnostics.TrainTestNegativeOverlapCount = size( ...
+        intersect(train_neg, test_neg, 'rows'), 1);
+    if isempty(test_pos)
+        diagnostics.PositiveTrainTestOverlapCount = 0;
+    else
+        positive_linear = sub2ind(size(train), test_pos(:, 1), test_pos(:, 2));
+        diagnostics.PositiveTrainTestOverlapCount = nnz(train(positive_linear));
+    end
+end
+
+function counts = endpoint_visibility_counts(links, visible)
+    if isempty(links)
+        counts = [0 0 0];
+        return;
+    end
+    endpoint_count = double(visible(links(:, 1))) + double(visible(links(:, 2)));
+    counts = [sum(endpoint_count == 2), sum(endpoint_count == 1), sum(endpoint_count == 0)];
+end
+
+function value = observed_zero_pool_size(observed_zero_mode, full_pool_size)
+    if observed_zero_mode
+        value = double(full_pool_size);
+    else
+        value = NaN;
+    end
 end
 
 function role_code = encode_roles(role, n)

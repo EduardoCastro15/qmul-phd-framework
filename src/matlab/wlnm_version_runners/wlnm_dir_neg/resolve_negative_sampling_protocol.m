@@ -31,7 +31,7 @@ function protocol = resolve_negative_sampling_protocol( ...
         end
     end
 
-    allowed_modes = {'role_only', 'role_or_mass', 'mass_only', 'all_nonlinks'};
+    allowed_modes = {'role_only', 'role_or_mass', 'mass_only', 'all_nonlinks', 'observed_zero'};
     if ~any(strcmp(mode, allowed_modes))
         error('resolve_negative_sampling_protocol:InvalidEligibilityMode', ...
             'Eligibility mode must be one of: %s. Got "%s".', ...
@@ -71,6 +71,12 @@ function protocol = resolve_negative_sampling_protocol( ...
     protocol.topup_policy = normalized_topup;
     protocol.use_role_filter = any(strcmp(mode, {'role_only', 'role_or_mass'}));
     protocol.use_mass_constraint = any(strcmp(mode, {'mass_only', 'role_or_mass'}));
+
+    if strcmp(mode, 'observed_zero') && ~strcmp(normalized_topup, 'error')
+        error('resolve_negative_sampling_protocol:ObservedZeroRequiresErrorTopup', ...
+            ['Eligibility mode observed_zero requires negativeTopupPolicy=error; ' ...
+             'unobserved pairs must never be used as top-up negatives.']);
+    end
 end
 
 function value = normalize_option(value)

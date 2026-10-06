@@ -32,6 +32,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     addParameter(p, 'negative_positive_ratio', 2);
     addParameter(p, 'negative_sampling_strategy', 'uniform_without_replacement');
     addParameter(p, 'negative_topup_policy', 'uniform_remaining_nonlinks');
+    addParameter(p, 'observed_negative_mask', []);
+    addParameter(p, 'candidate_mask', []);
     addParameter(p, 'negative_mass_eligibility_enabled', []);
     addParameter(p, 'negative_mass_eligibility_threshold', []);
     addParameter(p, 'negative_mass_preference_enabled', []);   % legacy alias
@@ -95,7 +97,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     [train_pos, train_neg, test_pos, test_neg, negative_sampling] = sample_neg_dir_neg( ...
         htrain, htest, role, a, portion, evaluate_on_all_unseen, use_role_filter, ...
         mass, negative_mass_eligibility_enabled, negative_mass_eligibility_threshold, ...
-        negative_protocol.topup_policy, negative_protocol.sampling_strategy);
+        negative_protocol.topup_policy, negative_protocol.sampling_strategy, ...
+        negative_protocol.eligibility_mode, opt.observed_negative_mask, opt.candidate_mask);
 
     % ------------------------------------------------------------
     % Sanity check
@@ -238,8 +241,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
         emp_metrics = compute_dir_neg_foodweb_metrics(empirical_full, opt.trophic_protocol, opt.trophic_high_precision);
         train_metrics = compute_dir_neg_foodweb_metrics(train_full, opt.trophic_protocol, opt.trophic_high_precision);
     else
-        emp_metrics = struct();
-        train_metrics = struct();
+        emp_metrics = [];
+        train_metrics = [];
     end
 
     num_thresholds = numel(best_threshold);
@@ -257,8 +260,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
             pseudo_metrics = compute_dir_neg_foodweb_metrics(pseudo_full, opt.trophic_protocol, opt.trophic_high_precision);
             cmp_metrics = compare_empirical_pseudo_webs_sparse(empirical_full, pseudo_full);
         else
-            pseudo_metrics = struct();
-            cmp_metrics = struct();
+            pseudo_metrics = [];
+            cmp_metrics = [];
         end
 
         best_precision(t) = test_metrics.Precision;

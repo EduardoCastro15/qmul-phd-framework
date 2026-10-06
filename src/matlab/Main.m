@@ -56,7 +56,7 @@ function Main()
         'fixedThreshold',         0.50, ...                                                           % Used when thresholdMode='fixed'
         'thresholdSweepEnabled',  false, ...                                                          % Primary protocol uses only fixedThreshold
         'thresholdSweepRange',    0.10:0.10:0.90, ...                                                 % Thresholds evaluated when thresholdSweepEnabled=true
-        'negativeEligibilityMode', 'role_only', ...                                                   % role_only, role_or_mass, mass_only, or all_nonlinks
+        'negativeEligibilityMode', 'role_only', ...                                                   % role_only, role_or_mass, mass_only, all_nonlinks, or observed_zero
         'negativePositiveRatio',  2, ...                                                             % Requested negative links per observed positive link
         'negativeSamplingStrategy', 'uniform_without_replacement', ...                                % Uniform draw from the eligible pool
         'negativeTopupPolicy',    'uniform_remaining_nonlinks', ...                                   % Random top-up when the eligible pool is insufficient
@@ -189,7 +189,7 @@ function Main()
                     continue;
                 end
 
-                [net, taxonomy, mass, role, p_values_mat] = ...
+                [net, taxonomy, mass, role, p_values_mat, input_fields] = ...
                     load_foodweb_fields(datapath);
                 fprintf('[INFO] Processing dataset: %s\n', dataname);
 
@@ -209,6 +209,9 @@ function Main()
                 data.role          = role;
                 data.p_values_mat  = p_values_mat;
                 data.backbone_mask = backbone_mask;
+                data.observed_negative_mask = input_fields.observed_negative_mask;
+                data.candidate_mask = input_fields.candidate_mask;
+                data.input_metadata = input_fields.metadata;
 
                 for K = config.kRange
                     fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));
@@ -255,7 +258,7 @@ function Main()
                     continue;
                 end
 
-                [net, taxonomy, mass, role, p_values_mat] = ...
+                [net, taxonomy, mass, role, p_values_mat, input_fields] = ...
                     load_foodweb_fields(datapath);
                 fprintf('[INFO] Processing dataset: %s\n', dataname);
 
@@ -297,6 +300,9 @@ function Main()
                 data.role          = role;
                 data.p_values_mat  = p_values_mat;
                 data.backbone_mask = backbone_mask;   % precomputed backbone mask (or [])
+                data.observed_negative_mask = input_fields.observed_negative_mask;
+                data.candidate_mask = input_fields.candidate_mask;
+                data.input_metadata = input_fields.metadata;
 
                 for K = config.kRange
                     fprintf('Processing with K = %d, node selection: %s\n', K, string(config.nodeSelection));
@@ -354,6 +360,7 @@ end
 function config = apply_runtime_overrides(config)
     config.version = get_env_text('WLNM_VERSION', config.version);
     config.foodwebCSV = get_env_text('WLNM_FOODWEB_CSV', config.foodwebCSV);
+    config.matFolder = get_env_text('WLNM_MAT_FOLDER', config.matFolder);
     config.useParallel = get_env_bool('WLNM_USE_PARALLEL', config.useParallel);
     config.numExperiments = get_env_number('WLNM_NUM_EXPERIMENTS', config.numExperiments);
     config.experimentIDList = get_env_number_list( ...
@@ -362,11 +369,13 @@ function config = apply_runtime_overrides(config)
     config.baseSeed = get_env_number('WLNM_BASE_SEED', config.baseSeed);
     config.resampleSplitsEachExperiment = get_env_bool( ...
         'WLNM_RESAMPLE_SPLITS_EACH_EXPERIMENT', config.resampleSplitsEachExperiment);
+    config.kRange = get_env_number_list('WLNM_K_RANGE', config.kRange);
     config.sweepTrainRatios = get_env_bool('WLNM_SWEEP_TRAIN_RATIOS', config.sweepTrainRatios);
     config.ratioTrain = get_env_number('WLNM_RATIO_TRAIN', config.ratioTrain);
     config.trainRatioRange = get_env_number_list('WLNM_TRAIN_RATIO_RANGE', config.trainRatioRange);
     config.checkConnectivity = get_env_bool('WLNM_CHECK_CONNECTIVITY', config.checkConnectivity);
     config.adaptiveConnectivity = get_env_bool('WLNM_ADAPTIVE_CONNECTIVITY', config.adaptiveConnectivity);
+    config.use_backbone = get_env_bool('WLNM_USE_BACKBONE', config.use_backbone);
     config.cvEnabled = get_env_bool('WLNM_CV_ENABLED', config.cvEnabled);
     config.cvKList = get_env_number_list('WLNM_CV_K_LIST', config.cvKList);
     config.cvSeed = get_env_number('WLNM_CV_SEED', config.cvSeed);
@@ -398,6 +407,8 @@ function config = apply_runtime_overrides(config)
     config.trophicLevelProtocol = get_env_text('WLNM_TROPHIC_LEVEL_PROTOCOL', config.trophicLevelProtocol);
     config.trophicHighPrecision = get_env_text('WLNM_TROPHIC_HIGH_PRECISION', config.trophicHighPrecision);
     config.trophicSnapshotDir = get_env_text('WLNM_TROPHIC_SNAPSHOT_DIR', config.trophicSnapshotDir);
+    config.useGraphEncodingParallel = get_env_bool( ...
+        'WLNM_USE_GRAPH_ENCODING_PARALLEL', config.useGraphEncodingParallel);
     config.computeEcologicalMetrics = get_env_bool('WLNM_COMPUTE_ECOLOGICAL_METRICS', config.computeEcologicalMetrics);
     config.runDeltaTTests = get_env_bool('WLNM_RUN_DELTA_TTESTS', config.runDeltaTTests);
     config.runDeltaEquivalenceTests = get_env_bool('WLNM_RUN_DELTA_EQUIVALENCE', config.runDeltaEquivalenceTests);
@@ -421,7 +432,7 @@ function config = validate_wlnm_dir_neg_protocol(config)
     end
 
     mode = normalize_protocol_option(config.negativeEligibilityMode);
-    allowed_modes = {'role_only', 'role_or_mass', 'mass_only', 'all_nonlinks'};
+    allowed_modes = {'role_only', 'role_or_mass', 'mass_only', 'all_nonlinks', 'observed_zero'};
     if ~any(strcmp(mode, allowed_modes))
         error('[Main] negativeEligibilityMode must be one of: %s. Got "%s".', ...
             strjoin(allowed_modes, ', '), char(string(config.negativeEligibilityMode)));
@@ -455,6 +466,32 @@ function config = validate_wlnm_dir_neg_protocol(config)
     end
     config.negativeTopupPolicy = topup_policy;
 
+    if strcmp(mode, 'observed_zero')
+        if ~strcmpi(version_key, 'wlnm_dir_neg')
+            error('[Main] observed_zero is supported only by WLNM_dir_neg holdout runs.');
+        end
+        if ~strcmp(topup_policy, 'error')
+            error(['[Main] observed_zero requires negativeTopupPolicy=error; ' ...
+                'NA and out-of-domain pairs cannot be used as fallback negatives.']);
+        end
+        if abs(ratio - 2) > 1e-12
+            error('[Main] The approved observed_zero protocol requires negativePositiveRatio=2.');
+        end
+        if logical(config.evaluate_on_all_unseen)
+            error('[Main] observed_zero requires evaluate_on_all_unseen=false.');
+        end
+        if logical(config.cvEnabled)
+            error('[Main] observed_zero requires cvEnabled=false.');
+        end
+        if logical(config.use_backbone)
+            error('[Main] observed_zero campaign requires use_backbone=false.');
+        end
+        if logical(config.computeEcologicalMetrics)
+            error(['[Main] observed_zero campaign requires computeEcologicalMetrics=false ' ...
+                'because zero-only nodes create isolates in these diet matrices.']);
+        end
+    end
+
     trophic_protocol = normalize_protocol_option(config.trophicLevelProtocol);
     if ~any(strcmp(trophic_protocol, {'legacy_v1', 'validated_v2'}))
         error('[Main] trophicLevelProtocol must be legacy_v1 or validated_v2. Got "%s".', ...
@@ -469,7 +506,7 @@ function config = validate_wlnm_dir_neg_protocol(config)
     end
     config.trophicHighPrecision = trophic_precision;
 
-    if any(strcmp(mode, {'role_only', 'all_nonlinks'})) && ...
+    if any(strcmp(mode, {'role_only', 'all_nonlinks', 'observed_zero'})) && ...
             logical(config.negativeMassEligibilityEnabled)
         error(['[Main] Conflicting negative-sampling configuration: ' ...
             'negativeEligibilityMode=%s but mass eligibility was enabled by a legacy flag ' ...
@@ -696,7 +733,7 @@ function value = get_env_number_list(name, default_value)
     end
 end
 
-function [net, taxonomy, mass, role, p_values_mat] = load_foodweb_fields(datapath)
+function [net, taxonomy, mass, role, p_values_mat, input_fields] = load_foodweb_fields(datapath)
     required = load(datapath, 'net', 'taxonomy', 'mass', 'role');
     net = required.net;
     taxonomy = required.taxonomy;
@@ -709,6 +746,91 @@ function [net, taxonomy, mass, role, p_values_mat] = load_foodweb_fields(datapat
         p_values_mat = optional.p_values_mat;
     else
         p_values_mat = [];
+    end
+
+    input_fields = struct( ...
+        'observed_negative_mask', [], ...
+        'candidate_mask', [], ...
+        'metadata', default_input_metadata());
+
+    optional_names = { ...
+        'observed_negative_mask', 'candidate_mask', ...
+        'data_regime', 'spatial_fold', 'group_id', 'year', ...
+        'input_positive_count', 'input_observed_zero_count', ...
+        'input_unresolved_count', 'input_candidate_count', ...
+        'original_status_1_count', 'original_status_0_count', ...
+        'original_status_na_count', 'final_status_1_count', ...
+        'final_status_0_count', 'final_status_na_count', ...
+        'negative_eligibility_mode', ...
+        'source_evidence_sha256', 'source_evidence_path'};
+    present = optional_names(ismember(optional_names, available));
+    if isempty(present)
+        return;
+    end
+    optional = load(datapath, present{:});
+    if isfield(optional, 'observed_negative_mask')
+        input_fields.observed_negative_mask = optional.observed_negative_mask;
+    end
+    if isfield(optional, 'candidate_mask')
+        input_fields.candidate_mask = optional.candidate_mask;
+    end
+
+    mappings = { ...
+        'data_regime', 'DataRegime'; ...
+        'spatial_fold', 'SpatialFold'; ...
+        'group_id', 'GroupID'; ...
+        'year', 'Year'; ...
+        'input_positive_count', 'InputPositiveCount'; ...
+        'input_observed_zero_count', 'InputObservedZeroCount'; ...
+        'input_unresolved_count', 'InputUnresolvedCount'; ...
+        'input_candidate_count', 'InputCandidateCount'; ...
+        'original_status_1_count', 'OriginalStatus1Count'; ...
+        'original_status_0_count', 'OriginalStatus0Count'; ...
+        'original_status_na_count', 'OriginalStatusNACount'; ...
+        'final_status_1_count', 'FinalStatus1Count'; ...
+        'final_status_0_count', 'FinalStatus0Count'; ...
+        'final_status_na_count', 'FinalStatusNACount'; ...
+        'negative_eligibility_mode', 'RequiredNegativeEligibilityMode'; ...
+        'source_evidence_sha256', 'SourceEvidenceSHA256'; ...
+        'source_evidence_path', 'SourceEvidencePath'};
+    for k = 1:size(mappings, 1)
+        source_name = mappings{k, 1};
+        target_name = mappings{k, 2};
+        if isfield(optional, source_name)
+            input_fields.metadata.(target_name) = unwrap_loaded_scalar(optional.(source_name));
+        end
+    end
+end
+
+function metadata = default_input_metadata()
+    metadata = struct( ...
+        'DataRegime', '', ...
+        'SpatialFold', NaN, ...
+        'GroupID', '', ...
+        'Year', NaN, ...
+        'InputPositiveCount', NaN, ...
+        'InputObservedZeroCount', NaN, ...
+        'InputUnresolvedCount', NaN, ...
+        'InputCandidateCount', NaN, ...
+        'OriginalStatus1Count', NaN, ...
+        'OriginalStatus0Count', NaN, ...
+        'OriginalStatusNACount', NaN, ...
+        'FinalStatus1Count', NaN, ...
+        'FinalStatus0Count', NaN, ...
+        'FinalStatusNACount', NaN, ...
+        'RequiredNegativeEligibilityMode', '', ...
+        'SourceEvidenceSHA256', '', ...
+        'SourceEvidencePath', '');
+end
+
+function value = unwrap_loaded_scalar(value)
+    while iscell(value) && numel(value) == 1
+        value = value{1};
+    end
+    if isstring(value) && isscalar(value)
+        value = char(value);
+    elseif isnumeric(value) && isscalar(value)
+        value = double(value);
     end
 end
 
