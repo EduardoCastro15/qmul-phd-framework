@@ -50,7 +50,7 @@ case "$mode" in
         parallel_workers=10
         sweep=false
         ratio_count=1
-        resource_args=(--array=1-3%2 --ntasks=11 --partition=highmem --mem-per-cpu=4G --time=08:00:00)
+        resource_args=(--array=1-3%2 --ntasks=11 --partition=compute --mem-per-cpu=4G --time=08:00:00)
         ;;
     primary60)
         regime="original_observed"
