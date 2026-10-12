@@ -1,9 +1,11 @@
 import csv
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import scipy.sparse as ssp
@@ -25,6 +27,7 @@ from seal_run_artifacts import (
     write_run_bundle,
 )
 from util_functions_directed import sample_neg
+from validate_seal_directed_gpu_run import check_slurm
 
 
 class SeedAndManifestTests(unittest.TestCase):
@@ -145,6 +148,23 @@ class AtomicArtifactTests(unittest.TestCase):
             self.assertEqual(payload["metrics"]["Foodweb"], "example")
             self.assertTrue(is_valid_complete_run(run_dir, config_hash))
             self.assertFalse(is_valid_complete_run(run_dir, "b" * 64))
+
+
+class SlurmValidationTests(unittest.TestCase):
+    def test_non_array_smoke_job_is_checked(self):
+        sacct_output = "\n".join([
+            "31318196|COMPLETED|0:0",
+            "31318196.batch|COMPLETED|0:0",
+            "31318196.extern|COMPLETED|0:0",
+        ])
+        completed = subprocess.CompletedProcess(
+            args=["sacct"], returncode=0, stdout=sacct_output, stderr=""
+        )
+        with patch("validate_seal_directed_gpu_run.subprocess.run", return_value=completed):
+            self.assertEqual(
+                check_slurm("31318196"),
+                {"job": ("COMPLETED", "0:0")},
+            )
 
 
 if __name__ == "__main__":
