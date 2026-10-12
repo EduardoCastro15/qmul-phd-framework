@@ -19,7 +19,6 @@ RUN_ID="${RUN_ID:-seal_directed_gpu_$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ROOT="${PROJECT_RESULTS_ROOT}/${RUN_ID}"
 MANIFEST_DIR="${RUN_ROOT}/manifest"
 REQUIRED_FREE_GB="${REQUIRED_FREE_GB:-20}"
-SOURCE_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 DETERMINISM_MANIFEST_ARGS=()
 if [[ "${SEAL_DETERMINISTIC:-1}" != "1" ]]; then
   DETERMINISM_MANIFEST_ARGS+=(--non-deterministic)
@@ -29,9 +28,22 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
   echo "[ERROR] Missing environment Python: ${PYTHON_BIN}" >&2
   exit 2
 fi
-if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
-  echo "[ERROR] Commit or deliberately snapshot the source changes before submission." >&2
-  exit 2
+DEPLOYMENT_MODE="bundle"
+if git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  DEPLOYMENT_MODE="git"
+  SOURCE_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+  if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
+    echo "[ERROR] Commit or deliberately snapshot the source changes before submission." >&2
+    exit 2
+  fi
+else
+  : "${SOURCE_COMMIT_FILE:=${REPO_ROOT}/SOURCE_COMMIT.txt}"
+  if [[ ! -f "${SOURCE_COMMIT_FILE}" ]]; then
+    echo "[ERROR] Bundle deployment is missing SOURCE_COMMIT.txt." >&2
+    exit 2
+  fi
+  "${PYTHON_BIN}" "${SEAL_DIR}/apocrita/verify_deployment_bundle.py" --root "${REPO_ROOT}"
+  SOURCE_COMMIT="$(tr -d '[:space:]' < "${SOURCE_COMMIT_FILE}")"
 fi
 if [[ ! -w "${PROJECT_RESULTS_ROOT}" ]]; then
   echo "[ERROR] PROJECT_RESULTS_ROOT is not writable: ${PROJECT_RESULTS_ROOT}" >&2
@@ -82,7 +94,17 @@ if [[ ! -e "${RUN_ROOT}" ]]; then
       --source-commit "${SOURCE_COMMIT}" \
       "${DETERMINISM_MANIFEST_ARGS[@]}"
   fi
-  git -C "${REPO_ROOT}" archive --format=tar.gz --output="${RUN_ROOT}/source_snapshot.tar.gz" HEAD
+  if [[ "${DEPLOYMENT_MODE}" == "git" ]]; then
+    git -C "${REPO_ROOT}" archive --format=tar.gz --output="${RUN_ROOT}/source_snapshot.tar.gz" HEAD
+  else
+    tar \
+      --exclude='*/__pycache__' \
+      --exclude='src/python/pytorch_DGCNN/lib/build' \
+      -czf "${RUN_ROOT}/source_snapshot.tar.gz" \
+      -C "${REPO_ROOT}" .
+    cp "${REPO_ROOT}/BUNDLE_METADATA.json" "${RUN_ROOT}/"
+    cp "${REPO_ROOT}/DEPLOYMENT_MANIFEST.sha256" "${RUN_ROOT}/"
+  fi
   printf '%s\n' "${SOURCE_COMMIT}" > "${RUN_ROOT}/SOURCE_COMMIT.txt"
   mkdir -p "${RUN_ROOT}/environment" "${RUN_ROOT}/slurm"
   cp "${SEAL_DIR}/apocrita/environment.apocrita.yml" "${RUN_ROOT}/environment/"
@@ -122,7 +144,7 @@ fi
 export MANIFEST_PATH="${MANIFEST_DIR}/manifest.csv"
 export CONFIG_PATH="${MANIFEST_DIR}/RUN_CONFIG.json"
 export PROJECT_RESULTS_ROOT="${RUN_ROOT}"
-export REPO_ROOT SEAL_ENV_PREFIX SCRATCH_ROOT
+export REPO_ROOT SEAL_ENV_PREFIX SCRATCH_ROOT SOURCE_COMMIT
 
 if [[ "${MODE}" == "smoke" ]]; then
   SCRIPT="${SEAL_DIR}/apocrita/seal_directed_gpushort.sbatch"
