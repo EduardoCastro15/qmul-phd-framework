@@ -16,6 +16,7 @@ set -euo pipefail
 : "${CONFIG_PATH:?Set CONFIG_PATH to the smoke RUN_CONFIG.json}"
 : "${PROJECT_RESULTS_ROOT:?Set PROJECT_RESULTS_ROOT to the persistent smoke output root}"
 : "${SCRATCH_ROOT:?Set SCRATCH_ROOT to /gpfs/scratch/$USER/...}"
+: "${SOURCE_COMMIT:?Set SOURCE_COMMIT to the verified deployment commit}"
 : "${TMPDIR:?Slurm did not provide TMPDIR}"
 
 SEAL_DIR="${REPO_ROOT}/src/python/seal_directed"
@@ -47,4 +48,5 @@ trap 'kill "${MONITOR_PID}" 2>/dev/null || true' EXIT
   --require-cuda \
   --num-workers "${NUM_WORKERS}" \
   --scratch-root "${TMPDIR}" \
+  --source-commit "${SOURCE_COMMIT}" \
   --resume
