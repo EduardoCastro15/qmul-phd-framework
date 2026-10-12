@@ -22,7 +22,7 @@ module load miniforge
 mamba env create --prefix "${SEAL_ENV_PREFIX}" --file "${SCRIPT_DIR}/environment.apocrita.yml"
 "${SEAL_ENV_PREFIX}/bin/python" -m pip install \
   torch==2.11.0 \
-  --index-url https://download.pytorch.org/whl/cu128
+  --index-url https://download.pytorch.org/whl/cu126
 "${SEAL_ENV_PREFIX}/bin/python" -m pip install \
   --requirement "${SCRIPT_DIR}/requirements-apocrita.txt"
 

@@ -89,15 +89,25 @@ def check_slurm(job_id):
     )
     if completed.returncode != 0:
         raise RuntimeError("sacct failed: {}".format(completed.stderr.strip()))
+    main_state = None
     task_states = {}
+    job_id = str(job_id)
     prefix = "{}_".format(job_id)
     for line in completed.stdout.splitlines():
         fields = line.split("|")
-        if len(fields) < 3 or not fields[0].startswith(prefix):
+        if len(fields) < 3:
             continue
-        suffix = fields[0][len(prefix):]
-        if suffix.isdigit():
-            task_states[int(suffix)] = (fields[1], fields[2])
+        sacct_id = fields[0]
+        if sacct_id == job_id:
+            main_state = (fields[1], fields[2])
+        elif sacct_id.startswith(prefix):
+            suffix = sacct_id[len(prefix):]
+            if suffix.isdigit():
+                task_states[int(suffix)] = (fields[1], fields[2])
+    if not task_states:
+        if main_state is None:
+            raise ValueError("No top-level Slurm records found for job {}".format(job_id))
+        task_states["job"] = main_state
     bad = {
         task: state for task, state in task_states.items()
         if state[0] != "COMPLETED" or state[1] != "0:0"
