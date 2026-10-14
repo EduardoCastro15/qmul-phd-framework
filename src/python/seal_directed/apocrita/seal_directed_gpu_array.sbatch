@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=seal-directed-100x290
-#SBATCH --output=seal-directed-100x290.o%A.%a
+#SBATCH --job-name=seal-directed
+#SBATCH --output=seal-directed.o%A.%a
 #SBATCH --partition=gpu
 #SBATCH --ntasks=8
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-cpu=11G
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-100%2
+#SBATCH --array=1-10%2
 
 set -euo pipefail
 

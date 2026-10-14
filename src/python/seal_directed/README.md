@@ -40,9 +40,9 @@ Regenerate them with:
   --overwrite
 ```
 
-## Frozen 100 x 290 GPU protocol
+## Frozen 10 x 290 GPU protocol
 
-The Apocrita campaign is a new cohort of 100 independent runs for every one of
+The Apocrita campaign is a new cohort of 10 independent runs for every one of
 the 290 food webs. It deliberately preserves the SEAL-directed configuration
 rather than copying the WLNM protocol:
 
@@ -54,10 +54,10 @@ rather than copying the WLNM protocol:
 - hop 1, batch size 50, 50 epochs and a fixed `score > 0.5` threshold;
 - raw aggregation only (no Tukey filtering).
 
-Seeds are unique and reproducible across all 29,000 runs:
+Seeds are unique and reproducible across all 2,900 runs:
 
 ```text
-seed = 12345 + 100 * (foodweb_index - 1) + experiment_id - 1
+seed = 12345 + 10 * (foodweb_index - 1) + experiment_id - 1
 ```
 
 Because SEAL and WLNM retain their own negative sampling, class balance and
@@ -114,12 +114,16 @@ The scripts under `apocrita/` implement the guarded workflow:
 3. Submit `submit_seal_directed_gpu.sh smoke`. Submissions are held by default;
    inspect and release the job deliberately. The smoke run has its own 3 x 1
    manifest and must not share a `RUN_ID` with production.
-4. Use the smoke job ID and GPU monitor CSV to request production GPU access.
-5. Choose a new production `RUN_ID` and submit `calibration` for ExperimentID 1.
-6. After setting the measured walltime in `seal_directed_gpu_array.sbatch`,
-   submit `full` with that same production `RUN_ID`; this schedules
-   ExperimentID 2-100.
-7. Run the validator with the Slurm job IDs before declaring completion.
+4. Use the smoke job ID and GPU monitor CSV to confirm production GPU access.
+5. For a new deployment, choose a production `RUN_ID`, submit `calibration`
+   for ExperimentID 1, inspect it, and then submit `full` with that same
+   `RUN_ID` for ExperimentID 2-10.
+6. When an equivalent deployment has already passed calibration, choose a new
+   production `RUN_ID` and submit `campaign` to schedule ExperimentID 1-10 in
+   one array. Set `SEAL_NUM_EXPERIMENTS=10` explicitly whenever creating or
+   resuming the run.
+7. Run the validator with every production Slurm job ID before declaring
+   completion.
 
 For example, environment creation starts from an interactive allocation:
 

@@ -41,6 +41,18 @@ class SeedAndManifestTests(unittest.TestCase):
         self.assertEqual(experiment_seed(1, 1), 12345)
         self.assertEqual(experiment_seed(290, 100), 41344)
 
+    def test_all_ten_repeat_campaign_seeds_are_unique(self):
+        seeds = {
+            experiment_seed(foodweb_index, experiment_id, experiments=10)
+            for foodweb_index in range(1, 291)
+            for experiment_id in range(1, 11)
+        }
+        self.assertEqual(len(seeds), 2900)
+        self.assertEqual(
+            experiment_seed(290, 10, experiments=10),
+            15244,
+        )
+
     def test_manifest_has_expected_cross_product(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -178,6 +190,15 @@ class ApocritaDeploymentScriptTests(unittest.TestCase):
         self.assertIn('--account="${SEAL_GPU_ACCOUNT}"', script)
         self.assertIn('--partition="${SEAL_GPU_PARTITION}"', script)
         self.assertIn('--constraint="${SEAL_GPU_CONSTRAINT}"', script)
+        self.assertIn('SEAL_NUM_EXPERIMENTS="${SEAL_NUM_EXPERIMENTS:-10}"', script)
+        self.assertIn(
+            'ARRAY_ARGS=(--array="2-${CONFIG_EXPERIMENTS}%${SEAL_MAX_CONCURRENT}")',
+            script,
+        )
+        self.assertIn(
+            'ARRAY_ARGS=(--array="1-${CONFIG_EXPERIMENTS}%${SEAL_MAX_CONCURRENT}")',
+            script,
+        )
 
     def test_native_library_is_built_with_system_compiler(self):
         script = (SEAL_DIR / "apocrita" / "create_seal_gpu_env.sh").read_text(
