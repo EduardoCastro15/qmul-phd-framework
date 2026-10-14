@@ -15,6 +15,7 @@ fi
 REPO_ROOT="$(cd "${REPO_ROOT}" && pwd)"
 SEAL_DIR="${REPO_ROOT}/src/python/seal_directed"
 PYTHON_BIN="${SEAL_ENV_PREFIX}/bin/python"
+NATIVE_LIBRARY="${REPO_ROOT}/src/python/pytorch_DGCNN/lib/build/dll/libgnn.so"
 RUN_ID="${RUN_ID:-seal_directed_gpu_$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ROOT="${PROJECT_RESULTS_ROOT}/${RUN_ID}"
 MANIFEST_DIR="${RUN_ROOT}/manifest"
@@ -26,6 +27,11 @@ fi
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   echo "[ERROR] Missing environment Python: ${PYTHON_BIN}" >&2
+  exit 2
+fi
+if [[ ! -f "${NATIVE_LIBRARY}" ]]; then
+  echo "[ERROR] Missing native DGCNN library: ${NATIVE_LIBRARY}" >&2
+  echo "[ERROR] Build it inside a compute allocation with: make -C ${REPO_ROOT}/src/python/pytorch_DGCNN/lib CXX=/usr/bin/g++" >&2
   exit 2
 fi
 DEPLOYMENT_MODE="bundle"
@@ -161,6 +167,26 @@ else
 fi
 
 SUBMIT_ARGS=(--parsable --export=ALL --output="${LOG_PATTERN}")
+if [[ "${MODE}" != "smoke" ]]; then
+  SEAL_GPU_ACCOUNT="${SEAL_GPU_ACCOUNT:-pilot_sae_gpu}"
+  SEAL_GPU_PARTITION="${SEAL_GPU_PARTITION:-sae}"
+  SEAL_GPU_CONSTRAINT="${SEAL_GPU_CONSTRAINT:-ampere}"
+  SEAL_GPU_TIME="${SEAL_GPU_TIME:-24:00:00}"
+  SUBMIT_ARGS+=(
+    --account="${SEAL_GPU_ACCOUNT}"
+    --partition="${SEAL_GPU_PARTITION}"
+    --time="${SEAL_GPU_TIME}"
+  )
+  if [[ -n "${SEAL_GPU_CONSTRAINT}" ]]; then
+    SUBMIT_ARGS+=(--constraint="${SEAL_GPU_CONSTRAINT}")
+  fi
+  {
+    printf 'account=%s\n' "${SEAL_GPU_ACCOUNT}"
+    printf 'partition=%s\n' "${SEAL_GPU_PARTITION}"
+    printf 'constraint=%s\n' "${SEAL_GPU_CONSTRAINT}"
+    printf 'time_limit=%s\n' "${SEAL_GPU_TIME}"
+  } > "${RUN_ROOT}/slurm/${MODE}_submission_config.txt"
+fi
 if [[ "${SUBMIT_HELD:-1}" == "1" ]]; then
   SUBMIT_ARGS+=(--hold)
 fi

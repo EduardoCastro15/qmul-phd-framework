@@ -167,5 +167,24 @@ class SlurmValidationTests(unittest.TestCase):
             )
 
 
+class ApocritaDeploymentScriptTests(unittest.TestCase):
+    def test_production_submission_defaults_to_sae_ampere_account(self):
+        script = (SEAL_DIR / "apocrita" / "submit_seal_directed_gpu.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('SEAL_GPU_ACCOUNT="${SEAL_GPU_ACCOUNT:-pilot_sae_gpu}"', script)
+        self.assertIn('SEAL_GPU_PARTITION="${SEAL_GPU_PARTITION:-sae}"', script)
+        self.assertIn('SEAL_GPU_CONSTRAINT="${SEAL_GPU_CONSTRAINT:-ampere}"', script)
+        self.assertIn('--account="${SEAL_GPU_ACCOUNT}"', script)
+        self.assertIn('--partition="${SEAL_GPU_PARTITION}"', script)
+        self.assertIn('--constraint="${SEAL_GPU_CONSTRAINT}"', script)
+
+    def test_native_library_is_built_with_system_compiler(self):
+        script = (SEAL_DIR / "apocrita" / "create_seal_gpu_env.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('make -C "${DGCNN_LIB}" CXX=/usr/bin/g++', script)
+
+
 if __name__ == "__main__":
     unittest.main()

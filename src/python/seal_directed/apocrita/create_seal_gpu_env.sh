@@ -27,7 +27,7 @@ mamba env create --prefix "${SEAL_ENV_PREFIX}" --file "${SCRIPT_DIR}/environment
   --requirement "${SCRIPT_DIR}/requirements-apocrita.txt"
 
 make -C "${DGCNN_LIB}" clean
-make -C "${DGCNN_LIB}"
+make -C "${DGCNN_LIB}" CXX=/usr/bin/g++
 file "${DGCNN_LIB}/build/dll/libgnn.so"
 "${SEAL_ENV_PREFIX}/bin/python" -m pip freeze > "${SEAL_ENV_PREFIX}/pip-freeze.txt"
 conda env export --prefix "${SEAL_ENV_PREFIX}" > "${SEAL_ENV_PREFIX}/environment-export.yml"
