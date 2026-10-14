@@ -120,7 +120,7 @@ def main():
             "source_branch": branch,
             "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "mat_files": len(mat_files),
-            "protocol": "SEAL-directed 100x290 GPU raw cohort",
+            "protocol": "SEAL-directed GPU raw cohort with runtime-configured repetitions",
         }
         (bundle_root / "BUNDLE_METADATA.json").write_text(
             json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"

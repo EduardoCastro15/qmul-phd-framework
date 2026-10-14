@@ -2,8 +2,8 @@
 set -euo pipefail
 
 MODE="${1:-}"
-if [[ "${MODE}" != "smoke" && "${MODE}" != "calibration" && "${MODE}" != "full" ]]; then
-  echo "Usage: $0 {smoke|calibration|full}" >&2
+if [[ "${MODE}" != "smoke" && "${MODE}" != "calibration" && "${MODE}" != "full" && "${MODE}" != "campaign" ]]; then
+  echo "Usage: $0 {smoke|calibration|full|campaign}" >&2
   exit 2
 fi
 
@@ -20,9 +20,19 @@ RUN_ID="${RUN_ID:-seal_directed_gpu_$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ROOT="${PROJECT_RESULTS_ROOT}/${RUN_ID}"
 MANIFEST_DIR="${RUN_ROOT}/manifest"
 REQUIRED_FREE_GB="${REQUIRED_FREE_GB:-20}"
+SEAL_NUM_EXPERIMENTS="${SEAL_NUM_EXPERIMENTS:-10}"
+SEAL_MAX_CONCURRENT="${SEAL_MAX_CONCURRENT:-2}"
 DETERMINISM_MANIFEST_ARGS=()
 if [[ "${SEAL_DETERMINISTIC:-1}" != "1" ]]; then
   DETERMINISM_MANIFEST_ARGS+=(--non-deterministic)
+fi
+if [[ "${MODE}" != "smoke" ]] && { [[ ! "${SEAL_NUM_EXPERIMENTS}" =~ ^[0-9]+$ ]] || (( SEAL_NUM_EXPERIMENTS < 2 )); }; then
+  echo "[ERROR] SEAL_NUM_EXPERIMENTS must be an integer greater than or equal to 2." >&2
+  exit 2
+fi
+if [[ ! "${SEAL_MAX_CONCURRENT}" =~ ^[0-9]+$ ]] || (( SEAL_MAX_CONCURRENT < 1 )); then
+  echo "[ERROR] SEAL_MAX_CONCURRENT must be a positive integer." >&2
+  exit 2
 fi
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
@@ -95,7 +105,7 @@ if [[ ! -e "${RUN_ROOT}" ]]; then
       --foodweb-csv "${REPO_ROOT}/src/matlab/data/foodwebs_mat/foodweb_metrics_ecosystem.csv" \
       --mat-folder "${SEAL_DIR}/data/foodwebs_mat_seal_attrs" \
       --output-dir "${MANIFEST_DIR}" \
-      --num-experiments 100 \
+      --num-experiments "${SEAL_NUM_EXPERIMENTS}" \
       --expected-foodwebs 290 \
       --source-commit "${SOURCE_COMMIT}" \
       "${DETERMINISM_MANIFEST_ARGS[@]}"
@@ -142,8 +152,8 @@ if [[ "${MODE}" == "smoke" ]]; then
     echo "[ERROR] Smoke RUN_ID does not contain the expected 3x1 manifest." >&2
     exit 2
   fi
-elif [[ "${CONFIG_FOODWEBS}" != "290" || "${CONFIG_EXPERIMENTS}" != "100" ]]; then
-  echo "[ERROR] Production RUN_ID does not contain the expected 290x100 manifest." >&2
+elif [[ "${CONFIG_FOODWEBS}" != "290" || "${CONFIG_EXPERIMENTS}" != "${SEAL_NUM_EXPERIMENTS}" ]]; then
+  echo "[ERROR] Production RUN_ID does not contain the expected 290x${SEAL_NUM_EXPERIMENTS} manifest." >&2
   exit 2
 fi
 
@@ -160,9 +170,13 @@ elif [[ "${MODE}" == "calibration" ]]; then
   SCRIPT="${SEAL_DIR}/apocrita/seal_directed_gpu_array.sbatch"
   ARRAY_ARGS=(--array=1%1)
   LOG_PATTERN="${RUN_ROOT}/slurm/%x.o%A.%a"
+elif [[ "${MODE}" == "campaign" ]]; then
+  SCRIPT="${SEAL_DIR}/apocrita/seal_directed_gpu_array.sbatch"
+  ARRAY_ARGS=(--array="1-${CONFIG_EXPERIMENTS}%${SEAL_MAX_CONCURRENT}")
+  LOG_PATTERN="${RUN_ROOT}/slurm/%x.o%A.%a"
 else
   SCRIPT="${SEAL_DIR}/apocrita/seal_directed_gpu_array.sbatch"
-  ARRAY_ARGS=(--array=2-100%2)
+  ARRAY_ARGS=(--array="2-${CONFIG_EXPERIMENTS}%${SEAL_MAX_CONCURRENT}")
   LOG_PATTERN="${RUN_ROOT}/slurm/%x.o%A.%a"
 fi
 
@@ -176,6 +190,7 @@ if [[ "${MODE}" != "smoke" ]]; then
     --account="${SEAL_GPU_ACCOUNT}"
     --partition="${SEAL_GPU_PARTITION}"
     --time="${SEAL_GPU_TIME}"
+    --job-name="seal-directed-${CONFIG_EXPERIMENTS}x${CONFIG_FOODWEBS}"
   )
   if [[ -n "${SEAL_GPU_CONSTRAINT}" ]]; then
     SUBMIT_ARGS+=(--constraint="${SEAL_GPU_CONSTRAINT}")
@@ -185,6 +200,8 @@ if [[ "${MODE}" != "smoke" ]]; then
     printf 'partition=%s\n' "${SEAL_GPU_PARTITION}"
     printf 'constraint=%s\n' "${SEAL_GPU_CONSTRAINT}"
     printf 'time_limit=%s\n' "${SEAL_GPU_TIME}"
+    printf 'num_experiments=%s\n' "${CONFIG_EXPERIMENTS}"
+    printf 'max_concurrent=%s\n' "${SEAL_MAX_CONCURRENT}"
   } > "${RUN_ROOT}/slurm/${MODE}_submission_config.txt"
 fi
 if [[ "${SUBMIT_HELD:-1}" == "1" ]]; then

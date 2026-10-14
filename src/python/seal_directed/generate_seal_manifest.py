@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze the 100 x 290 SEAL-directed experiment ledger."""
+"""Freeze a reproducible SEAL-directed experiment ledger."""
 
 from __future__ import annotations
 
