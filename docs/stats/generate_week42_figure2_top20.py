@@ -1,4 +1,4 @@
-"""Generate the 20 ranked Figure 2 options used by week-42.ipynb cell 4.
+"""Generate ranked Figure 2 options used by week-42.ipynb.
 
 This file is executed with ``runpy.run_path(..., init_globals=globals())``
 from the notebook.  It deliberately reuses the notebook's validated data
@@ -49,16 +49,45 @@ if missing_globals:
     )
 
 
-NUM_OPTIONS = 20
+NUM_OPTIONS = int(globals().get("FIGURE_NUM_OPTIONS", 20))
+if NUM_OPTIONS < 1:
+    raise ValueError("FIGURE_NUM_OPTIONS must be a positive integer.")
 MIN_TEST_LINKS_90 = 30
 FIGURE_DPI = 300
+FIGURE_SELECTION_MODE = str(
+    globals().get("FIGURE_SELECTION_MODE", "representative_mean_f1")
+).lower()
+if FIGURE_SELECTION_MODE not in {
+    "representative_mean_f1",
+    "best_case_tp_fp_fn",
+    "lowest_fn_fp",
+}:
+    raise ValueError(
+        "FIGURE_SELECTION_MODE must be 'representative_mean_f1' or "
+        "'best_case_tp_fp_fn' or 'lowest_fn_fp'."
+    )
+FIGURE_OUTPUT_FORMAT = str(
+    globals().get("FIGURE_OUTPUT_FORMAT", "png")
+).lower().lstrip(".")
+if FIGURE_OUTPUT_FORMAT not in {"png", "pdf"}:
+    raise ValueError(
+        "FIGURE_OUTPUT_FORMAT must be either 'png' or 'pdf'."
+    )
 OUTPUT_DIR = (
     REPO_ROOT
     / "docs/progress_notebooks_logs/2026/figures"
-    / "week-42/figure-2-top20-options"
+    / (
+        f"week-42/figure-2-top{NUM_OPTIONS}-low-fn-fp"
+        if FIGURE_SELECTION_MODE == "lowest_fn_fp"
+        else (
+            f"week-42/figure-2-top{NUM_OPTIONS}-best-tp-low-errors"
+            if FIGURE_SELECTION_MODE == "best_case_tp_fp_fn"
+            else f"week-42/figure-2-top{NUM_OPTIONS}-options"
+        )
+    )
 )
 SPECIES_KEY_DIR = OUTPUT_DIR / "species_keys"
-INDEX_PATH = OUTPUT_DIR / "top20_options_index.csv"
+INDEX_PATH = OUTPUT_DIR / f"top{NUM_OPTIONS}_options_index.csv"
 
 
 def build_ranking():
@@ -227,6 +256,142 @@ def representative_experiment(scores, ranking_row):
         float(selected["F1Distance"]),
         float(selected["FNRateDistance"]),
     )
+
+
+def build_best_case_ranking(scores):
+    """Select one deliberately favourable run per eligible food web."""
+    summary = (
+        scores.groupby(["Foodweb", "TrainRatio"], as_index=False)
+        .agg(
+            NumSpecies=("EmpiricalNumSpecies", "first"),
+            EmpiricalLinks=("EmpiricalLinks", "first"),
+            TestLinks=("TestLinks", "mean"),
+            MeanTP=("TestTP", "mean"),
+            MeanFP=("TestFP", "mean"),
+            MeanFN=("TestFN", "mean"),
+            MeanF1=("TestF1Score", "mean"),
+            MeanMCC=("TestMCC", "mean"),
+        )
+    )
+    ratio_tables = {}
+    for ratio in (60, 90):
+        table = summary.loc[
+            summary["TrainRatio"].eq(ratio)
+        ].drop(columns="TrainRatio")
+        ratio_tables[ratio] = table.rename(
+            columns={
+                column: f"{column}_{ratio}"
+                for column in table.columns
+                if column != "Foodweb"
+            }
+        )
+    foodweb_summary = ratio_tables[60].merge(
+        ratio_tables[90], on="Foodweb", validate="one_to_one"
+    )
+    foodweb_summary["CombinedMeanF1"] = (
+        foodweb_summary["MeanF1_60"]
+        + foodweb_summary["MeanF1_90"]
+    ) / 2.0
+    eligible = foodweb_summary.loc[
+        foodweb_summary["NumSpecies_90"].ge(MIN_NODES)
+        & foodweb_summary["TestLinks_90"].ge(MIN_TEST_LINKS_90)
+    ].copy()
+
+    paired = scores.loc[
+        scores["Foodweb"].isin(eligible["Foodweb"])
+    ].pivot(
+        index=["Foodweb", "ExperimentID"],
+        columns="TrainRatio",
+        values=["TestTP", "TestFP", "TestFN"],
+    ).dropna()
+    expected_pairs = len(eligible) * 100
+    if len(paired) != expected_pairs:
+        raise ValueError(
+            "Expected 100 paired ExperimentIDs for every eligible food "
+            f"web; found {len(paired)} pairs instead of {expected_pairs}."
+        )
+
+    candidates = paired.index.to_frame(index=False)
+    for metric in ("TestTP", "TestFP", "TestFN"):
+        candidates[f"{metric}_60"] = paired[(metric, 60)].to_numpy()
+        candidates[f"{metric}_90"] = paired[(metric, 90)].to_numpy()
+    candidates["SelectionTotalTP"] = (
+        candidates["TestTP_60"] + candidates["TestTP_90"]
+    )
+    candidates["SelectionTotalFP"] = (
+        candidates["TestFP_60"] + candidates["TestFP_90"]
+    )
+    candidates["SelectionTotalFN"] = (
+        candidates["TestFN_60"] + candidates["TestFN_90"]
+    )
+    candidates["SelectionTotalErrors"] = (
+        candidates["SelectionTotalFN"]
+        + candidates["SelectionTotalFP"]
+    )
+
+    if FIGURE_SELECTION_MODE == "lowest_fn_fp":
+        selection_columns = [
+            "SelectionTotalErrors",
+            "SelectionTotalFN",
+            "SelectionTotalFP",
+            "SelectionTotalTP",
+        ]
+        selection_ascending = [True, True, True, False]
+    else:
+        # Original deliberate best-TP ordering retained for reproducibility.
+        selection_columns = [
+            "SelectionTotalTP",
+            "SelectionTotalFP",
+            "SelectionTotalFN",
+        ]
+        selection_ascending = [False, True, True]
+
+    best_per_foodweb = (
+        candidates.sort_values(
+            ["Foodweb", *selection_columns, "ExperimentID"],
+            ascending=[True, *selection_ascending, True],
+        )
+        .groupby("Foodweb", as_index=False, sort=False)
+        .head(1)
+    )
+    ranking = best_per_foodweb.merge(
+        eligible, on="Foodweb", validate="one_to_one"
+    )
+    ranking = (
+        ranking.sort_values(
+            [*selection_columns, "Foodweb"],
+            ascending=[*selection_ascending, True],
+        )
+        .reset_index(drop=True)
+    )
+    renderable_indices = []
+    for index, row in ranking.iterrows():
+        foodweb = row["Foodweb"]
+        stem = tax_mass_stem(foodweb)
+        try:
+            tax_mass_cache[stem] = load_tax_mass(foodweb)
+        except FileNotFoundError as exc:
+            print(f"[SKIP] {foodweb}: {exc}")
+            continue
+        except ValueError as exc:
+            if "Duplicate taxonomy labels" not in str(exc):
+                raise
+            print(
+                f"[SKIP] {foodweb}: duplicate taxonomy labels make "
+                "the snapshot node mapping ambiguous."
+            )
+            continue
+        renderable_indices.append(index)
+        if len(renderable_indices) == NUM_OPTIONS:
+            break
+    ranking = ranking.loc[renderable_indices].reset_index(drop=True)
+    if len(ranking) != NUM_OPTIONS:
+        raise ValueError(
+            f"Expected {NUM_OPTIONS} eligible and renderable food webs, found "
+            f"{len(ranking)}."
+        )
+    ranking.insert(0, "Rank", np.arange(1, len(ranking) + 1))
+    return ranking
 
 
 tax_mass_cache = {}
@@ -403,15 +568,36 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     SPECIES_KEY_DIR.mkdir(parents=True, exist_ok=True)
     scores, ranking = build_ranking()
+    if FIGURE_SELECTION_MODE in {
+        "best_case_tp_fp_fn",
+        "lowest_fn_fp",
+    }:
+        ranking = build_best_case_ranking(scores)
     records = []
     figure_paths = []
 
     for _, ranking_row in ranking.iterrows():
         rank = int(ranking_row["Rank"])
         foodweb = ranking_row["Foodweb"]
-        experiment_id, f1_distance, fn_rate_distance = (
-            representative_experiment(scores, ranking_row)
-        )
+        if FIGURE_SELECTION_MODE in {
+            "best_case_tp_fp_fn",
+            "lowest_fn_fp",
+        }:
+            experiment_id = int(ranking_row["ExperimentID"])
+            f1_distance = np.nan
+            fn_rate_distance = np.nan
+            selection_method = (
+                "min_total_fn_plus_fp_then_fn_then_fp_then_max_tp"
+                if FIGURE_SELECTION_MODE == "lowest_fn_fp"
+                else "max_total_tp_then_min_total_fp_then_min_total_fn"
+            )
+        else:
+            experiment_id, f1_distance, fn_rate_distance = (
+                representative_experiment(scores, ranking_row)
+            )
+            selection_method = (
+                "closest_to_100_run_mean_F1_at_60_and_90"
+            )
         panels = [
             prepare_panel(foodweb, 90, experiment_id, "a"),
             prepare_panel(foodweb, 60, experiment_id, "b"),
@@ -424,7 +610,10 @@ def main():
         safe_foodweb = re.sub(
             r"[^A-Za-z0-9._-]+", "_", foodweb
         ).strip("_")
-        figure_path = OUTPUT_DIR / f"{rank:02d}_{safe_foodweb}.png"
+        figure_path = (
+            OUTPUT_DIR
+            / f"{rank:02d}_{safe_foodweb}.{FIGURE_OUTPUT_FORMAT}"
+        )
         species_key_path = (
             SPECIES_KEY_DIR
             / f"{rank:02d}_{safe_foodweb}_species_key.csv"
@@ -451,8 +640,18 @@ def main():
                 "Rank": rank,
                 "Foodweb": foodweb,
                 "ExperimentID": experiment_id,
-                "SelectionMethod": (
-                    "closest_to_100_run_mean_F1_at_60_and_90"
+                "SelectionMethod": selection_method,
+                "SelectionTotalTP": ranking_row.get(
+                    "SelectionTotalTP", np.nan
+                ),
+                "SelectionTotalFP": ranking_row.get(
+                    "SelectionTotalFP", np.nan
+                ),
+                "SelectionTotalFN": ranking_row.get(
+                    "SelectionTotalFN", np.nan
+                ),
+                "SelectionTotalErrors": ranking_row.get(
+                    "SelectionTotalErrors", np.nan
                 ),
                 "RepresentativeF1Distance": f1_distance,
                 "RepresentativeFNRateDistance": fn_rate_distance,
@@ -486,7 +685,7 @@ def main():
             }
         )
         print(
-            f"[TOP20] {rank:02d}/20 {foodweb}: "
+            f"[TOP{NUM_OPTIONS}] {rank:02d}/{NUM_OPTIONS} {foodweb}: "
             f"ExperimentID={experiment_id}, "
             f"90% TP/FP/FN="
             f"{panel_90['counts']['TestTP']}/"
