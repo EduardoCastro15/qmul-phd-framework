@@ -1,0 +1,379 @@
+====== begin of gnn configuration ======
+| msg_average = 0
+======   end of gnn configuration ======
+/data/home/acw792/PhD/Stage2/Code/seal-original-gpu/seal-original-apocrita-9736688d32fc/src/python/Main.py:869: DeprecationWarning: The default value for `spmatrix` is changing to `False` in v1.20.
+        That means the default return type will be a sparse array.
+        Unless you use * instead of @, ** for matrix power, or you depend
+        on 2D shapes from e.g. `A.sum(axis=0)` it may not matter to you.
+        See the spmatrix to sparray migration guide for details.
+        https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html
+        
+  data = sio.loadmat(args.data_dir)
+Namespace(data_name='PP2I4_tax_mass', mat_folder='/tmp/seal_original_32632369_4/mats', result_dir='/data/home/acw792/PhD/Stage2/Results/SEAL_original/production/seal_original_10x290_9736688d_20261019/runs/PP2I4_tax_mass/.experiment_004_seed_12348.tmp.mh_1lfqp/main_output', train_name=None, test_name=None, only_predict=False, batch_size=50, max_train_num=100000, no_cuda=False, seed=12348, experiment_id=4, test_ratio=0.09999999999999998, num_epochs=50, threshold=0.5, no_parallel=False, all_unknown_as_negative=False, hop='1', max_nodes_per_hop=None, use_embedding=False, use_attribute=False, save_model=False, cuda=True)
+sampling negative links for train and test
+Enclosing subgraph extraction begins...
+  0%|          | 0/27 [00:00<?, ?it/s]100%|██████████| 27/27 [00:01<00:00, 27.00it/s]100%|██████████| 27/27 [00:01<00:00, 26.99it/s]
+Time eplased for subgraph extraction: 1.2551169395446777s
+  0%|          | 0/27 [00:00<?, ?it/s]100%|██████████| 27/27 [00:01<00:00, 27.00it/s]100%|██████████| 27/27 [00:01<00:00, 26.99it/s]
+Time eplased for subgraph extraction: 1.2381765842437744s
+  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:01<00:00,  2.00it/s]100%|██████████| 2/2 [00:01<00:00,  2.00it/s]
+Time eplased for subgraph extraction: 1.2389366626739502s
+  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:01<00:00,  2.00it/s]100%|██████████| 2/2 [00:01<00:00,  2.00it/s]
+Time eplased for subgraph extraction: 1.238250970840454s
+# train: 54, # test: 4
+k used in SortPooling is: 10
+Initializing DGCNN
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69848 acc: 0.36735:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69848 acc: 0.36735: 100%|██████████| 1/1 [00:00<00:00,  2.56batch/s]loss: 0.69848 acc: 0.36735: 100%|██████████| 1/1 [00:00<00:00,  2.56batch/s]
+[92maverage training of epoch 0: loss 0.69848 acc 0.36735 auc 0.39899[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68675 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68675 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 89.06batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 0: loss 0.68675 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69089 acc: 0.75000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69089 acc: 0.75000: 100%|██████████| 1/1 [00:00<00:00, 239.88batch/s]
+[94maverage test of epoch 0: loss 0.69089 acc 0.75000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69197 acc: 0.55102:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69197 acc: 0.55102: 100%|██████████| 1/1 [00:00<00:00, 97.53batch/s]
+[92maverage training of epoch 1: loss 0.69197 acc 0.55102 auc 0.56397[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68651 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68651 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 145.12batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 1: loss 0.68651 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69041 acc: 0.75000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69041 acc: 0.75000: 100%|██████████| 1/1 [00:00<00:00, 471.38batch/s]
+[94maverage test of epoch 1: loss 0.69041 acc 0.75000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69146 acc: 0.59184:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69146 acc: 0.59184: 100%|██████████| 1/1 [00:00<00:00, 109.46batch/s]
+[92maverage training of epoch 2: loss 0.69146 acc 0.59184 auc 0.54882[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68630 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68630 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 459.95batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 2: loss 0.68630 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68993 acc: 0.75000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68993 acc: 0.75000: 100%|██████████| 1/1 [00:00<00:00, 475.22batch/s]
+[94maverage test of epoch 2: loss 0.68993 acc 0.75000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69643 acc: 0.44898:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69643 acc: 0.44898: 100%|██████████| 1/1 [00:00<00:00, 111.09batch/s]
+[92maverage training of epoch 3: loss 0.69643 acc 0.44898 auc 0.44781[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68611 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68611 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.61batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 3: loss 0.68611 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68951 acc: 0.75000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68951 acc: 0.75000: 100%|██████████| 1/1 [00:00<00:00, 480.23batch/s]
+[94maverage test of epoch 3: loss 0.68951 acc 0.75000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69428 acc: 0.51020:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69428 acc: 0.51020: 100%|██████████| 1/1 [00:00<00:00, 111.24batch/s]
+[92maverage training of epoch 4: loss 0.69428 acc 0.51020 auc 0.48822[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68614 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68614 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.05batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 4: loss 0.68614 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68581 acc: 0.69388:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68581 acc: 0.69388: 100%|██████████| 1/1 [00:00<00:00, 111.35batch/s]
+[92maverage training of epoch 5: loss 0.68581 acc 0.69388 auc 0.68687[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68617 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68617 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 460.41batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 5: loss 0.68617 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69470 acc: 0.46939:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69470 acc: 0.46939: 100%|██████████| 1/1 [00:00<00:00, 110.95batch/s]
+[92maverage training of epoch 6: loss 0.69470 acc 0.46939 auc 0.48990[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68624 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68624 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.06batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 6: loss 0.68624 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68656 acc: 0.63265:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68656 acc: 0.63265: 100%|██████████| 1/1 [00:00<00:00, 111.70batch/s]
+[92maverage training of epoch 7: loss 0.68656 acc 0.63265 auc 0.65320[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68632 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68632 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 460.20batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 7: loss 0.68632 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68696 acc: 0.65306:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68696 acc: 0.65306: 100%|██████████| 1/1 [00:00<00:00, 109.55batch/s]
+[92maverage training of epoch 8: loss 0.68696 acc 0.65306 auc 0.67172[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68645 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68645 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 451.68batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 8: loss 0.68645 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69323 acc: 0.53061:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69323 acc: 0.53061: 100%|██████████| 1/1 [00:00<00:00, 111.50batch/s]
+[92maverage training of epoch 9: loss 0.69323 acc 0.53061 auc 0.53535[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68653 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68653 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.13batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 9: loss 0.68653 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69369 acc: 0.48980:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69369 acc: 0.48980: 100%|██████████| 1/1 [00:00<00:00, 112.36batch/s]
+[92maverage training of epoch 10: loss 0.69369 acc 0.48980 auc 0.48653[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68672 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68672 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 467.96batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 10: loss 0.68672 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67999 acc: 0.73469:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67999 acc: 0.73469: 100%|██████████| 1/1 [00:00<00:00, 112.23batch/s]
+[92maverage training of epoch 11: loss 0.67999 acc 0.73469 auc 0.77104[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68690 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68690 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 465.83batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 11: loss 0.68690 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68612 acc: 0.61224:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68612 acc: 0.61224: 100%|██████████| 1/1 [00:00<00:00, 111.92batch/s]
+[92maverage training of epoch 12: loss 0.68612 acc 0.61224 auc 0.62963[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68701 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68701 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.87batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 12: loss 0.68701 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68451 acc: 0.65306:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68451 acc: 0.65306: 100%|██████████| 1/1 [00:00<00:00, 112.32batch/s]
+[92maverage training of epoch 13: loss 0.68451 acc 0.65306 auc 0.67172[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68712 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68712 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.72batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 13: loss 0.68712 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69135 acc: 0.59184:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69135 acc: 0.59184: 100%|██████████| 1/1 [00:00<00:00, 111.93batch/s]
+[92maverage training of epoch 14: loss 0.69135 acc 0.59184 auc 0.56061[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68724 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68724 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.08batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 14: loss 0.68724 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67990 acc: 0.65306:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67990 acc: 0.65306: 100%|██████████| 1/1 [00:00<00:00, 112.10batch/s]
+[92maverage training of epoch 15: loss 0.67990 acc 0.65306 auc 0.71044[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68736 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68736 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 460.56batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 15: loss 0.68736 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68452 acc: 0.61224:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68452 acc: 0.61224: 100%|██████████| 1/1 [00:00<00:00, 111.59batch/s]
+[92maverage training of epoch 16: loss 0.68452 acc 0.61224 auc 0.67677[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68750 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68750 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.44batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 16: loss 0.68750 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68600 acc: 0.63265:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68600 acc: 0.63265: 100%|██████████| 1/1 [00:00<00:00, 112.14batch/s]
+[92maverage training of epoch 17: loss 0.68600 acc 0.63265 auc 0.66667[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68761 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68761 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.22batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 17: loss 0.68761 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68296 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68296 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 111.92batch/s]
+[92maverage training of epoch 18: loss 0.68296 acc 0.67347 auc 0.71886[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68765 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68765 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 465.36batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 18: loss 0.68765 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68917 acc: 0.55102:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68917 acc: 0.55102: 100%|██████████| 1/1 [00:00<00:00, 111.66batch/s]
+[92maverage training of epoch 19: loss 0.68917 acc 0.55102 auc 0.57912[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68764 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68764 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.82batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 19: loss 0.68764 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68231 acc: 0.63265:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68231 acc: 0.63265: 100%|██████████| 1/1 [00:00<00:00, 112.24batch/s]
+[92maverage training of epoch 20: loss 0.68231 acc 0.63265 auc 0.68519[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68755 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68755 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.41batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 20: loss 0.68755 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68147 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68147 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 112.14batch/s]
+[92maverage training of epoch 21: loss 0.68147 acc 0.67347 auc 0.71886[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68751 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68751 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 464.54batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 21: loss 0.68751 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68633 acc: 0.59184:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68633 acc: 0.59184: 100%|██████████| 1/1 [00:00<00:00, 111.91batch/s]
+[92maverage training of epoch 22: loss 0.68633 acc 0.59184 auc 0.62963[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68736 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68736 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.66batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 22: loss 0.68736 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68379 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68379 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 111.81batch/s]
+[92maverage training of epoch 23: loss 0.68379 acc 0.67347 auc 0.70707[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68717 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68717 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.22batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 23: loss 0.68717 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68206 acc: 0.65306:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68206 acc: 0.65306: 100%|██████████| 1/1 [00:00<00:00, 111.99batch/s]
+[92maverage training of epoch 24: loss 0.68206 acc 0.65306 auc 0.71717[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68699 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68699 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 458.69batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 24: loss 0.68699 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68693 acc: 0.55102:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68693 acc: 0.55102: 100%|██████████| 1/1 [00:00<00:00, 112.35batch/s]
+[92maverage training of epoch 25: loss 0.68693 acc 0.55102 auc 0.62795[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68680 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68680 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.01batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 25: loss 0.68680 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68213 acc: 0.65306:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68213 acc: 0.65306: 100%|██████████| 1/1 [00:00<00:00, 111.65batch/s]
+[92maverage training of epoch 26: loss 0.68213 acc 0.65306 auc 0.70539[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68655 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68655 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 458.85batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 26: loss 0.68655 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68384 acc: 0.69388:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68384 acc: 0.69388: 100%|██████████| 1/1 [00:00<00:00, 111.60batch/s]
+[92maverage training of epoch 27: loss 0.68384 acc 0.69388 auc 0.70202[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68624 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68624 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.90batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 27: loss 0.68624 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67964 acc: 0.73469:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67964 acc: 0.73469: 100%|██████████| 1/1 [00:00<00:00, 111.63batch/s]
+[92maverage training of epoch 28: loss 0.67964 acc 0.73469 auc 0.75253[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68593 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68593 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 452.22batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 28: loss 0.68593 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68104 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68104 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 473.50batch/s]
+[94maverage test of epoch 28: loss 0.68104 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68836 acc: 0.61224:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68836 acc: 0.61224: 100%|██████████| 1/1 [00:00<00:00, 111.65batch/s]
+[92maverage training of epoch 29: loss 0.68836 acc 0.61224 auc 0.63131[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68564 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68564 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.66batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 29: loss 0.68564 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68068 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68068 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 484.44batch/s]
+[94maverage test of epoch 29: loss 0.68068 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68277 acc: 0.69388:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68277 acc: 0.69388: 100%|██████████| 1/1 [00:00<00:00, 111.01batch/s]
+[92maverage training of epoch 30: loss 0.68277 acc 0.69388 auc 0.72222[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68531 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68531 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 467.75batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 30: loss 0.68531 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68030 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68030 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 479.51batch/s]
+[94maverage test of epoch 30: loss 0.68030 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68459 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68459 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 112.08batch/s]
+[92maverage training of epoch 31: loss 0.68459 acc 0.71429 auc 0.69192[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68496 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68496 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 464.23batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 31: loss 0.68496 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67991 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67991 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 476.95batch/s]
+[94maverage test of epoch 31: loss 0.67991 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68605 acc: 0.59184:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68605 acc: 0.59184: 100%|██████████| 1/1 [00:00<00:00, 111.93batch/s]
+[92maverage training of epoch 32: loss 0.68605 acc 0.59184 auc 0.64141[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68451 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68451 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.85batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 32: loss 0.68451 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67947 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67947 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 477.38batch/s]
+[94maverage test of epoch 32: loss 0.67947 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68007 acc: 0.61224:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68007 acc: 0.61224: 100%|██████████| 1/1 [00:00<00:00, 111.80batch/s]
+[92maverage training of epoch 33: loss 0.68007 acc 0.61224 auc 0.75421[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68405 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68405 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 458.44batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 33: loss 0.68405 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67906 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67906 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 475.49batch/s]
+[94maverage test of epoch 33: loss 0.67906 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67356 acc: 0.75510:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67356 acc: 0.75510: 100%|██████████| 1/1 [00:00<00:00, 111.71batch/s]
+[92maverage training of epoch 34: loss 0.67356 acc 0.75510 auc 0.80976[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68356 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68356 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.72batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 34: loss 0.68356 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67862 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67862 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 476.52batch/s]
+[94maverage test of epoch 34: loss 0.67862 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68428 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68428 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 109.57batch/s]
+[92maverage training of epoch 35: loss 0.68428 acc 0.67347 auc 0.65993[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68316 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68316 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 449.31batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 35: loss 0.68316 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67819 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67819 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 474.47batch/s]
+[94maverage test of epoch 35: loss 0.67819 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68255 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68255 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 110.62batch/s]
+[92maverage training of epoch 36: loss 0.68255 acc 0.67347 auc 0.72727[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68272 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68272 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 460.46batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 36: loss 0.68272 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67775 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67775 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 481.44batch/s]
+[94maverage test of epoch 36: loss 0.67775 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67452 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67452 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 111.42batch/s]
+[92maverage training of epoch 37: loss 0.67452 acc 0.71429 auc 0.81987[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68231 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68231 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 466.40batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 37: loss 0.68231 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67729 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67729 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 474.09batch/s]
+[94maverage test of epoch 37: loss 0.67729 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67966 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67966 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 110.88batch/s]
+[92maverage training of epoch 38: loss 0.67966 acc 0.67347 auc 0.74074[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68183 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68183 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 457.69batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 38: loss 0.68183 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67682 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67682 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 468.79batch/s]
+[94maverage test of epoch 38: loss 0.67682 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68146 acc: 0.65306:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68146 acc: 0.65306: 100%|██████████| 1/1 [00:00<00:00, 111.83batch/s]
+[92maverage training of epoch 39: loss 0.68146 acc 0.65306 auc 0.73232[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68140 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68140 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 464.49batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 39: loss 0.68140 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67635 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67635 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 482.27batch/s]
+[94maverage test of epoch 39: loss 0.67635 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68025 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68025 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 111.61batch/s]
+[92maverage training of epoch 40: loss 0.68025 acc 0.67347 auc 0.75253[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68104 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68104 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.90batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 40: loss 0.68104 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67590 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67590 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 473.40batch/s]
+[94maverage test of epoch 40: loss 0.67590 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67922 acc: 0.67347:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67922 acc: 0.67347: 100%|██████████| 1/1 [00:00<00:00, 112.21batch/s]
+[92maverage training of epoch 41: loss 0.67922 acc 0.67347 auc 0.76263[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68068 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68068 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.77batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 41: loss 0.68068 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67545 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67545 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 478.15batch/s]
+[94maverage test of epoch 41: loss 0.67545 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67034 acc: 0.83673:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67034 acc: 0.83673: 100%|██████████| 1/1 [00:00<00:00, 111.68batch/s]
+[92maverage training of epoch 42: loss 0.67034 acc 0.83673 auc 0.89057[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68030 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68030 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 465.26batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 42: loss 0.68030 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67499 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67499 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 477.17batch/s]
+[94maverage test of epoch 42: loss 0.67499 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67686 acc: 0.63265:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67686 acc: 0.63265: 100%|██████████| 1/1 [00:00<00:00, 111.67batch/s]
+[92maverage training of epoch 43: loss 0.67686 acc 0.63265 auc 0.76768[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67988 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67988 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.67batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 43: loss 0.67988 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67453 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67453 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 478.75batch/s]
+[94maverage test of epoch 43: loss 0.67453 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67772 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67772 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 111.71batch/s]
+[92maverage training of epoch 44: loss 0.67772 acc 0.71429 auc 0.78788[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67944 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67944 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 461.67batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 44: loss 0.67944 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67405 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67405 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 479.73batch/s]
+[94maverage test of epoch 44: loss 0.67405 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67819 acc: 0.73469:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67819 acc: 0.73469: 100%|██████████| 1/1 [00:00<00:00, 111.77batch/s]
+[92maverage training of epoch 45: loss 0.67819 acc 0.73469 auc 0.78788[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67906 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67906 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 462.39batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 45: loss 0.67906 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67357 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67357 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 476.73batch/s]
+[94maverage test of epoch 45: loss 0.67357 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67990 acc: 0.73469:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67990 acc: 0.73469: 100%|██████████| 1/1 [00:00<00:00, 111.96batch/s]
+[92maverage training of epoch 46: loss 0.67990 acc 0.73469 auc 0.77104[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67865 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67865 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 466.50batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 46: loss 0.67865 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67312 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67312 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 478.75batch/s]
+[94maverage test of epoch 46: loss 0.67312 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67475 acc: 0.73469:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67475 acc: 0.73469: 100%|██████████| 1/1 [00:00<00:00, 111.69batch/s]
+[92maverage training of epoch 47: loss 0.67475 acc 0.73469 auc 0.80808[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67826 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67826 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.00batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 47: loss 0.67826 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67267 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67267 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 477.22batch/s]
+[94maverage test of epoch 47: loss 0.67267 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67238 acc: 0.81633:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67238 acc: 0.81633: 100%|██████████| 1/1 [00:00<00:00, 110.82batch/s]
+[92maverage training of epoch 48: loss 0.67238 acc 0.81633 auc 0.86027[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67781 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67781 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 454.17batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 48: loss 0.67781 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67217 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67217 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 476.84batch/s]
+[94maverage test of epoch 48: loss 0.67217 acc 1.00000 auc 1.00000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67380 acc: 0.73469:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67380 acc: 0.73469: 100%|██████████| 1/1 [00:00<00:00, 111.17batch/s]
+[92maverage training of epoch 49: loss 0.67380 acc 0.73469 auc 0.82155[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67739 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67739 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 463.00batch/s]
+/gpfs/scratch/acw792/SEAL_original/envs/seal-original-py312-cu126/lib/python3.12/site-packages/sklearn/metrics/_ranking.py:1294: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+[93maverage validation of epoch 49: loss 0.67739 acc 1.00000 auc nan[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67163 acc: 1.00000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67163 acc: 1.00000: 100%|██████████| 1/1 [00:00<00:00, 475.87batch/s]
+[94maverage test of epoch 49: loss 0.67163 acc 1.00000 auc 1.00000[0m
+[95mFinal test performance: epoch 49: loss 0.67163 acc 1.00000 auc 1.00000[0m
+SEAL metrics appended to /data/home/acw792/PhD/Stage2/Results/SEAL_original/production/seal_original_10x290_9736688d_20261019/runs/PP2I4_tax_mass/.experiment_004_seed_12348.tmp.mh_1lfqp/main_output/PP2I4_tax_mass_results_SEAL.csv
