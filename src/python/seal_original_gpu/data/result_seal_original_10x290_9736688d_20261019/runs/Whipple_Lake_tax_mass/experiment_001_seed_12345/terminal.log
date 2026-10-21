@@ -1,0 +1,327 @@
+====== begin of gnn configuration ======
+| msg_average = 0
+======   end of gnn configuration ======
+/data/home/acw792/PhD/Stage2/Code/seal-original-gpu/seal-original-apocrita-9736688d32fc/src/python/Main.py:869: DeprecationWarning: The default value for `spmatrix` is changing to `False` in v1.20.
+        That means the default return type will be a sparse array.
+        Unless you use * instead of @, ** for matrix power, or you depend
+        on 2D shapes from e.g. `A.sum(axis=0)` it may not matter to you.
+        See the spmatrix to sparray migration guide for details.
+        https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html
+        
+  data = sio.loadmat(args.data_dir)
+Namespace(data_name='Whipple Lake_tax_mass', mat_folder='/tmp/seal_original_32621105_1/mats', result_dir='/data/home/acw792/PhD/Stage2/Results/SEAL_original/production/seal_original_10x290_9736688d_20261019/runs/Whipple_Lake_tax_mass/.experiment_001_seed_12345.tmp.ujm2vpb6/main_output', train_name=None, test_name=None, only_predict=False, batch_size=50, max_train_num=100000, no_cuda=False, seed=12345, experiment_id=1, test_ratio=0.09999999999999998, num_epochs=50, threshold=0.5, no_parallel=False, all_unknown_as_negative=False, hop='1', max_nodes_per_hop=None, use_embedding=False, use_attribute=False, save_model=False, cuda=True)
+sampling negative links for train and test
+Enclosing subgraph extraction begins...
+  0%|          | 0/69 [00:00<?, ?it/s]100%|██████████| 69/69 [00:01<00:00, 68.99it/s]100%|██████████| 69/69 [00:01<00:00, 68.98it/s]
+Time eplased for subgraph extraction: 1.252711534500122s
+  0%|          | 0/69 [00:00<?, ?it/s]100%|██████████| 69/69 [00:01<00:00, 69.00it/s]100%|██████████| 69/69 [00:01<00:00, 68.98it/s]
+Time eplased for subgraph extraction: 1.2381503582000732s
+  0%|          | 0/7 [00:00<?, ?it/s]100%|██████████| 7/7 [00:01<00:00,  7.00it/s]100%|██████████| 7/7 [00:01<00:00,  7.00it/s]
+Time eplased for subgraph extraction: 1.234919786453247s
+  0%|          | 0/7 [00:00<?, ?it/s]100%|██████████| 7/7 [00:01<00:00,  7.00it/s]100%|██████████| 7/7 [00:01<00:00,  7.00it/s]
+Time eplased for subgraph extraction: 1.236227035522461s
+# train: 138, # test: 14
+k used in SortPooling is: 15
+Initializing DGCNN
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68792 acc: 0.58000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68792 acc: 0.58000:  50%|█████     | 1/2 [00:00<00:00,  2.70batch/s]loss: 0.68874 acc: 0.42000:  50%|█████     | 1/2 [00:00<00:00,  2.70batch/s]loss: 0.68874 acc: 0.42000: 100%|██████████| 2/2 [00:00<00:00,  5.25batch/s]
+[92maverage training of epoch 0: loss 0.68833 acc 0.50000 auc 0.58703[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67481 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67481 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 89.81batch/s]
+[93maverage validation of epoch 0: loss 0.67481 acc 0.61538 auc 0.70000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69290 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69290 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 216.77batch/s]
+[94maverage test of epoch 0: loss 0.69290 acc 0.50000 auc 0.57143[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68855 acc: 0.54000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68989 acc: 0.48000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68989 acc: 0.48000: 100%|██████████| 2/2 [00:00<00:00, 100.90batch/s]
+[92maverage training of epoch 1: loss 0.68922 acc 0.51000 auc 0.66143[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67411 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67411 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 369.61batch/s]
+[93maverage validation of epoch 1: loss 0.67411 acc 0.61538 auc 0.72500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69156 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69156 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 366.22batch/s]
+[94maverage test of epoch 1: loss 0.69156 acc 0.50000 auc 0.73469[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68205 acc: 0.54000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68255 acc: 0.56000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68255 acc: 0.56000: 100%|██████████| 2/2 [00:00<00:00, 106.61batch/s]
+[92maverage training of epoch 2: loss 0.68230 acc 0.55000 auc 0.60105[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67334 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67334 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 371.77batch/s]
+[93maverage validation of epoch 2: loss 0.67334 acc 0.61538 auc 0.72500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69113 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.69113 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 369.35batch/s]
+[94maverage test of epoch 2: loss 0.69113 acc 0.50000 auc 0.77551[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66712 acc: 0.68000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.70485 acc: 0.40000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.70485 acc: 0.40000: 100%|██████████| 2/2 [00:00<00:00, 106.93batch/s]
+[92maverage training of epoch 3: loss 0.68598 acc 0.54000 auc 0.61144[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67228 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67228 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 370.85batch/s]
+[93maverage validation of epoch 3: loss 0.67228 acc 0.61538 auc 0.72500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68984 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68984 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 371.18batch/s]
+[94maverage test of epoch 3: loss 0.68984 acc 0.50000 auc 0.77551[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67834 acc: 0.58000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68894 acc: 0.44000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68894 acc: 0.44000: 100%|██████████| 2/2 [00:00<00:00, 107.11batch/s]
+[92maverage training of epoch 4: loss 0.68364 acc 0.51000 auc 0.69471[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67147 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67147 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 373.49batch/s]
+[93maverage validation of epoch 4: loss 0.67147 acc 0.61538 auc 0.75000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68863 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68863 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 368.28batch/s]
+[94maverage test of epoch 4: loss 0.68863 acc 0.50000 auc 0.77551[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67978 acc: 0.54000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.69011 acc: 0.50000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.69011 acc: 0.50000: 100%|██████████| 2/2 [00:00<00:00, 106.07batch/s]
+[92maverage training of epoch 5: loss 0.68494 acc 0.52000 auc 0.61905[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67061 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67061 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 367.02batch/s]
+[93maverage validation of epoch 5: loss 0.67061 acc 0.61538 auc 0.77500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68672 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68672 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 363.65batch/s]
+[94maverage test of epoch 5: loss 0.68672 acc 0.50000 auc 0.81633[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68808 acc: 0.44000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.69566 acc: 0.46000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.69566 acc: 0.46000: 100%|██████████| 2/2 [00:00<00:00, 107.13batch/s]
+[92maverage training of epoch 6: loss 0.69187 acc 0.45000 auc 0.64205[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66982 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66982 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 372.63batch/s]
+[93maverage validation of epoch 6: loss 0.66982 acc 0.61538 auc 0.77500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68515 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68515 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 364.60batch/s]
+[94maverage test of epoch 6: loss 0.68515 acc 0.50000 auc 0.81633[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68293 acc: 0.52000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.69865 acc: 0.48000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.69865 acc: 0.48000: 100%|██████████| 2/2 [00:00<00:00, 107.91batch/s]
+[92maverage training of epoch 7: loss 0.69079 acc 0.50000 auc 0.57823[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66937 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66937 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 373.89batch/s]
+[93maverage validation of epoch 7: loss 0.66937 acc 0.61538 auc 0.77500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68386 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68386 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 371.70batch/s]
+[94maverage test of epoch 7: loss 0.68386 acc 0.50000 auc 0.85714[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68888 acc: 0.46000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67249 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67249 acc: 0.62000: 100%|██████████| 2/2 [00:00<00:00, 107.80batch/s]
+[92maverage training of epoch 8: loss 0.68068 acc 0.54000 auc 0.70108[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66917 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66917 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 372.93batch/s]
+[93maverage validation of epoch 8: loss 0.66917 acc 0.61538 auc 0.80000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68259 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68259 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 365.93batch/s]
+[94maverage test of epoch 8: loss 0.68259 acc 0.50000 auc 0.85714[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67621 acc: 0.56000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68171 acc: 0.58000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68171 acc: 0.58000: 100%|██████████| 2/2 [00:00<00:00, 108.10batch/s]
+[92maverage training of epoch 9: loss 0.67896 acc 0.57000 auc 0.73037[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66835 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66835 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 370.26batch/s]
+[93maverage validation of epoch 9: loss 0.66835 acc 0.61538 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68140 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68140 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 366.09batch/s]
+[94maverage test of epoch 9: loss 0.68140 acc 0.50000 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67073 acc: 0.54000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68974 acc: 0.46000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68974 acc: 0.46000: 100%|██████████| 2/2 [00:00<00:00, 107.05batch/s]
+[92maverage training of epoch 10: loss 0.68024 acc 0.50000 auc 0.74468[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66750 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66750 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 374.26batch/s]
+[93maverage validation of epoch 10: loss 0.66750 acc 0.61538 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68007 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.68007 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 366.25batch/s]
+[94maverage test of epoch 10: loss 0.68007 acc 0.50000 auc 0.91837[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68032 acc: 0.50000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68326 acc: 0.60000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68326 acc: 0.60000: 100%|██████████| 2/2 [00:00<00:00, 107.32batch/s]
+[92maverage training of epoch 11: loss 0.68179 acc 0.55000 auc 0.70692[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66693 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66693 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 372.76batch/s]
+[93maverage validation of epoch 11: loss 0.66693 acc 0.61538 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67908 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67908 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 369.05batch/s]
+[94maverage test of epoch 11: loss 0.67908 acc 0.50000 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68903 acc: 0.56000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67699 acc: 0.60000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67699 acc: 0.60000: 100%|██████████| 2/2 [00:00<00:00, 107.68batch/s]
+[92maverage training of epoch 12: loss 0.68301 acc 0.58000 auc 0.70293[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66621 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66621 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 372.66batch/s]
+[93maverage validation of epoch 12: loss 0.66621 acc 0.61538 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67785 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67785 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 365.74batch/s]
+[94maverage test of epoch 12: loss 0.67785 acc 0.50000 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66638 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67571 acc: 0.52000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67571 acc: 0.52000: 100%|██████████| 2/2 [00:00<00:00, 107.22batch/s]
+[92maverage training of epoch 13: loss 0.67104 acc 0.61000 auc 0.77364[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66511 acc: 0.61538:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66511 acc: 0.61538: 100%|██████████| 1/1 [00:00<00:00, 368.63batch/s]
+[93maverage validation of epoch 13: loss 0.66511 acc 0.61538 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67665 acc: 0.50000:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67665 acc: 0.50000: 100%|██████████| 1/1 [00:00<00:00, 364.85batch/s]
+[94maverage test of epoch 13: loss 0.67665 acc 0.50000 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68763 acc: 0.48000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67472 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67472 acc: 0.62000: 100%|██████████| 2/2 [00:00<00:00, 107.77batch/s]
+[92maverage training of epoch 14: loss 0.68118 acc 0.55000 auc 0.69068[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66413 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66413 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 375.83batch/s]
+[93maverage validation of epoch 14: loss 0.66413 acc 0.76923 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67536 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67536 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 367.57batch/s]
+[94maverage test of epoch 14: loss 0.67536 acc 0.64286 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67717 acc: 0.58000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68911 acc: 0.50000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.68911 acc: 0.50000: 100%|██████████| 2/2 [00:00<00:00, 108.17batch/s]
+[92maverage training of epoch 15: loss 0.68314 acc 0.54000 auc 0.70593[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66270 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66270 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 372.63batch/s]
+[93maverage validation of epoch 15: loss 0.66270 acc 0.76923 auc 0.82500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67365 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67365 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 368.37batch/s]
+[94maverage test of epoch 15: loss 0.67365 acc 0.64286 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67878 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66199 acc: 0.66000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66199 acc: 0.66000: 100%|██████████| 2/2 [00:00<00:00, 107.65batch/s]
+[92maverage training of epoch 16: loss 0.67038 acc 0.64000 auc 0.77800[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66156 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66156 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 375.26batch/s]
+[93maverage validation of epoch 16: loss 0.66156 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67213 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67213 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 368.99batch/s]
+[94maverage test of epoch 16: loss 0.67213 acc 0.64286 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67640 acc: 0.64000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66920 acc: 0.76000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66920 acc: 0.76000: 100%|██████████| 2/2 [00:00<00:00, 107.43batch/s]
+[92maverage training of epoch 17: loss 0.67280 acc 0.70000 auc 0.74200[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66011 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66011 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 373.76batch/s]
+[93maverage validation of epoch 17: loss 0.66011 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67049 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.67049 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 370.39batch/s]
+[94maverage test of epoch 17: loss 0.67049 acc 0.64286 auc 0.89796[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66831 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67195 acc: 0.56000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67195 acc: 0.56000: 100%|██████████| 2/2 [00:00<00:00, 107.79batch/s]
+[92maverage training of epoch 18: loss 0.67013 acc 0.63000 auc 0.79928[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65878 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65878 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 374.39batch/s]
+[93maverage validation of epoch 18: loss 0.65878 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66880 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66880 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 368.34batch/s]
+[94maverage test of epoch 18: loss 0.66880 acc 0.64286 auc 0.91837[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66401 acc: 0.68000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66826 acc: 0.68000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66826 acc: 0.68000: 100%|██████████| 2/2 [00:00<00:00, 108.07batch/s]
+[92maverage training of epoch 19: loss 0.66614 acc 0.68000 auc 0.79487[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65729 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65729 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 375.13batch/s]
+[93maverage validation of epoch 19: loss 0.65729 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66703 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66703 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 369.09batch/s]
+[94maverage test of epoch 19: loss 0.66703 acc 0.64286 auc 0.91837[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66322 acc: 0.64000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66940 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66940 acc: 0.62000: 100%|██████████| 2/2 [00:00<00:00, 107.99batch/s]
+[92maverage training of epoch 20: loss 0.66631 acc 0.63000 auc 0.80610[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65590 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65590 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 375.83batch/s]
+[93maverage validation of epoch 20: loss 0.65590 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66523 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66523 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 370.06batch/s]
+[94maverage test of epoch 20: loss 0.66523 acc 0.64286 auc 0.95918[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67397 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65623 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65623 acc: 0.70000: 100%|██████████| 2/2 [00:00<00:00, 107.28batch/s]
+[92maverage training of epoch 21: loss 0.66510 acc 0.66000 auc 0.78191[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65455 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65455 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 370.29batch/s]
+[93maverage validation of epoch 21: loss 0.65455 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66343 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66343 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 366.12batch/s]
+[94maverage test of epoch 21: loss 0.66343 acc 0.64286 auc 0.95918[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66496 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66316 acc: 0.76000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66316 acc: 0.76000: 100%|██████████| 2/2 [00:00<00:00, 108.13batch/s]
+[92maverage training of epoch 22: loss 0.66406 acc 0.75000 auc 0.83253[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65300 acc: 0.76923:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65300 acc: 0.76923: 100%|██████████| 1/1 [00:00<00:00, 373.79batch/s]
+[93maverage validation of epoch 22: loss 0.65300 acc 0.76923 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66152 acc: 0.64286:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.66152 acc: 0.64286: 100%|██████████| 1/1 [00:00<00:00, 368.28batch/s]
+[94maverage test of epoch 22: loss 0.66152 acc 0.64286 auc 0.95918[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66379 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65946 acc: 0.72000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65946 acc: 0.72000: 100%|██████████| 2/2 [00:00<00:00, 108.06batch/s]
+[92maverage training of epoch 23: loss 0.66163 acc 0.73000 auc 0.86110[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65136 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65136 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 377.32batch/s]
+[93maverage validation of epoch 23: loss 0.65136 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65955 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65955 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 371.41batch/s]
+[94maverage test of epoch 23: loss 0.65955 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.67098 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66256 acc: 0.72000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66256 acc: 0.72000: 100%|██████████| 2/2 [00:00<00:00, 107.41batch/s]
+[92maverage training of epoch 24: loss 0.66677 acc 0.71000 auc 0.79106[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64970 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64970 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 372.20batch/s]
+[93maverage validation of epoch 24: loss 0.64970 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65751 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65751 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.19batch/s]
+[94maverage test of epoch 24: loss 0.65751 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65932 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66297 acc: 0.66000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66297 acc: 0.66000: 100%|██████████| 2/2 [00:00<00:00, 107.84batch/s]
+[92maverage training of epoch 25: loss 0.66115 acc 0.70000 auc 0.84255[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64796 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64796 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 371.57batch/s]
+[93maverage validation of epoch 25: loss 0.64796 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65535 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65535 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.57batch/s]
+[94maverage test of epoch 25: loss 0.65535 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66481 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66760 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66760 acc: 0.62000: 100%|██████████| 2/2 [00:00<00:00, 108.37batch/s]
+[92maverage training of epoch 26: loss 0.66620 acc 0.66000 auc 0.81069[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64618 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64618 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 374.99batch/s]
+[93maverage validation of epoch 26: loss 0.64618 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65312 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65312 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.52batch/s]
+[94maverage test of epoch 26: loss 0.65312 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63958 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66036 acc: 0.62000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66036 acc: 0.62000: 100%|██████████| 2/2 [00:00<00:00, 108.19batch/s]
+[92maverage training of epoch 27: loss 0.64997 acc 0.71000 auc 0.86836[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64439 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64439 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 374.02batch/s]
+[93maverage validation of epoch 27: loss 0.64439 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65089 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.65089 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.46batch/s]
+[94maverage test of epoch 27: loss 0.65089 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64893 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64704 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64704 acc: 0.78000: 100%|██████████| 2/2 [00:00<00:00, 107.90batch/s]
+[92maverage training of epoch 28: loss 0.64798 acc 0.76000 auc 0.82553[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64252 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64252 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 373.19batch/s]
+[93maverage validation of epoch 28: loss 0.64252 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64864 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64864 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 368.05batch/s]
+[94maverage test of epoch 28: loss 0.64864 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.66965 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64126 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64126 acc: 0.80000: 100%|██████████| 2/2 [00:00<00:00, 107.14batch/s]
+[92maverage training of epoch 29: loss 0.65546 acc 0.75000 auc 0.81040[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64061 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64061 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 372.93batch/s]
+[93maverage validation of epoch 29: loss 0.64061 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64646 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64646 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.57batch/s]
+[94maverage test of epoch 29: loss 0.64646 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64613 acc: 0.82000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64428 acc: 0.72000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64428 acc: 0.72000: 100%|██████████| 2/2 [00:00<00:00, 108.04batch/s]
+[92maverage training of epoch 30: loss 0.64520 acc 0.77000 auc 0.87220[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63859 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63859 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 373.89batch/s]
+[93maverage validation of epoch 30: loss 0.63859 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64423 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64423 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.92batch/s]
+[94maverage test of epoch 30: loss 0.64423 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64643 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63519 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63519 acc: 0.78000: 100%|██████████| 2/2 [00:00<00:00, 107.97batch/s]
+[92maverage training of epoch 31: loss 0.64081 acc 0.79000 auc 0.87195[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63646 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63646 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 375.09batch/s]
+[93maverage validation of epoch 31: loss 0.63646 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64197 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.64197 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 369.64batch/s]
+[94maverage test of epoch 31: loss 0.64197 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63923 acc: 0.90000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65275 acc: 0.68000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.65275 acc: 0.68000: 100%|██████████| 2/2 [00:00<00:00, 108.48batch/s]
+[92maverage training of epoch 32: loss 0.64599 acc 0.79000 auc 0.88607[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63410 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63410 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 372.89batch/s]
+[93maverage validation of epoch 32: loss 0.63410 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63959 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63959 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 368.83batch/s]
+[94maverage test of epoch 32: loss 0.63959 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63944 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63609 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63609 acc: 0.74000: 100%|██████████| 2/2 [00:00<00:00, 108.09batch/s]
+[92maverage training of epoch 33: loss 0.63776 acc 0.77000 auc 0.87515[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63173 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63173 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 376.04batch/s]
+[93maverage validation of epoch 33: loss 0.63173 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63704 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63704 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 365.80batch/s]
+[94maverage test of epoch 33: loss 0.63704 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64353 acc: 0.82000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62953 acc: 0.84000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62953 acc: 0.84000: 100%|██████████| 2/2 [00:00<00:00, 107.91batch/s]
+[92maverage training of epoch 34: loss 0.63653 acc 0.83000 auc 0.87320[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62922 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62922 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 375.93batch/s]
+[93maverage validation of epoch 34: loss 0.62922 acc 0.84615 auc 0.85000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63442 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63442 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.36batch/s]
+[94maverage test of epoch 34: loss 0.63442 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64123 acc: 0.84000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63587 acc: 0.76000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63587 acc: 0.76000: 100%|██████████| 2/2 [00:00<00:00, 107.49batch/s]
+[92maverage training of epoch 35: loss 0.63855 acc 0.80000 auc 0.86475[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62659 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62659 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 374.59batch/s]
+[93maverage validation of epoch 35: loss 0.62659 acc 0.84615 auc 0.87500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63186 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.63186 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.13batch/s]
+[94maverage test of epoch 35: loss 0.63186 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63870 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63928 acc: 0.76000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63928 acc: 0.76000: 100%|██████████| 2/2 [00:00<00:00, 107.69batch/s]
+[92maverage training of epoch 36: loss 0.63899 acc 0.77000 auc 0.85949[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62399 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62399 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 375.16batch/s]
+[93maverage validation of epoch 36: loss 0.62399 acc 0.84615 auc 0.87500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62920 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62920 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 371.87batch/s]
+[94maverage test of epoch 36: loss 0.62920 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64113 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62934 acc: 0.84000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62934 acc: 0.84000: 100%|██████████| 2/2 [00:00<00:00, 106.95batch/s]
+[92maverage training of epoch 37: loss 0.63524 acc 0.81000 auc 0.84335[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62138 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62138 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 370.52batch/s]
+[93maverage validation of epoch 37: loss 0.62138 acc 0.84615 auc 0.87500[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62652 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62652 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 363.77batch/s]
+[94maverage test of epoch 37: loss 0.62652 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.64120 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62824 acc: 0.84000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62824 acc: 0.84000: 100%|██████████| 2/2 [00:00<00:00, 107.92batch/s]
+[92maverage training of epoch 38: loss 0.63472 acc 0.79000 auc 0.80490[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61787 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61787 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 376.37batch/s]
+[93maverage validation of epoch 38: loss 0.61787 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62377 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62377 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 369.64batch/s]
+[94maverage test of epoch 38: loss 0.62377 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62828 acc: 0.72000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63165 acc: 0.76000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63165 acc: 0.76000: 100%|██████████| 2/2 [00:00<00:00, 108.13batch/s]
+[92maverage training of epoch 39: loss 0.62996 acc 0.74000 auc 0.86194[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61507 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61507 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 376.54batch/s]
+[93maverage validation of epoch 39: loss 0.61507 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62096 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.62096 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.19batch/s]
+[94maverage test of epoch 39: loss 0.62096 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62871 acc: 0.82000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62612 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62612 acc: 0.80000: 100%|██████████| 2/2 [00:00<00:00, 107.68batch/s]
+[92maverage training of epoch 40: loss 0.62742 acc 0.81000 auc 0.85914[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61204 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61204 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 374.96batch/s]
+[93maverage validation of epoch 40: loss 0.61204 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61801 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61801 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.00batch/s]
+[94maverage test of epoch 40: loss 0.61801 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60495 acc: 0.86000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62166 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62166 acc: 0.78000: 100%|██████████| 2/2 [00:00<00:00, 107.83batch/s]
+[92maverage training of epoch 41: loss 0.61331 acc 0.82000 auc 0.91106[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60882 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60882 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 375.06batch/s]
+[93maverage validation of epoch 41: loss 0.60882 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61491 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61491 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 369.35batch/s]
+[94maverage test of epoch 41: loss 0.61491 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.61962 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62377 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62377 acc: 0.80000: 100%|██████████| 2/2 [00:00<00:00, 108.08batch/s]
+[92maverage training of epoch 42: loss 0.62170 acc 0.77000 auc 0.87520[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60571 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60571 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 375.40batch/s]
+[93maverage validation of epoch 42: loss 0.60571 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61175 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.61175 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.39batch/s]
+[94maverage test of epoch 42: loss 0.61175 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.59619 acc: 0.88000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62784 acc: 0.76000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.62784 acc: 0.76000: 100%|██████████| 2/2 [00:00<00:00, 107.33batch/s]
+[92maverage training of epoch 43: loss 0.61201 acc 0.82000 auc 0.85417[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60249 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60249 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 372.73batch/s]
+[93maverage validation of epoch 43: loss 0.60249 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60870 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60870 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 370.36batch/s]
+[94maverage test of epoch 43: loss 0.60870 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60571 acc: 0.86000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60737 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60737 acc: 0.78000: 100%|██████████| 2/2 [00:00<00:00, 107.99batch/s]
+[92maverage training of epoch 44: loss 0.60654 acc 0.82000 auc 0.90505[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59926 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59926 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 374.12batch/s]
+[93maverage validation of epoch 44: loss 0.59926 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60552 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60552 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 367.41batch/s]
+[94maverage test of epoch 44: loss 0.60552 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60086 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.61731 acc: 0.78000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.61731 acc: 0.78000: 100%|██████████| 2/2 [00:00<00:00, 106.98batch/s]
+[92maverage training of epoch 45: loss 0.60909 acc 0.79000 auc 0.87796[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59599 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59599 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 372.30batch/s]
+[93maverage validation of epoch 45: loss 0.59599 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60220 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.60220 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.38batch/s]
+[94maverage test of epoch 45: loss 0.60220 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60360 acc: 0.74000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.58495 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.58495 acc: 0.80000: 100%|██████████| 2/2 [00:00<00:00, 107.29batch/s]
+[92maverage training of epoch 46: loss 0.59428 acc 0.77000 auc 0.91640[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59258 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59258 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 376.14batch/s]
+[93maverage validation of epoch 46: loss 0.59258 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59872 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59872 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.63batch/s]
+[94maverage test of epoch 46: loss 0.59872 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.63787 acc: 0.70000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.58765 acc: 0.86000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.58765 acc: 0.86000: 100%|██████████| 2/2 [00:00<00:00, 108.07batch/s]
+[92maverage training of epoch 47: loss 0.61276 acc 0.78000 auc 0.85834[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58917 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58917 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 370.91batch/s]
+[93maverage validation of epoch 47: loss 0.58917 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59531 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59531 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 366.92batch/s]
+[94maverage test of epoch 47: loss 0.59531 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.61482 acc: 0.80000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.58588 acc: 0.84000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.58588 acc: 0.84000: 100%|██████████| 2/2 [00:00<00:00, 108.12batch/s]
+[92maverage training of epoch 48: loss 0.60035 acc 0.82000 auc 0.87240[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58573 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58573 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 370.78batch/s]
+[93maverage validation of epoch 48: loss 0.58573 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59186 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.59186 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 365.96batch/s]
+[94maverage test of epoch 48: loss 0.59186 acc 0.71429 auc 0.97959[0m
+  0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.60192 acc: 0.72000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.59036 acc: 0.84000:   0%|          | 0/2 [00:00<?, ?batch/s]loss: 0.59036 acc: 0.84000: 100%|██████████| 2/2 [00:00<00:00, 106.49batch/s]
+[92maverage training of epoch 49: loss 0.59614 acc 0.78000 auc 0.88355[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58209 acc: 0.84615:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58209 acc: 0.84615: 100%|██████████| 1/1 [00:00<00:00, 376.27batch/s]
+[93maverage validation of epoch 49: loss 0.58209 acc 0.84615 auc 0.90000[0m
+  0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58830 acc: 0.71429:   0%|          | 0/1 [00:00<?, ?batch/s]loss: 0.58830 acc: 0.71429: 100%|██████████| 1/1 [00:00<00:00, 373.19batch/s]
+[94maverage test of epoch 49: loss 0.58830 acc 0.71429 auc 0.97959[0m
+[95mFinal test performance: epoch 49: loss 0.58830 acc 0.71429 auc 0.97959[0m
+SEAL metrics appended to /data/home/acw792/PhD/Stage2/Results/SEAL_original/production/seal_original_10x290_9736688d_20261019/runs/Whipple_Lake_tax_mass/.experiment_001_seed_12345.tmp.ujm2vpb6/main_output/Whipple_Lake_tax_mass_results_SEAL.csv
