@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+  echo "[ERROR] Create the environment inside a compute allocation." >&2
+  exit 2
+fi
+: "${SEAL_ENV_PREFIX:?Set SEAL_ENV_PREFIX to a persistent Miniforge prefix}"
+: "${SCRATCH_ROOT:?Set SCRATCH_ROOT under /gpfs/scratch/$USER}"
+
+mkdir -p "${SCRATCH_ROOT}/conda-pkgs" "${SCRATCH_ROOT}/pip-cache"
+export CONDA_PKGS_DIRS="${SCRATCH_ROOT}/conda-pkgs"
+export PIP_CACHE_DIR="${SCRATCH_ROOT}/pip-cache"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DGCNN_LIB="$(cd "${SCRIPT_DIR}/../../pytorch_DGCNN/lib" && pwd)"
+module load miniforge
+mamba env create --prefix "${SEAL_ENV_PREFIX}" --file "${SCRIPT_DIR}/environment.apocrita.yml"
+"${SEAL_ENV_PREFIX}/bin/python" -m pip install \
+  torch==2.11.0 --index-url https://download.pytorch.org/whl/cu126
+"${SEAL_ENV_PREFIX}/bin/python" -m pip install \
+  --requirement "${SCRIPT_DIR}/requirements-apocrita.txt"
+
+make -C "${DGCNN_LIB}" clean
+make -C "${DGCNN_LIB}" CXX=/usr/bin/g++
+file "${DGCNN_LIB}/build/dll/libgnn.so"
+ldd "${DGCNN_LIB}/build/dll/libgnn.so"
+"${SEAL_ENV_PREFIX}/bin/python" -c \
+  'import ctypes,sys; ctypes.CDLL(sys.argv[1]); print("[OK] native library loaded")' \
+  "${DGCNN_LIB}/build/dll/libgnn.so"
+"${SEAL_ENV_PREFIX}/bin/python" -m pip freeze > "${SEAL_ENV_PREFIX}/pip-freeze.txt"
+conda env export --prefix "${SEAL_ENV_PREFIX}" > "${SEAL_ENV_PREFIX}/environment-export.yml"
+
