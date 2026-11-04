@@ -14,8 +14,11 @@ from seal_run_artifacts import canonical_json_bytes, configuration_hash, file_sh
 
 
 DEFAULT_CONFIG = {
-    "schema_version": "seal-directed-gpu-config-v1",
-    "version": "SEAL_directed_gpu_v1",
+    "schema_version": "seal-directed-nodeattr-config-v1",
+    "version": "SEAL_directed_nodeattr_v1",
+    "ModelID": "SEAL_directed_nodeattr_v1",
+    "DisplayName": "SEAL-D-NodeAttr",
+    "LegacyFamily": "SEAL_directed",
     "requested_train_ratio": 90.0,
     "test_ratio": 0.1,
     "hop": 1,
@@ -37,6 +40,7 @@ DEFAULT_CONFIG = {
     "retention": "raw_no_outlier_filter",
     "threshold_operator": "score_gt_threshold",
     "deterministic_algorithms": True,
+    "label_permutation_control": False,
 }
 
 
@@ -85,6 +89,7 @@ def build_manifest(
     only_foodwebs=None,
     source_commit="unspecified",
     deterministic_algorithms=True,
+    label_permutation_control=False,
 ):
     foodweb_csv = Path(foodweb_csv).resolve()
     mat_folder = Path(mat_folder).resolve()
@@ -115,8 +120,12 @@ def build_manifest(
             "seed_formula": "base_seed + num_experiments*(foodweb_index-1) + experiment_id-1",
             "source_commit": str(source_commit),
             "deterministic_algorithms": bool(deterministic_algorithms),
+            "label_permutation_control": bool(label_permutation_control),
         }
     )
+    if label_permutation_control:
+        config["ModelID"] = "SEAL_directed_nodeattr_permuted_labels_control_v1"
+        config["DisplayName"] = "SEAL-D-NodeAttr-PermutedLabelsControl"
     config_hash = configuration_hash(config)
 
     rows = []
@@ -194,7 +203,7 @@ def parse_args(argv=None):
     parser.add_argument("--foodweb-csv", type=Path, required=True)
     parser.add_argument("--mat-folder", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--num-experiments", type=int, default=100)
+    parser.add_argument("--num-experiments", type=int, default=10)
     parser.add_argument("--base-seed", type=int, default=12345)
     parser.add_argument("--expected-foodwebs", type=int, default=290)
     parser.add_argument("--only-foodweb", action="append", default=[])
@@ -202,6 +211,10 @@ def parse_args(argv=None):
     parser.add_argument(
         "--non-deterministic", action="store_true",
         help="record an explicitly approved CUDA determinism exception",
+    )
+    parser.add_argument(
+        "--label-permutation-control", action="store_true",
+        help="create a distinct sanity-control manifest with permuted training labels",
     )
     return parser.parse_args(argv)
 
@@ -218,6 +231,7 @@ def main(argv=None):
         only_foodwebs=args.only_foodweb,
         source_commit=args.source_commit,
         deterministic_algorithms=not args.non_deterministic,
+        label_permutation_control=args.label_permutation_control,
     )
     print("[OK] Manifest: {}".format(manifest_path))
     print("[OK] Configuration: {}".format(config_path))

@@ -19,6 +19,15 @@ VARIANTS = ("legacy_weak_node", "directed_node", "directed_scalar_gate", "direct
 DEFAULT_CONFIG = {
     "schema_version": "seal-directed-weighted-config-v1",
     "version": "SEAL_directed_weighted_v1",
+    "ModelID": "SEAL_directed_nodeedgeattr_v1",
+    "DisplayName": "SEAL-D-NodeEdgeAttr",
+    "LegacyFamily": "SEAL_directed_weighted_v1",
+    "VariantDisplayNames": {
+        "legacy_weak_node": "SEAL-D-NodeAttr-WeakMP",
+        "directed_node": "SEAL-D-NodeAttr-DirectedMP",
+        "directed_scalar_gate": "SEAL-D-NodeEdgeAttr-Gate",
+        "directed_ecc": "SEAL-D-NodeEdgeAttr-ECC",
+    },
     "task": "binary_resource_to_consumer_link_prediction",
     "edge_semantics": "contextual_covariates_not_interaction_strength",
     "edge_schema": "full_v1",

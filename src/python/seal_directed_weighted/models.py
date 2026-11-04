@@ -13,6 +13,15 @@ import torch.nn.functional as F
 
 
 VARIANTS = ("legacy_weak_node", "directed_node", "directed_scalar_gate", "directed_ecc")
+MODEL_ID = "SEAL_directed_nodeedgeattr_v1"
+DISPLAY_NAME = "SEAL-D-NodeEdgeAttr"
+LEGACY_FAMILY = "SEAL_directed_weighted_v1"
+VARIANT_DISPLAY_NAMES = {
+    "legacy_weak_node": "SEAL-D-NodeAttr-WeakMP",
+    "directed_node": "SEAL-D-NodeAttr-DirectedMP",
+    "directed_scalar_gate": "SEAL-D-NodeEdgeAttr-Gate",
+    "directed_ecc": "SEAL-D-NodeEdgeAttr-ECC",
+}
 
 
 def collate_directed(graphs, label_dim, device):

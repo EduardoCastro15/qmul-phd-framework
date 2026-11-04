@@ -64,15 +64,13 @@ class DGCNN(nn.Module):
             e2n_sp = e2n_sp.to(device)
             subg_sp = subg_sp.to(device)
             node_degs = node_degs.to(device)
-        node_feat = Variable(node_feat)
+        # ``node_feat`` may be an attribution input.  Re-wrapping a Tensor in
+        # ``Variable`` detaches it on modern PyTorch and prevents gradients
+        # from reaching node attributes/DRNL.  Tensor already provides the
+        # Variable API, so keep the original differentiable object.
         if edge_feat is not None:
-            edge_feat = Variable(edge_feat)
             if node_feat.is_cuda:
                 edge_feat = edge_feat.to(device)
-        n2n_sp = Variable(n2n_sp)
-        e2n_sp = Variable(e2n_sp)
-        subg_sp = Variable(subg_sp)
-        node_degs = Variable(node_degs)
 
         h = self.sortpooling_embedding(node_feat, edge_feat, n2n_sp, e2n_sp, subg_sp, graph_sizes, node_degs)
 

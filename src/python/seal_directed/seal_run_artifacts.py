@@ -14,7 +14,10 @@ import numpy as np
 import scipy.sparse as ssp
 
 
-SCHEMA_VERSION = "seal-directed-run-v1"
+SCHEMA_VERSION_V1 = "seal-directed-run-v1"
+SCHEMA_VERSION_V2 = "seal-directed-run-v2"
+SCHEMA_VERSION = SCHEMA_VERSION_V2
+SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION_V1, SCHEMA_VERSION_V2}
 
 
 def safe_file_stem(value):
@@ -132,8 +135,24 @@ def _json_compatible(value):
     return value
 
 
-def write_run_bundle(run_dir, metrics, artifact_arrays, provenance, config_hash):
+def write_run_bundle(
+    run_dir,
+    metrics,
+    artifact_arrays,
+    provenance,
+    config_hash,
+    extra_files=None,
+):
     """Write one complete run using a same-filesystem atomic directory rename."""
+    extra_files = dict(extra_files or {})
+    schema_version = SCHEMA_VERSION_V2 if extra_files else SCHEMA_VERSION_V1
+    if extra_files and set(extra_files) != {"checkpoint.pt", "model_config.json"}:
+        raise ValueError(
+            "Version-2 bundles require exactly checkpoint.pt and model_config.json"
+        )
+    for name, content in extra_files.items():
+        if Path(name).name != name or not isinstance(content, (bytes, bytearray)):
+            raise ValueError("Extra bundle files must be byte payloads with plain filenames")
     run_dir = Path(run_dir)
     run_dir.parent.mkdir(parents=True, exist_ok=True)
     if run_dir.exists():
@@ -148,7 +167,7 @@ def write_run_bundle(run_dir, metrics, artifact_arrays, provenance, config_hash)
     )
     try:
         metrics_payload = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": schema_version,
             "config_hash": str(config_hash),
             "metrics": _json_compatible(metrics),
             "provenance": _json_compatible(provenance),
@@ -164,12 +183,23 @@ def write_run_bundle(run_dir, metrics, artifact_arrays, provenance, config_hash)
             **{key: np.asarray(value) for key, value in artifact_arrays.items()},
         )
 
+        for name, content in extra_files.items():
+            with open(temp_dir / name, "wb") as handle:
+                handle.write(content)
+
+        file_hashes = {
+            path.name: file_sha256(path)
+            for path in sorted(temp_dir.iterdir())
+            if path.is_file()
+        }
+
         success_payload = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": schema_version,
             "config_hash": str(config_hash),
             "hostname": socket.gethostname(),
             "metrics_sha256": file_sha256(metrics_path),
             "artifacts_sha256": file_sha256(artifact_path),
+            "files_sha256": file_hashes,
         }
         success_path = temp_dir / "_SUCCESS"
         with open(success_path, "wb") as handle:
@@ -199,9 +229,10 @@ def validate_run_bundle(run_dir, expected_config_hash=None, verify_checksums=Tru
     with open(required["success"], encoding="utf-8") as handle:
         success = json.load(handle)
 
-    if payload.get("schema_version") != SCHEMA_VERSION:
+    schema_version = payload.get("schema_version")
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError("Unexpected metrics schema in {}".format(run_dir))
-    if success.get("schema_version") != SCHEMA_VERSION:
+    if success.get("schema_version") != schema_version:
         raise ValueError("Unexpected success-marker schema in {}".format(run_dir))
     if payload.get("config_hash") != success.get("config_hash"):
         raise ValueError("Configuration hashes disagree in {}".format(run_dir))
@@ -212,6 +243,12 @@ def validate_run_bundle(run_dir, expected_config_hash=None, verify_checksums=Tru
             )
         )
 
+    recorded_files = success.get("files_sha256", {})
+    if schema_version == SCHEMA_VERSION_V2 and set(recorded_files) != {
+        "metrics.json", "artifacts.npz", "checkpoint.pt", "model_config.json"
+    }:
+        raise ValueError("Version-2 _SUCCESS does not checksum every bundle file")
+
     if verify_checksums:
         observed_metrics = file_sha256(required["metrics"])
         observed_artifacts = file_sha256(required["artifacts"])
@@ -219,6 +256,50 @@ def validate_run_bundle(run_dir, expected_config_hash=None, verify_checksums=Tru
             raise ValueError("metrics.json checksum mismatch in {}".format(run_dir))
         if observed_artifacts != success.get("artifacts_sha256"):
             raise ValueError("artifacts.npz checksum mismatch in {}".format(run_dir))
+        for filename, expected_hash in recorded_files.items():
+            file_path = run_dir / filename
+            if not file_path.is_file() or file_sha256(file_path) != expected_hash:
+                raise ValueError("{} checksum mismatch in {}".format(filename, run_dir))
+
+    if schema_version == SCHEMA_VERSION_V2:
+        checkpoint_path = run_dir / "checkpoint.pt"
+        model_config_path = run_dir / "model_config.json"
+        if not checkpoint_path.is_file() or not model_config_path.is_file():
+            raise ValueError("Version-2 run is missing checkpoint.pt/model_config.json")
+        with open(model_config_path, encoding="utf-8") as handle:
+            model_config = json.load(handle)
+        required_model_fields = {
+            "schema_version",
+            "ModelID",
+            "DisplayName",
+            "LegacyFamily",
+            "feature_names",
+            "feature_schema_hash",
+            "feat_dim",
+            "attr_dim",
+            "sortpooling_k",
+            "checkpoint_sha256",
+        }
+        absent_model_fields = sorted(required_model_fields.difference(model_config))
+        if absent_model_fields:
+            raise ValueError(
+                "model_config.json is missing {} in {}".format(
+                    ", ".join(absent_model_fields), run_dir
+                )
+            )
+        if model_config["checkpoint_sha256"] != file_sha256(checkpoint_path):
+            raise ValueError("Checkpoint hash disagrees with model_config.json in {}".format(run_dir))
+        from nodeattr_schema import feature_schema_hash
+
+        if int(model_config["attr_dim"]) != len(model_config["feature_names"]):
+            raise ValueError("Attribute dimension disagrees with feature names in {}".format(run_dir))
+        if int(model_config["attr_dim"]) > 0 and model_config[
+            "feature_schema_hash"
+        ] != feature_schema_hash(model_config["feature_names"]):
+            raise ValueError("Feature schema hash disagrees with model_config.json in {}".format(run_dir))
+        for key in ("ModelID", "DisplayName", "LegacyFamily"):
+            if payload.get("metrics", {}).get(key) != model_config.get(key):
+                raise ValueError("{} disagrees between metrics/model config in {}".format(key, run_dir))
 
     with np.load(required["artifacts"], allow_pickle=False) as artifact:
         required_arrays = {
@@ -242,6 +323,37 @@ def validate_run_bundle(run_dir, expected_config_hash=None, verify_checksums=Tru
             raise ValueError("Test labels/scores shape mismatch in {}".format(run_dir))
         if not np.all(np.isfinite(artifact["test_scores"])):
             raise ValueError("Non-finite test scores in {}".format(run_dir))
+
+        if schema_version == SCHEMA_VERSION_V2:
+            from graph_artifacts import validate_packed_graphs
+
+            train_pairs = np.vstack([artifact["train_pos"], artifact["train_neg"]])
+            train_labels = np.concatenate([
+                np.ones(len(artifact["train_pos"]), dtype=np.int8),
+                np.zeros(len(artifact["train_neg"]), dtype=np.int8),
+            ])
+            test_pairs = np.vstack([artifact["test_pos"], artifact["test_neg"]])
+            permutation_control = bool(
+                payload.get("metrics", {}).get("LabelPermutationControl", 0)
+            )
+            validate_packed_graphs(
+                artifact,
+                "train",
+                expected_pairs=train_pairs,
+                expected_labels=None if permutation_control else train_labels,
+            )
+            if permutation_control:
+                observed_train_labels = np.asarray(artifact["train_graph_labels"])
+                if not np.array_equal(
+                    np.sort(observed_train_labels), np.sort(train_labels)
+                ):
+                    raise ValueError("Permuted training labels do not preserve class counts")
+            validate_packed_graphs(
+                artifact,
+                "test",
+                expected_pairs=test_pairs,
+                expected_labels=artifact["test_labels"],
+            )
 
     return payload
 

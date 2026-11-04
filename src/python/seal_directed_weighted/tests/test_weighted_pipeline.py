@@ -185,7 +185,7 @@ class WeightedPipelineTests(unittest.TestCase):
             with open(foodweb_csv, "w", newline="") as handle:
                 writer = csv.DictWriter(handle, fieldnames=["Foodweb"])
                 writer.writeheader(); writer.writerow({"Foodweb": "Fixture_tax_mass"})
-            manifest_path, _, rows = build_manifest(
+            manifest_path, config_path, rows = build_manifest(
                 foodweb_csv, mat_root, root / "manifest", num_experiments=2,
                 expected_foodwebs=1, frozen_source_commit="fixture",
             )
@@ -198,6 +198,10 @@ class WeightedPipelineTests(unittest.TestCase):
                 self.assertEqual(len({row["SplitFileSHA256"] for row in subset}), 1)
             self.assertEqual(seed_for(290, 10), 25244)
             self.assertTrue(manifest_path.is_file())
+            with open(config_path, encoding="utf-8") as handle:
+                config = json.load(handle)
+            self.assertEqual(config["ModelID"], "SEAL_directed_nodeedgeattr_v1")
+            self.assertEqual(config["DisplayName"], "SEAL-D-NodeEdgeAttr")
 
     def test_atomic_bundle_validation(self):
         with tempfile.TemporaryDirectory() as temporary:

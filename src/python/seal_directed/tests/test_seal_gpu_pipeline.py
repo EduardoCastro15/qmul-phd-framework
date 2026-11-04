@@ -77,6 +77,9 @@ class SeedAndManifestTests(unittest.TestCase):
             with open(config_path, encoding="utf-8") as handle:
                 config = json.load(handle)
             self.assertEqual(config["retention"], "raw_no_outlier_filter")
+            self.assertEqual(config["ModelID"], "SEAL_directed_nodeattr_v1")
+            self.assertEqual(config["DisplayName"], "SEAL-D-NodeAttr")
+            self.assertEqual(config["LegacyFamily"], "SEAL_directed")
             self.assertEqual({row["ConfigHash"] for row in rows}, {configuration_hash(config)})
 
 

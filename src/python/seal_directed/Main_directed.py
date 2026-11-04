@@ -11,6 +11,8 @@ import socket
 import random
 import argparse
 import csv
+import hashlib
+import io
 from torch.utils.data import DataLoader
 from sklearn import metrics
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -19,11 +21,20 @@ sys.path.append('%s/pytorch_DGCNN' % PYTHON_DIR)
 from main import *
 from util_functions_directed import *
 from seal_run_artifacts import (
+    canonical_json_bytes,
     node_order_hash,
     pairs_to_array,
     sparse_to_arrays,
     split_hash,
     write_run_bundle,
+)
+from graph_artifacts import pack_graphs
+from nodeattr_schema import (
+    DISPLAY_NAME,
+    LEGACY_FAMILY,
+    MODEL_ID,
+    feature_names_from_mat,
+    validate_feature_schema,
 )
 
 # python src/python/seal_directed/run_foodweb_seal_directed.py \
@@ -865,6 +876,14 @@ def main(argv=None):
                         help='immutable RUN_CONFIG hash required with --run-dir')
     parser.add_argument('--source-commit', default='unknown',
                         help='source Git commit recorded in run provenance')
+    parser.add_argument('--model-id', default=MODEL_ID,
+                        help='stable scientific model identifier for new bundles')
+    parser.add_argument('--display-name', default=DISPLAY_NAME,
+                        help='human-readable scientific model name')
+    parser.add_argument('--legacy-family', default=LEGACY_FAMILY,
+                        help='historical implementation family retained for compatibility')
+    parser.add_argument('--permute-training-labels', action='store_true', default=False,
+                        help='sanity-control only: permute training graph labels deterministically')
     args = parser.parse_args(argv)
     run_start_time = time.time()
     if args.num_workers < 1:
@@ -935,6 +954,7 @@ def main(argv=None):
         args.data_dir = os.path.join(mat_folder, '{}.mat'.format(args.data_name))
         data = sio.loadmat(args.data_dir)
         net = binarize_adjacency(data['net'])
+        feature_names = None
         if 'group' in data:
             # load node attributes (here a.k.a. node classes)
             group = data['group']
@@ -964,6 +984,7 @@ def main(argv=None):
         )
         net = binarize_adjacency(net)
         attributes = None
+        feature_names = None
         role_code = None
 
     # sample train and test links
@@ -1015,6 +1036,20 @@ def main(argv=None):
                     args.data_name,
                 )
             )
+        feature_names = feature_names_from_mat(data)
+        feature_schema = validate_feature_schema(feature_names)
+        if attributes.shape[1] != len(feature_names):
+            raise ValueError(
+                '`group` column count ({}) does not match group_feature_names ({}) for {}.'.format(
+                    attributes.shape[1], len(feature_names), args.data_name
+                )
+            )
+    else:
+        feature_schema = {
+            'feature_names': [],
+            'feature_families': [],
+            'feature_schema_hash': None,
+        }
 
     node_information = None
     if args.use_embedding:
@@ -1113,6 +1148,18 @@ def main(argv=None):
 
     optimizer = optim.Adam(classifier.parameters(), lr=cmd_args.learning_rate)
 
+    attribution_train_graphs = list(train_graphs)
+    label_permutation_seed = int(args.seed) + 2000000
+    if args.permute_training_labels:
+        original_labels = np.asarray(
+            [graph.label for graph in attribution_train_graphs], dtype=np.int64
+        )
+        permuted_labels = np.random.default_rng(label_permutation_seed).permutation(
+            original_labels
+        )
+        for graph, permuted_label in zip(attribution_train_graphs, permuted_labels):
+            graph.label = int(permuted_label)
+    train_graphs = list(train_graphs)
     random.shuffle(train_graphs)
     val_num = max(1, int(0.1 * len(train_graphs))) if len(train_graphs) > 1 else 0
     val_graphs = train_graphs[:val_num]
@@ -1202,7 +1249,12 @@ def main(argv=None):
     )
     timings['total_seconds'] = time.time() - run_start_time
     metrics_row = {
-        'Version': 'SEAL_directed',
+        'Version': args.legacy_family,
+        'ModelID': args.model_id,
+        'DisplayName': args.display_name,
+        'LegacyFamily': args.legacy_family,
+        'LabelPermutationControl': int(args.permute_training_labels),
+        'LabelPermutationSeed': label_permutation_seed if args.permute_training_labels else None,
         'TimeElapsed': format_elapsed_time(timings['total_seconds']),
         'TimeElapsedSeconds': timings['total_seconds'],
         'K': args.hop,
@@ -1259,6 +1311,8 @@ def main(argv=None):
             'test_scores': np.asarray(test_scores, dtype=np.float64),
             'predicted_links': np.asarray(predicted_links, dtype=np.int64).reshape(-1, 2),
         }
+        artifact_arrays.update(pack_graphs(attribution_train_graphs, prefix='train'))
+        artifact_arrays.update(pack_graphs(test_graphs, prefix='test'))
         artifact_arrays.update(sparse_to_arrays(pseudo_full, prefix='pseudo'))
         provenance = {
             'schema_version': 'seal-directed-provenance-v1',
@@ -1277,6 +1331,58 @@ def main(argv=None):
             'node_order_hash': node_order_hash(taxonomy, net),
             'negative_sampling': negative_sampling_metadata,
             'timings': timings,
+            'feature_schema_hash': feature_schema['feature_schema_hash'],
+            'label_permutation_control': bool(args.permute_training_labels),
+            'label_permutation_seed': (
+                label_permutation_seed if args.permute_training_labels else None
+            ),
+        }
+        checkpoint_buffer = io.BytesIO()
+        portable_state_dict = {
+            key: value.detach().cpu() for key, value in best_state_dict.items()
+        }
+        torch.save(
+            {
+                'schema_version': 'seal-directed-checkpoint-v1',
+                'state_dict': portable_state_dict,
+                'best_epoch': int(best_epoch),
+                'config_hash': args.config_hash,
+                'ModelID': args.model_id,
+            },
+            checkpoint_buffer,
+        )
+        checkpoint_bytes = checkpoint_buffer.getvalue()
+        checkpoint_sha256 = hashlib.sha256(checkpoint_bytes).hexdigest()
+        model_config = {
+            'schema_version': 'seal-directed-model-config-v1',
+            'ModelID': args.model_id,
+            'DisplayName': args.display_name,
+            'LegacyFamily': args.legacy_family,
+            'config_hash': args.config_hash,
+            'source_commit': args.source_commit,
+            'checkpoint_sha256': checkpoint_sha256,
+            'best_epoch': int(best_epoch),
+            'gm': cmd_args.gm,
+            'feat_dim': int(cmd_args.feat_dim),
+            'attr_dim': int(cmd_args.attr_dim),
+            'edge_feat_dim': int(cmd_args.edge_feat_dim),
+            'sortpooling_k': int(cmd_args.sortpooling_k),
+            'batch_size': int(args.batch_size),
+            'latent_dim': [int(value) for value in cmd_args.latent_dim],
+            'hidden': int(cmd_args.hidden),
+            'out_dim': int(cmd_args.out_dim),
+            'dropout': bool(cmd_args.dropout),
+            'num_class': int(cmd_args.num_class),
+            'conv1d_activation': str(cmd_args.conv1d_activation),
+            'hop': args.hop,
+            'max_nodes_per_hop': args.max_nodes_per_hop,
+            'use_attribute': bool(args.use_attribute),
+            'use_embedding': bool(args.use_embedding),
+            'feature_names': feature_schema['feature_names'],
+            'feature_families': feature_schema['feature_families'],
+            'feature_schema_hash': feature_schema['feature_schema_hash'],
+            'test_score_semantics': 'positive_class_probability',
+            'attribution_target': 'log_p_positive_minus_log_p_negative',
         }
         metrics_file = write_run_bundle(
             args.run_dir,
@@ -1284,6 +1390,10 @@ def main(argv=None):
             artifact_arrays,
             provenance,
             args.config_hash,
+            extra_files={
+                'checkpoint.pt': checkpoint_bytes,
+                'model_config.json': canonical_json_bytes(model_config) + b'\n',
+            },
         ) / 'metrics.json'
         print('SEAL atomic run bundle written to {}'.format(args.run_dir))
     else:

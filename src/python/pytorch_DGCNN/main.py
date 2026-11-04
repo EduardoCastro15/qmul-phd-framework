@@ -123,6 +123,83 @@ class Classifier(nn.Module):
         embed = self.gnn(batch_graph, node_feat, edge_feat)
         return self.mlp(embed, labels)
 
+    def forward_prepared(
+        self,
+        batch_graph,
+        node_tag_onehot,
+        node_attributes=None,
+        edge_feat=None,
+        labels=None,
+    ):
+        """Evaluate fixed graph topologies with explicit differentiable inputs.
+
+        ``forward(batch_graph)`` remains the training/legacy interface.  This
+        method is the attribution interface: callers supply the one-hot DRNL
+        block and, when present, the continuous node-attribute block.  Keeping
+        graph topology in ``batch_graph`` makes it fixed while gradients flow
+        only through the requested input tensor(s).
+        """
+        if not torch.is_tensor(node_tag_onehot):
+            raise TypeError('node_tag_onehot must be a torch.Tensor')
+        if node_tag_onehot.ndim != 2:
+            raise ValueError('node_tag_onehot must have shape [total_nodes, feat_dim]')
+        if node_tag_onehot.shape[1] != int(cmd_args.feat_dim):
+            raise ValueError(
+                'DRNL width mismatch: expected {}, found {}'.format(
+                    int(cmd_args.feat_dim), int(node_tag_onehot.shape[1])
+                )
+            )
+        expected_nodes = sum(int(graph.num_nodes) for graph in batch_graph)
+        if node_tag_onehot.shape[0] != expected_nodes:
+            raise ValueError(
+                'Node count mismatch: graphs contain {}, tensor contains {}'.format(
+                    expected_nodes, int(node_tag_onehot.shape[0])
+                )
+            )
+
+        if node_attributes is None:
+            if int(cmd_args.attr_dim) != 0:
+                raise ValueError('node_attributes are required for attr_dim={}'.format(cmd_args.attr_dim))
+            node_feat = node_tag_onehot
+        else:
+            if not torch.is_tensor(node_attributes) or node_attributes.ndim != 2:
+                raise ValueError('node_attributes must have shape [total_nodes, attr_dim]')
+            if node_attributes.shape[0] != expected_nodes:
+                raise ValueError('node_attributes node count does not match batch_graph')
+            if node_attributes.shape[1] != int(cmd_args.attr_dim):
+                raise ValueError(
+                    'Attribute width mismatch: expected {}, found {}'.format(
+                        int(cmd_args.attr_dim), int(node_attributes.shape[1])
+                    )
+                )
+            node_feat = torch.cat(
+                [node_tag_onehot.type_as(node_attributes), node_attributes], dim=1
+            )
+
+        embed = self.gnn(batch_graph, node_feat, edge_feat)
+        return self.mlp(embed, labels)
+
+    def forward_log_odds(
+        self,
+        batch_graph,
+        node_tag_onehot,
+        node_attributes=None,
+        edge_feat=None,
+    ):
+        """Return differentiable positive-class log odds for attribution."""
+        if self.regression:
+            raise ValueError('Log odds are defined only for classification models')
+        log_probabilities = self.forward_prepared(
+            batch_graph,
+            node_tag_onehot,
+            node_attributes=node_attributes,
+            edge_feat=edge_feat,
+            labels=None,
+        )
+        if log_probabilities.ndim != 2 or log_probabilities.shape[1] != 2:
+            raise ValueError('Expected binary class log probabilities')
+        return log_probabilities[:, 1] - log_probabilities[:, 0]
+
     def output_features(self, batch_graph):
         feature_label = self.PrepareFeatureLabel(batch_graph)
         if len(feature_label) == 2:

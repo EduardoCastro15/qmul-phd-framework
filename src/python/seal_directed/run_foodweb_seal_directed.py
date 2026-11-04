@@ -65,9 +65,10 @@ def detect_source_commit(repo_root):
 
 def validate_python_environment(python_executable, device, require_cuda):
     code = (
-        "import json, numpy, scipy, sklearn, networkx, torch; "
+        "import json, numpy, scipy, sklearn, networkx, torch, captum; "
         "print(json.dumps({'python': __import__('sys').version.split()[0], "
-        "'torch': torch.__version__, 'torch_cuda': torch.version.cuda, "
+        "'torch': torch.__version__, 'captum': captum.__version__, "
+        "'torch_cuda': torch.version.cuda, "
         "'cuda_available': torch.cuda.is_available(), "
         "'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}))"
     )
@@ -132,6 +133,9 @@ def build_command(args, config, row, run_dir, source_commit, script_dir, mat_pat
         "--run-dir", str(run_dir),
         "--config-hash", row["ConfigHash"],
         "--source-commit", source_commit,
+        "--model-id", config.get("ModelID", "SEAL_directed_nodeattr_v1"),
+        "--display-name", config.get("DisplayName", "SEAL-D-NodeAttr"),
+        "--legacy-family", config.get("LegacyFamily", "SEAL_directed"),
         "--foodweb-index", row["FoodwebIndex"],
         "--experiment-id", row["ExperimentID"],
         "--seed", row["Seed"],
@@ -158,6 +162,8 @@ def build_command(args, config, row, run_dir, source_commit, script_dir, mat_pat
         command.append("--no-role-filter")
     if config.get("all_unknown_as_negative"):
         command.append("--all-unknown-as-negative")
+    if config.get("label_permutation_control"):
+        command.append("--permute-training-labels")
     if args.num_workers == 1:
         command.append("--no-parallel")
     return command

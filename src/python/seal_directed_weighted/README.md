@@ -1,15 +1,18 @@
-# SEAL-directed-weighted
+# SEAL-D-NodeEdgeAttr
 
 This package is an isolated extension of `src/python/seal_directed`. It keeps
 the existing 44 node attributes and binary resource-to-consumer prediction,
 then evaluates contextual edge covariates with truly directed message passing.
-No scientific file in the validated `seal_directed` package is modified.
+The directory name remains `seal_directed_weighted` for historical
+reproducibility; the scientific alias changes without renaming old outputs.
 
 ## Scientific scope
 
-Visible name: **SEAL-directed-weighted**
+Visible name: **SEAL-D-NodeEdgeAttr**
 
-Internal version: `SEAL_directed_weighted_v1`
+Future identifier: `SEAL_directed_nodeedgeattr_v1`
+
+Historical alias retained in existing results: `SEAL_directed_weighted_v1`
 
 The word *weighted* means **edge covariates**. It does not mean measured diet
 proportion, biomass flux, interaction frequency, or interaction strength.
@@ -26,12 +29,17 @@ remain multi-hot. The target candidate never receives its own link metadata:
 test positives and their attributes are removed from the observed network, and
 every candidate edge is removed again from its enclosing subgraph.
 
-The four frozen variants are:
+The four frozen variants and their scientific display names are:
 
-1. `legacy_weak_node`: existing weak-projection DGCNN with node attributes;
-2. `directed_node`: separate incoming/outgoing directed messages, no edge data;
-3. `directed_scalar_gate`: a learned 17 -> 32 -> 1 sigmoid gate;
-4. `directed_ecc`: layer- and direction-specific edge-conditioned filters.
+1. `legacy_weak_node` -> **SEAL-D-NodeAttr-WeakMP**: existing weak-projection DGCNN with node attributes;
+2. `directed_node` -> **SEAL-D-NodeAttr-DirectedMP**: separate incoming/outgoing directed messages, no edge data;
+3. `directed_scalar_gate` -> **SEAL-D-NodeEdgeAttr-Gate**: a learned 17 -> 32 -> 1 sigmoid gate;
+4. `directed_ecc` -> **SEAL-D-NodeEdgeAttr-ECC**: layer- and direction-specific edge-conditioned filters.
+
+This package receives naming aliases only in the present work. Attribute
+attribution is implemented for `SEAL-D-NodeAttr`; it is intentionally not
+enabled here because the edge-covariate variants require their own attribution
+target and differentiable-edge validation protocol.
 
 The ECC design follows Simonovsky and Komodakis (2017), *Dynamic
 Edge-Conditioned Filters in Convolutional Neural Networks on Graphs*. All

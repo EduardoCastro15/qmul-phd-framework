@@ -16,7 +16,13 @@ REPO_ROOT="$(cd "${REPO_ROOT}" && pwd)"
 SEAL_DIR="${REPO_ROOT}/src/python/seal_directed"
 PYTHON_BIN="${SEAL_ENV_PREFIX}/bin/python"
 NATIVE_LIBRARY="${REPO_ROOT}/src/python/pytorch_DGCNN/lib/build/dll/libgnn.so"
-RUN_ID="${RUN_ID:-seal_directed_gpu_$(date -u +%Y%m%dT%H%M%SZ)}"
+COMMIT_TOKEN="$(git -C "${REPO_ROOT}" rev-parse --short=12 HEAD 2>/dev/null || printf 'bundle')"
+if [[ "${MODE}" == "smoke" ]]; then
+  DEFAULT_RUN_ID="result_seal_directed_nodeattr_eg_smoke_3x1_${COMMIT_TOKEN}_$(date -u +%Y%m%d)"
+else
+  DEFAULT_RUN_ID="result_seal_directed_nodeattr_eg_10x290_${COMMIT_TOKEN}_$(date -u +%Y%m%d)"
+fi
+RUN_ID="${RUN_ID:-${DEFAULT_RUN_ID}}"
 RUN_ROOT="${PROJECT_RESULTS_ROOT}/${RUN_ID}"
 MANIFEST_DIR="${RUN_ROOT}/manifest"
 REQUIRED_FREE_GB="${REQUIRED_FREE_GB:-20}"

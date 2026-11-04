@@ -22,7 +22,15 @@ import torch.nn.functional as F
 from sklearn import metrics as sklearn_metrics
 
 from edge_schema import FEATURE_NAMES, SCHEMA_SHA256, preprocess_training_edge_attributes
-from models import VARIANTS, build_classifier, choose_sortpooling_k
+from models import (
+    DISPLAY_NAME,
+    LEGACY_FAMILY,
+    MODEL_ID,
+    VARIANTS,
+    VARIANT_DISPLAY_NAMES,
+    build_classifier,
+    choose_sortpooling_k,
+)
 from run_artifacts import file_sha256, write_run_bundle
 from split_bundles import load_split_bundle
 from subgraphs import extract_dataset
@@ -262,7 +270,11 @@ def run(args):
     total_seconds = time.time() - start_time
     metrics_row = {
         "Version": "SEAL_directed_weighted_v1",
+        "ModelID": MODEL_ID,
+        "DisplayName": DISPLAY_NAME,
+        "LegacyFamily": LEGACY_FAMILY,
         "ModelVariant": args.variant,
+        "VariantDisplayName": VARIANT_DISPLAY_NAMES[args.variant],
         "Foodweb": args.foodweb,
         "FoodwebIndex": int(args.foodweb_index),
         "ExperimentID": int(args.experiment_id),

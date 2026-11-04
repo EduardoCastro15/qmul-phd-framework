@@ -15,11 +15,23 @@ from pathlib import Path
 SEAL_FILES = (
     "Main_directed.py",
     "README.md",
+    "attribution.py",
+    "attribution_artifacts.py",
+    "explain_seal_directed.py",
+    "freeze_attribution_config.py",
     "generate_seal_manifest.py",
+    "generate_attribution_config.py",
+    "graph_artifacts.py",
+    "nodeattr_schema.py",
+    "run_foodweb_seal_attribution.py",
     "run_foodweb_seal_directed.py",
     "seal_run_artifacts.py",
+    "summarize_attributions.py",
     "util_functions_directed.py",
+    "validate_attribution_campaign.py",
+    "validate_attribution_sanity.py",
     "validate_seal_directed_gpu_run.py",
+    "tests/test_attribution_pipeline.py",
     "tests/test_seal_gpu_pipeline.py",
 )
 
@@ -31,6 +43,8 @@ APOCRITA_FILES = (
     "requirements-apocrita.txt",
     "seal_directed_gpu_array.sbatch",
     "seal_directed_gpushort.sbatch",
+    "seal_nodeattr_attribution_array.sbatch",
+    "submit_nodeattr_attribution.sh",
     "submit_seal_directed_gpu.sh",
     "verify_deployment_bundle.py",
 )

@@ -25,9 +25,10 @@ EXPERIMENT_ID="${SMOKE_EXPERIMENT_ID:-1}"
 NUM_WORKERS="${SEAL_NUM_WORKERS:-4}"
 
 module load miniforge
-mkdir -p "${SCRATCH_ROOT}/torch-cache" "${SCRATCH_ROOT}/xdg-cache"
+mkdir -p "${SCRATCH_ROOT}/torch-cache" "${SCRATCH_ROOT}/xdg-cache" "${SCRATCH_ROOT}/mpl-cache"
 export TORCH_HOME="${SCRATCH_ROOT}/torch-cache"
 export XDG_CACHE_HOME="${SCRATCH_ROOT}/xdg-cache"
+export MPLCONFIGDIR="${SCRATCH_ROOT}/mpl-cache"
 
 mkdir -p "${PROJECT_RESULTS_ROOT}/gpu_monitor"
 nvidia-smi \

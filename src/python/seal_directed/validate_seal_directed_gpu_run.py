@@ -232,6 +232,12 @@ def main(argv=None):
                 verify_checksums=not args.skip_checksums,
             )
             run_errors = validate_artifact_contents(run_dir, row, payload["metrics"])
+            if config.get("ModelID") == "SEAL_directed_nodeattr_v1":
+                if payload.get("schema_version") != "seal-directed-run-v2":
+                    run_errors.append("node-attribute campaign requires version-2 checkpoint bundle")
+                for key in ("ModelID", "DisplayName", "LegacyFamily"):
+                    if payload["metrics"].get(key) != config.get(key):
+                        run_errors.append("{} does not match RUN_CONFIG".format(key))
             provenance = payload.get("provenance", {})
             frozen_commit = config.get("source_commit", "unspecified")
             if frozen_commit not in ("", "unspecified", provenance.get("source_commit")):

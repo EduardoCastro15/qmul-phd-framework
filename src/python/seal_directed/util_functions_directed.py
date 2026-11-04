@@ -202,17 +202,21 @@ def links2subgraphs(A, train_pos, train_neg, test_pos, test_neg, h=1,
                 total=len(links[0]),
                 disable=not sys.stderr.isatty(),
             ):
-                g, n_labels, n_features = subgraph_extraction_labeling(
-                    (i, j), A, h, max_nodes_per_hop, node_information
+                g, n_labels, n_features, node_ids = subgraph_extraction_labeling(
+                    (i, j), A, h, max_nodes_per_hop, node_information,
+                    return_node_ids=True,
                 )
                 max_n_label['value'] = max(max(n_labels), max_n_label['value'])
-                g_list.append(GNNGraph(g, g_label, n_labels, n_features))
+                graph = GNNGraph(g, g_label, n_labels, n_features)
+                graph.node_ids = np.asarray(node_ids, dtype=np.int64)
+                graph.candidate_pair = np.asarray([i, j], dtype=np.int64)
+                g_list.append(graph)
             return g_list
         else:
             # the parallel extraction code
             start = time.time()
             work_items = [
-                ((i, j), A, h, max_nodes_per_hop, node_information)
+                ((i, j), A, h, max_nodes_per_hop, node_information, True)
                 for i, j in zip(links[0], links[1])
             ]
             results = list(tqdm(
@@ -220,10 +224,17 @@ def links2subgraphs(A, train_pos, train_neg, test_pos, test_neg, h=1,
                 total=len(work_items),
                 disable=not sys.stderr.isatty(),
             ))
-            g_list = [GNNGraph(g, g_label, n_labels, n_features) for g, n_labels, n_features in results]
+            g_list = []
+            for (g, n_labels, n_features, node_ids), (i, j) in zip(
+                results, zip(links[0], links[1])
+            ):
+                graph = GNNGraph(g, g_label, n_labels, n_features)
+                graph.node_ids = np.asarray(node_ids, dtype=np.int64)
+                graph.candidate_pair = np.asarray([i, j], dtype=np.int64)
+                g_list.append(graph)
             if results:
                 max_n_label['value'] = max(
-                    max([max(n_labels) for _, n_labels, _ in results]), max_n_label['value']
+                    max([max(n_labels) for _, n_labels, _, _ in results]), max_n_label['value']
                 )
             end = time.time()
             print("Time eplased for subgraph extraction: {}s".format(end-start))
@@ -248,7 +259,7 @@ def parallel_worker(x):
     return subgraph_extraction_labeling(*x)
 
 def subgraph_extraction_labeling(ind, A, h=1, max_nodes_per_hop=None,
-                                 node_information=None):
+                                 node_information=None, return_node_ids=False):
     # extract the h-hop enclosing subgraph around link 'ind'
     dist = 0
     nodes = set([ind[0], ind[1]])
@@ -291,7 +302,10 @@ def subgraph_extraction_labeling(ind, A, h=1, max_nodes_per_hop=None,
         g = nx.from_scipy_sparse_array(graph_matrix)
     except AttributeError:
         g = nx.from_scipy_sparse_matrix(graph_matrix)
-    return g, labels.tolist(), features
+    result = (g, labels.tolist(), features)
+    if return_node_ids:
+        return result + (np.asarray(nodes, dtype=np.int64),)
+    return result
 
 
 def neighbors(fringe, A):
