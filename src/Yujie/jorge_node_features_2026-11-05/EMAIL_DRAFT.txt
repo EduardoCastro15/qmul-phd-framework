@@ -1,0 +1,16 @@
+Subject: Node-feature extension to your food-web link prediction code
+
+Hi Jorge,
+
+I have added node ecological features to the subgraph-based link prediction code and attached the implementation.
+
+The change is to concatenate the original subgraph structural vector with the attributes of its nodes, keeping those attributes in exactly the same canonical node order. The attributes include biomass, mean individual body weight and feeding role, together with missing-value indicators. The combined vector is then passed to the MLP, with its input dimension adjusted accordingly.
+
+The main change is in run_node_ecological_features.py, and the preprocessing and alignment functions are in node_ecological_encoder.py. I also included the local wlnm.py implementation so that the encoder interface is clear. This is the node-feature version, before the later Logistic probability extension.
+
+The experiment runner uses our project-specific data files and saved splits, so it will not run unchanged in your environment. The README explains which functions to integrate into your local code and how to align the node features.
+
+Could you take a look and let me know whether this matches the intended use of the canonical subgraph representation?
+
+Best,
+[Your name]

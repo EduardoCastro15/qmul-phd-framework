@@ -62,6 +62,7 @@ function Main()
         'negativeTopupPolicy',    'uniform_remaining_nonlinks', ...                                   % Random top-up when the eligible pool is insufficient
         'negativeMassEligibilityEnabled', false, ...                                                  % Legacy compatibility flag; canonical mode above wins
         'negativeMassEligibilityThreshold', 1.0, ...                                                  % mass(target) < threshold * mass(source); sampled uniformly in the union pool
+        'focalMassFeatureMode', 'structure_only', ...                                                 % New focal-mass version only: structure_only, endpoint_masses, mass_ratio, endpoint_masses_ratio
         'trophicLevelProtocol', 'validated_v2', ...                                                   % Shared trophic-level protocol for dir-neg holdout and k-fold
         'trophicHighPrecision', 'auto', ...                                                           % off, auto, or required
         'trophicSnapshotDir', '', ...                                                                 % Optional snapshot directory; empty disables snapshots
@@ -397,6 +398,8 @@ function config = apply_runtime_overrides(config)
         'WLNM_NEGATIVE_SAMPLING_STRATEGY', config.negativeSamplingStrategy);
     config.negativeTopupPolicy = get_env_text( ...
         'WLNM_NEGATIVE_TOPUP_POLICY', config.negativeTopupPolicy);
+    config.focalMassFeatureMode = get_env_text( ...
+        'WLNM_FOCAL_MASS_FEATURE_MODE', config.focalMassFeatureMode);
     % Backward-compatible aliases are read first; MASS_ELIGIBILITY is canonical and wins.
     config.negativeMassEligibilityEnabled = get_env_bool('WLNM_NEGATIVE_MASS_PREFERENCE_ENABLED', config.negativeMassEligibilityEnabled);
     config.negativeMassEligibilityThreshold = get_env_number('WLNM_NEGATIVE_MASS_PREFERENCE_THRESHOLD', config.negativeMassEligibilityThreshold);
@@ -427,7 +430,8 @@ end
 
 function config = validate_wlnm_dir_neg_protocol(config)
     version_key = strtrim(char(string(config.version)));
-    if ~any(strcmpi(version_key, {'wlnm_dir_neg', 'wlnm_dir_neg_kfold'}))
+    if ~any(strcmpi(version_key, {'wlnm_dir_neg', 'wlnm_dir_neg_kfold', ...
+            'wlnm_dir_neg_focal_mass', 'wlnm_dir_neg_node_ecology'}))
         return;
     end
 
@@ -511,6 +515,56 @@ function config = validate_wlnm_dir_neg_protocol(config)
         error(['[Main] Conflicting negative-sampling configuration: ' ...
             'negativeEligibilityMode=%s but mass eligibility was enabled by a legacy flag ' ...
             'or environment variable. Disable WLNM_NEGATIVE_MASS_ELIGIBILITY_ENABLED.'], mode);
+    end
+
+    if strcmpi(version_key, 'wlnm_dir_neg_focal_mass')
+        feature_mode = normalize_protocol_option(config.focalMassFeatureMode);
+        allowed_feature_modes = {'structure_only', 'endpoint_masses', ...
+            'mass_ratio', 'endpoint_masses_ratio'};
+        if ~any(strcmp(feature_mode, allowed_feature_modes))
+            error('[Main] Invalid WLNM_FOCAL_MASS_FEATURE_MODE: %s.', ...
+                char(string(config.focalMassFeatureMode)));
+        end
+        config.focalMassFeatureMode = feature_mode;
+        if ~strcmp(mode, 'role_only') || abs(ratio - 2) > 1e-12 || ...
+                ~strcmp(strategy, 'uniform_without_replacement') || ...
+                ~strcmp(topup_policy, 'uniform_remaining_nonlinks') || ...
+                logical(config.negativeMassEligibilityEnabled)
+            error(['[Main] WLNM_dir_neg_focal_mass requires role_only, ratio=2, ' ...
+                'uniform_without_replacement, uniform_remaining_nonlinks, and ' ...
+                'mass eligibility disabled.']);
+        end
+        if logical(config.cvEnabled)
+            error('[Main] WLNM_dir_neg_focal_mass does not support k-fold routing.');
+        end
+        if any(double(config.kRange(:)) ~= 10) || ...
+                ~strcmpi(strtrim(char(string(config.thresholdMode))), 'fixed') || ...
+                abs(double(config.fixedThreshold) - 0.50) > 1e-12 || ...
+                logical(config.thresholdSweepEnabled)
+            error(['[Main] WLNM_dir_neg_focal_mass requires K=10, ' ...
+                'thresholdMode=fixed, fixedThreshold=0.50, and no threshold sweep.']);
+        end
+    end
+
+    if strcmpi(version_key, 'wlnm_dir_neg_node_ecology')
+        if ~strcmp(mode, 'role_only') || abs(ratio - 2) > 1e-12 || ...
+                ~strcmp(strategy, 'uniform_without_replacement') || ...
+                ~strcmp(topup_policy, 'uniform_remaining_nonlinks') || ...
+                logical(config.negativeMassEligibilityEnabled)
+            error(['[Main] WLNM_dir_neg_node_ecology requires role_only, ratio=2, ' ...
+                'uniform_without_replacement, uniform_remaining_nonlinks, and ' ...
+                'mass eligibility disabled.']);
+        end
+        if logical(config.cvEnabled)
+            error('[Main] WLNM_dir_neg_node_ecology does not support k-fold routing.');
+        end
+        if any(double(config.kRange(:)) ~= 10) || ...
+                ~strcmpi(strtrim(char(string(config.thresholdMode))), 'fixed') || ...
+                abs(double(config.fixedThreshold) - 0.50) > 1e-12 || ...
+                logical(config.thresholdSweepEnabled)
+            error(['[Main] WLNM_dir_neg_node_ecology requires K=10, ' ...
+                'thresholdMode=fixed, fixedThreshold=0.50, and no threshold sweep.']);
+        end
     end
 
     fprintf(['[Main] Negative protocol: eligibility=%s ratio=%g strategy=%s ' ...
@@ -643,7 +697,9 @@ function job_storage = resolve_matlab_job_storage()
 end
 
 function tf = is_experiment_parallel_wlnm(version_key)
-    tf = any(strcmp(version_key, {'wlnm_dir_neg', 'wlnm_dir_neg_kfold', 'wlnm_original', 'wlnm_directed', 'wlnm_negative'}));
+    tf = any(strcmp(version_key, {'wlnm_dir_neg', 'wlnm_dir_neg_focal_mass', ...
+        'wlnm_dir_neg_node_ecology', 'wlnm_dir_neg_kfold', ...
+        'wlnm_original', 'wlnm_directed', 'wlnm_negative'}));
 end
 
 function results = attach_foodweb_to_results(results, dataname, ecosystem_type)
