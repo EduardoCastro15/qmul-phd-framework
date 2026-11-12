@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
+import io
 import json
 import math
 import os
@@ -31,7 +33,8 @@ from models import (
     build_classifier,
     choose_sortpooling_k,
 )
-from run_artifacts import file_sha256, write_run_bundle
+from graph_artifacts_v2 import pack_graphs, packed_graph_hash
+from run_artifacts import canonical_json_bytes, file_sha256, write_run_bundle
 from split_bundles import load_split_bundle
 from subgraphs import extract_dataset
 
@@ -43,6 +46,19 @@ def matlab_string(value):
             return ""
         current = current.reshape(-1)[0]
     return str(current).strip()
+
+
+def node_feature_schema(data):
+    if "group_feature_names" not in data:
+        raise ValueError("attribution_v2 requires group_feature_names in the weighted MAT")
+    names = [
+        matlab_string(value)
+        for value in np.asarray(data["group_feature_names"]).reshape(-1)
+    ]
+    if len(names) != 44 or any(not name for name in names) or len(set(names)) != 44:
+        raise ValueError("group_feature_names must contain 44 unique non-empty names")
+    digest = hashlib.sha256(canonical_json_bytes(names)).hexdigest()
+    return names, digest
 
 
 def safe_divide(numerator, denominator):
@@ -170,10 +186,17 @@ def load_mat(path):
 
 def run(args):
     start_time = time.time()
+    artifact_mode = getattr(args, "artifact_mode", "v1")
+    if artifact_mode not in {"v1", "attribution_v2"}:
+        raise ValueError("Unknown artifact mode: {}".format(artifact_mode))
     if args.num_workers < 1:
         raise ValueError("--num-workers must be at least 1")
     if args.variant not in VARIANTS:
         raise ValueError(args.variant)
+    if artifact_mode == "attribution_v2" and args.variant not in {
+        "directed_node", "directed_ecc"
+    }:
+        raise ValueError("attribution_v2 supports only directed_node and directed_ecc")
     if args.require_cuda and args.device != "cuda":
         raise ValueError("--require-cuda requires --device cuda")
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -192,6 +215,9 @@ def run(args):
         torch.cuda.manual_seed_all(args.seed)
 
     data, net, node_features, raw_edges, raw_edge_attr = load_mat(args.mat_path)
+    feature_names = feature_schema_sha256 = None
+    if artifact_mode == "attribution_v2":
+        feature_names, feature_schema_sha256 = node_feature_schema(data)
     splits, observed_split_hash = load_split_bundle(
         args.split_bundle,
         expected_file_hash=args.split_file_sha256,
@@ -255,6 +281,50 @@ def run(args):
     test_loss, test_accuracy, test_labels, test_scores = evaluate(
         model, test_graphs, args.batch_size, device, return_scores=True
     )
+    checkpoint_bytes = model_config = None
+    checkpoint_score_max_abs_diff = None
+    if artifact_mode == "attribution_v2":
+        checkpoint_buffer = io.BytesIO()
+        portable_state_dict = {
+            key: value.detach().cpu() for key, value in model.state_dict().items()
+        }
+        torch.save(
+            {
+                "schema_version": "seal-directed-weighted-checkpoint-v2",
+                "state_dict": portable_state_dict,
+                "best_epoch": int(best_epoch),
+                "config_hash": args.config_hash,
+                "ModelID": MODEL_ID,
+                "ModelVariant": args.variant,
+            },
+            checkpoint_buffer,
+        )
+        checkpoint_bytes = checkpoint_buffer.getvalue()
+        restored_payload = torch.load(
+            io.BytesIO(checkpoint_bytes), map_location=device, weights_only=False
+        )
+        restored_model = build_classifier(
+            args.variant,
+            node_attribute_dim=node_features.shape[1],
+            label_dim=label_dim,
+            sortpooling_k=sortpooling_k,
+            edge_chunk_size=args.edge_chunk_size,
+        ).to(device)
+        restored_model.load_state_dict(restored_payload["state_dict"])
+        _, _, restored_labels, restored_scores = evaluate(
+            restored_model, test_graphs, args.batch_size, device, return_scores=True
+        )
+        if not np.array_equal(test_labels, restored_labels):
+            raise ValueError("checkpoint reload changed test label order")
+        checkpoint_score_max_abs_diff = float(
+            np.max(np.abs(test_scores - restored_scores)) if test_scores.size else 0.0
+        )
+        if checkpoint_score_max_abs_diff > 1e-7:
+            raise ValueError(
+                "checkpoint score parity failed: max abs diff {:.12g}".format(
+                    checkpoint_score_max_abs_diff
+                )
+            )
     training_seconds = time.time() - training_start
     metric_values = prediction_metrics(test_labels, test_scores, args.threshold)
     gate_min = gate_max = gate_mean = None
@@ -269,7 +339,10 @@ def run(args):
 
     total_seconds = time.time() - start_time
     metrics_row = {
-        "Version": "SEAL_directed_weighted_v1",
+        "Version": (
+            "SEAL_directed_node_ecc_attribution_v2"
+            if artifact_mode == "attribution_v2" else "SEAL_directed_weighted_v1"
+        ),
         "ModelID": MODEL_ID,
         "DisplayName": DISPLAY_NAME,
         "LegacyFamily": LEGACY_FAMILY,
@@ -304,9 +377,19 @@ def run(args):
         "TrainingInferenceSeconds": training_seconds,
         "TimeElapsedSeconds": total_seconds,
     }
+    if artifact_mode == "attribution_v2":
+        metrics_row.update({
+            "ArtifactMode": artifact_mode,
+            "CheckpointScoreMaxAbsDiff": checkpoint_score_max_abs_diff,
+            "AttributionTarget": "log_p_positive_minus_log_p_negative",
+        })
     metrics_row.update(metric_values)
     provenance = {
-        "schema_version": "seal-directed-weighted-provenance-v1",
+        "schema_version": (
+            "seal-directed-weighted-provenance-v2"
+            if artifact_mode == "attribution_v2"
+            else "seal-directed-weighted-provenance-v1"
+        ),
         "source_commit": args.source_commit,
         "config_hash": args.config_hash,
         "mat_sha256": file_sha256(args.mat_path),
@@ -338,7 +421,59 @@ def run(args):
         validation_indices=np.asarray(sorted(validation_indices), dtype=np.int64),
         context_edge_index=context_edges,
     )
-    write_run_bundle(args.run_dir, metrics_row, arrays, provenance, args.config_hash)
+    extra_files = None
+    if artifact_mode == "attribution_v2":
+        arrays["context_edge_attr"] = context_attr
+        arrays.update(pack_graphs(train_graphs, "train"))
+        arrays.update(pack_graphs(test_graphs, "test"))
+        graph_input_sha256 = packed_graph_hash(arrays)
+        provenance.update({
+            "graph_input_sha256": graph_input_sha256,
+            "node_feature_schema_sha256": feature_schema_sha256,
+            "node_alignment": "focal_resource_focal_consumer_sorted_context",
+            "directed_edge_order": "frozen_exact_local_csr_order",
+            "checkpoint_score_absolute_tolerance": 1e-7,
+        })
+        checkpoint_sha256 = hashlib.sha256(checkpoint_bytes).hexdigest()
+        model_config = {
+            "schema_version": "seal-directed-weighted-model-config-v2",
+            "ModelID": MODEL_ID,
+            "DisplayName": DISPLAY_NAME,
+            "LegacyFamily": LEGACY_FAMILY,
+            "ModelVariant": args.variant,
+            "VariantDisplayName": VARIANT_DISPLAY_NAMES[args.variant],
+            "config_hash": args.config_hash,
+            "source_commit": args.source_commit,
+            "checkpoint_sha256": checkpoint_sha256,
+            "best_epoch": int(best_epoch),
+            "label_dim": int(label_dim),
+            "node_attribute_dim": int(node_features.shape[1]),
+            "edge_attribute_dim": int(len(FEATURE_NAMES)),
+            "sortpooling_k": int(sortpooling_k),
+            "latent_dimensions": [32, 32, 32, 1],
+            "hidden_dimension": 128,
+            "dropout": True,
+            "edge_chunk_size": int(args.edge_chunk_size),
+            "batch_size": int(args.batch_size),
+            "hop": int(args.hop),
+            "max_nodes_per_hop": args.max_nodes_per_hop,
+            "node_feature_names": list(feature_names),
+            "node_feature_schema_sha256": feature_schema_sha256,
+            "edge_feature_names": list(FEATURE_NAMES),
+            "edge_feature_schema_sha256": SCHEMA_SHA256,
+            "preprocessing": preprocessing,
+            "graph_input_sha256": graph_input_sha256,
+            "test_score_semantics": "positive_class_probability",
+            "attribution_target": "log_p_positive_minus_log_p_negative",
+        }
+        extra_files = {
+            "checkpoint.pt": checkpoint_bytes,
+            "model_config.json": canonical_json_bytes(model_config) + b"\n",
+        }
+    write_run_bundle(
+        args.run_dir, metrics_row, arrays, provenance, args.config_hash,
+        extra_files=extra_files,
+    )
     print(
         "[OK] variant={} foodweb={!r} experiment={} split={} seconds={:.1f}".format(
             args.variant, args.foodweb, args.experiment_id, observed_split_hash[:12], total_seconds
@@ -362,6 +497,10 @@ def parse_args(argv=None):
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--config-hash", required=True)
     parser.add_argument("--source-commit", default="unknown")
+    parser.add_argument(
+        "--artifact-mode", choices=("v1", "attribution_v2"), default="v1",
+        help="Opt-in attribution-ready bundle; v1 remains the historical default.",
+    )
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--require-cuda", action="store_true")
     parser.add_argument("--deterministic", action="store_true")

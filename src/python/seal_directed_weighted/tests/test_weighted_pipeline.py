@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import sys
 import tempfile
@@ -20,8 +21,16 @@ if str(PACKAGE) not in sys.path:
 from build_weighted_mats import build_one, validate_weighted_mat
 from edge_schema import FEATURE_NAMES, SCHEMA_SHA256, build_edge_vector, preprocess_training_edge_attributes
 from generate_manifest import VARIANTS, build_manifest, seed_for
+from graph_artifacts_v2 import pack_graphs, packed_graph_hash, unpack_graphs, validate_packed_graphs
 from models import DirectedClassifier, DirectedLayer, EdgeGate
-from run_artifacts import configuration_hash, is_valid_complete_run, write_run_bundle
+from run_artifacts import (
+    RUN_SCHEMA_V2,
+    canonical_json_bytes,
+    configuration_hash,
+    is_valid_complete_run,
+    validate_run_bundle,
+    write_run_bundle,
+)
 from split_bundles import create_split, load_split_bundle
 from subgraphs import extract_one, reverse_graph
 
@@ -69,6 +78,7 @@ class WeightedPipelineTests(unittest.TestCase):
         self.assertNotIn((0, 1), local)
         self.assertIn((1, 0), local)
         self.assertEqual(graph.edge_attr.shape[0], 2)
+        np.testing.assert_array_equal(graph.node_ids[:2], [0, 1])
 
     def test_legacy_weak_fixture_matches_existing_directed_extractor(self):
         directed_root = PACKAGE.parent / "seal_directed"
@@ -214,6 +224,102 @@ class WeightedPipelineTests(unittest.TestCase):
             }
             write_run_bundle(run_dir, {"PR_AUC": 1.0}, arrays, {}, config_hash)
             self.assertTrue(is_valid_complete_run(run_dir, config_hash))
+            self.assertEqual(
+                {path.name for path in run_dir.iterdir()},
+                {"metrics.json", "artifacts.npz", "_SUCCESS"},
+            )
+
+    def test_directed_graph_v2_round_trip_preserves_exact_order(self):
+        adjacency = ssp.csr_matrix(
+            (np.ones(4), ([0, 1, 2, 3], [2, 2, 3, 0])), shape=(4, 4)
+        )
+        edges = np.column_stack(adjacency.nonzero())
+        attrs = np.arange(len(edges) * 17, dtype=np.float32).reshape(-1, 17)
+        features = np.arange(4 * 44, dtype=np.float32).reshape(4, 44)
+        graphs = [extract_one((0, 1), 1, adjacency, features, edges, attrs)]
+        packed = pack_graphs(graphs, "test")
+        self.assertEqual(validate_packed_graphs(packed, "test"), 1)
+        restored = unpack_graphs(packed, "test")
+        self.assertEqual(len(restored), 1)
+        for name in (
+            "node_ids", "node_labels", "node_features", "edge_index", "edge_attr"
+        ):
+            np.testing.assert_array_equal(getattr(restored[0], name), getattr(graphs[0], name))
+        self.assertEqual(restored[0].candidate, graphs[0].candidate)
+
+    def test_attribution_v2_bundle_is_atomic_and_self_validating(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "run-v2"
+            config_hash = configuration_hash({"fixture": "attribution-v2"})
+            adjacency = ssp.csr_matrix(
+                (np.ones(3), ([0, 1, 2], [2, 2, 0])), shape=(3, 3)
+            )
+            context_edges = np.column_stack(adjacency.nonzero())
+            context_attr = np.zeros((len(context_edges), 17), dtype=np.float32)
+            features = np.zeros((3, 44), dtype=np.float32)
+            train_graphs = [
+                extract_one((0, 1), 1, adjacency, features, context_edges, context_attr),
+                extract_one((1, 0), 0, adjacency, features, context_edges, context_attr),
+            ]
+            test_graphs = [
+                extract_one((1, 2), 1, adjacency, features, context_edges, context_attr),
+                extract_one((2, 1), 0, adjacency, features, context_edges, context_attr),
+            ]
+            arrays = {
+                "train_pos": np.asarray([[0, 1]]),
+                "train_neg": np.asarray([[1, 0]]),
+                "test_pos": np.asarray([[1, 2]]),
+                "test_neg": np.asarray([[2, 1]]),
+                "test_labels": np.asarray([1, 0], dtype=np.int8),
+                "test_scores": np.asarray([0.8, 0.2]),
+                "validation_indices": np.asarray([0]),
+                "context_edge_index": context_edges,
+                "context_edge_attr": context_attr,
+            }
+            arrays.update(pack_graphs(train_graphs, "train"))
+            arrays.update(pack_graphs(test_graphs, "test"))
+            graph_hash = packed_graph_hash(arrays)
+            checkpoint = b"portable checkpoint fixture"
+            node_names = ["node_{:02d}".format(index) for index in range(44)]
+            model_config = {
+                "schema_version": "seal-directed-weighted-model-config-v2",
+                "ModelID": "SEAL_directed_nodeedgeattr_v1",
+                "ModelVariant": "directed_ecc",
+                "config_hash": config_hash,
+                "checkpoint_sha256": hashlib.sha256(checkpoint).hexdigest(),
+                "label_dim": 5,
+                "node_attribute_dim": 44,
+                "edge_attribute_dim": 17,
+                "sortpooling_k": 10,
+                "latent_dimensions": [32, 32, 32, 1],
+                "hidden_dimension": 128,
+                "dropout": True,
+                "edge_chunk_size": 8192,
+                "node_feature_names": node_names,
+                "node_feature_schema_sha256": hashlib.sha256(
+                    canonical_json_bytes(node_names)
+                ).hexdigest(),
+                "edge_feature_names": list(FEATURE_NAMES),
+                "edge_feature_schema_sha256": SCHEMA_SHA256,
+                "attribution_target": "log_p_positive_minus_log_p_negative",
+                "graph_input_sha256": graph_hash,
+            }
+            write_run_bundle(
+                run_dir,
+                {"ModelVariant": "directed_ecc"},
+                arrays,
+                {"graph_input_sha256": graph_hash},
+                config_hash,
+                extra_files={
+                    "checkpoint.pt": checkpoint,
+                    "model_config.json": canonical_json_bytes(model_config) + b"\n",
+                },
+            )
+            payload = validate_run_bundle(run_dir, config_hash)
+            self.assertEqual(payload["schema_version"], RUN_SCHEMA_V2)
+            self.assertTrue(is_valid_complete_run(run_dir, config_hash))
+            (run_dir / "checkpoint.pt").write_bytes(b"corrupt")
+            self.assertFalse(is_valid_complete_run(run_dir, config_hash))
 
 
 if __name__ == "__main__":

@@ -202,18 +202,97 @@ class DirectedClassifier(nn.Module):
                  edge_dim=17, edge_chunk_size=8192):
         super().__init__()
         self.label_dim = int(label_dim)
+        self.node_input_dim = int(node_input_dim)
+        self.node_attribute_dim = self.node_input_dim - self.label_dim
+        self.variant = str(variant)
+        self.edge_dim = int(edge_dim)
+        if self.node_attribute_dim < 0:
+            raise ValueError("node_input_dim cannot be smaller than label_dim")
         self.encoder = DirectedEncoder(
             node_input_dim, variant, latent_dims, edge_dim, edge_chunk_size
         )
         self.head = SortPoolingHead(sum(latent_dims), sortpooling_k, hidden, dropout)
         self.last_gates = None
 
-    def forward(self, graphs):
-        device = next(self.parameters()).device
-        node_input, edges, edge_attr, sizes, _ = collate_directed(graphs, self.label_dim, device)
-        states, gates = self.encoder(node_input, edges, edge_attr)
+    def forward_packed(self, node_input, edge_index, edge_attributes, graph_sizes):
+        """Run the directed model from already packed tensors.
+
+        This is the single tensor-level execution path used by both ordinary
+        inference and attribution. ``edge_index`` remains fixed while node or
+        edge feature tensors can be differentiated.
+        """
+        if node_input.ndim != 2 or node_input.shape[1] != self.node_input_dim:
+            raise ValueError(
+                "node_input must have shape [nodes, {}]".format(self.node_input_dim)
+            )
+        if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+            raise ValueError("edge_index must have shape [2, edges]")
+        if edge_attributes.ndim != 2 or edge_attributes.shape[1] != self.edge_dim:
+            raise ValueError(
+                "edge_attributes must have shape [edges, {}]".format(self.edge_dim)
+            )
+        if edge_index.shape[1] != edge_attributes.shape[0]:
+            raise ValueError("edge_index and edge_attributes row counts differ")
+        sizes = [int(value) for value in graph_sizes]
+        if any(value < 1 for value in sizes) or sum(sizes) != int(node_input.shape[0]):
+            raise ValueError("graph_sizes do not partition node_input")
+        states, gates = self.encoder(node_input, edge_index, edge_attributes)
         self.last_gates = gates
         return self.head(states, sizes)
+
+    def forward_prepared(
+        self,
+        drnl_onehot,
+        node_attributes,
+        edge_index,
+        edge_attributes,
+        graph_sizes,
+    ):
+        """Run with DRNL and ecological attributes supplied independently."""
+        if drnl_onehot.ndim != 2 or drnl_onehot.shape[1] != self.label_dim:
+            raise ValueError(
+                "drnl_onehot must have shape [nodes, {}]".format(self.label_dim)
+            )
+        if (
+            node_attributes.ndim != 2
+            or node_attributes.shape[1] != self.node_attribute_dim
+            or node_attributes.shape[0] != drnl_onehot.shape[0]
+        ):
+            raise ValueError(
+                "node_attributes must have shape [nodes, {}]".format(
+                    self.node_attribute_dim
+                )
+            )
+        if drnl_onehot.device != node_attributes.device:
+            raise ValueError("DRNL and node attributes must be on the same device")
+        node_input = torch.cat([drnl_onehot, node_attributes], dim=1)
+        return self.forward_packed(
+            node_input, edge_index, edge_attributes, graph_sizes
+        )
+
+    def forward_log_odds(
+        self,
+        drnl_onehot,
+        node_attributes,
+        edge_index,
+        edge_attributes,
+        graph_sizes,
+    ):
+        log_probabilities = self.forward_prepared(
+            drnl_onehot,
+            node_attributes,
+            edge_index,
+            edge_attributes,
+            graph_sizes,
+        )
+        return log_probabilities[:, 1] - log_probabilities[:, 0]
+
+    def forward(self, graphs):
+        device = next(self.parameters()).device
+        node_input, edges, edge_attr, sizes, _ = collate_directed(
+            graphs, self.label_dim, device
+        )
+        return self.forward_packed(node_input, edges, edge_attr, sizes)
 
 
 def _to_legacy_graphs(graphs):

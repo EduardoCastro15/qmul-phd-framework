@@ -36,10 +36,15 @@ The four frozen variants and their scientific display names are:
 3. `directed_scalar_gate` -> **SEAL-D-NodeEdgeAttr-Gate**: a learned 17 -> 32 -> 1 sigmoid gate;
 4. `directed_ecc` -> **SEAL-D-NodeEdgeAttr-ECC**: layer- and direction-specific edge-conditioned filters.
 
-This package receives naming aliases only in the present work. Attribute
-attribution is implemented for `SEAL-D-NodeAttr`; it is intentionally not
-enabled here because the edge-covariate variants require their own attribution
-target and differentiable-edge validation protocol.
+This package also provides an opt-in, version-2 attribution workflow for
+`directed_node` and `directed_ecc`.  It never rewrites the historical v1 run
+bundles.  Both variants use Expected Gradients for the 44 node attributes and
+Integrated Gradients for DRNL.  `directed_ecc` additionally uses Expected
+Gradients for the 17 contextual edge covariates while keeping the local
+directed topology fixed.  Node, DRNL and edge results remain separate because
+they use different reference distributions.  These quantities describe model
+reliance, not causal ecological effects, and are not reported as exact SHAP
+values.
 
 The ECC design follows Simonovsky and Komodakis (2017), *Dynamic
 Edge-Conditioned Filters in Convolutional Neural Networks on Graphs*. All
@@ -106,6 +111,73 @@ Create and verify the deployment bundle with `apocrita/build_bundle.py`, then:
 
 Submissions are held by default. Inspect the manifest, resources and array
 mapping before using `scontrol release`.
+
+## Attribution v2 on Apocrita
+
+The attribution campaign has its own immutable result root and reuses the
+historical split bundles without editing the 11,600 original runs.  Set these
+variables in a login shell after deploying the source bundle:
+
+```bash
+export REPO_ROOT=/data/home/$USER/PhD/Stage2/Code/seal-directed-node-ecc-attribution-v2
+export RUN_ROOT=/data/home/$USER/PhD/Stage2/Results/SEAL_directed_node_ecc_attribution_v2/production/run_YYYYMMDD
+export HISTORICAL_RUN_ROOT=/data/home/$USER/PhD/Stage2/Results/SEAL_directed_weighted/production/seal_weighted_10x290x4_fb60fd147be3_20261024
+export SEAL_ENV_PREFIX=/gpfs/scratch/$USER/SEAL_directed/envs/seal-directed-py312-cu126
+export SCRATCH_ROOT=/gpfs/scratch/$USER/SEAL_directed_node_ecc_attribution_v2
+
+LAUNCHER="$REPO_ROOT/src/python/seal_directed_weighted/apocrita/submit_node_ecc_attribution.sh"
+```
+
+The launcher refuses to run when `RUN_ROOT` resolves to the historical result
+root.
+
+Run the stages in order. Every submitted job starts in `HOLD` unless
+`SUBMIT_HELD=0` is set explicitly:
+
+```bash
+"$LAUNCHER" init
+"$LAUNCHER" train-smoke
+"$LAUNCHER" attr-smoke
+
+"$LAUNCHER" train-experiment1
+"$LAUNCHER" calibration 32
+"$LAUNCHER" calibration 64
+"$LAUNCHER" calibration 128
+"$LAUNCHER" calibration 256
+"$LAUNCHER" freeze
+
+"$LAUNCHER" train-campaign
+"$LAUNCHER" attr-experiment1
+"$LAUNCHER" attr-campaign
+"$LAUNCHER" validate
+"$LAUNCHER" summarize
+```
+
+`freeze` is fail-closed: it creates the production
+`ATTRIBUTION_CONFIG.json` only when one common setting passes every node,
+DRNL and ECC-edge convergence gate. Faithfulness replacements are evaluated
+during calibration; production bundles retain the selected EG/IG setting but
+do not repeat that extra control. Each stage still contains 5,800 scientific
+runs (290 food webs x 10 experiments x 2 models), but the scheduler mapping
+packs up to six food webs from the same model and experiment into each task.
+With the default `SEAL_FOODWEB_BLOCK_SIZE=6`, the largest array index is 980,
+and concurrency is controlled by `SEAL_MAX_CONCURRENT`. The block size cannot
+be smaller than six under the cluster's 1,000-index array limit; increase
+`SEAL_GPU_TIME` if the slowest six-web attribution blocks need more than the
+default 24 hours.
+
+The final validator requires all 2,900 bundles for each model, exact candidate
+coverage, checkpoint and forward parity, CUDA provenance, finite
+attributions, and an explicit historical-score comparison. Summaries are
+written below `summary/attribution/`. They include separate feature- and
+family-level tables for the 44 node attributes (six families), separate
+feature- and family-level tables for the 17 ECC edge covariates (five
+families), and an independent DRNL table. Channels are never summed together,
+and every cohort summary gives equal final weight to each food web. Run this
+post-processing on a compute node rather than a login node: `validate` and
+`summarize` submit separate held high-memory jobs. Candidate matrices are
+retained for one model variant at a time and can still require several GB for
+the complete campaign.
 
 ## Descriptive analysis
 

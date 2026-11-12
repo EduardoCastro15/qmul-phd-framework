@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -23,16 +24,50 @@ def read_manifest(path):
         return list(csv.DictReader(handle))
 
 
+def select_manifest_row(rows, row_id):
+    """Return one 1-based manifest row for fine-grained scheduler arrays."""
+    row_id = int(row_id)
+    if not 1 <= row_id <= len(rows):
+        raise ValueError("manifest row id must be in 1..{}".format(len(rows)))
+    return rows[row_id - 1]
+
+
+def resolve_block_task(block_task_id, config, foodweb_block_size):
+    """Map a compact Slurm index to variant, experiment and food-web block."""
+    variants = tuple(config.get("model_variants", VARIANTS))
+    if not variants or not set(variants).issubset(VARIANTS):
+        raise ValueError("RUN_CONFIG contains unsupported model variants")
+    experiments = int(config["num_experiments"])
+    foodwebs = int(config["num_foodwebs"])
+    block_size = int(foodweb_block_size)
+    if block_size < 1:
+        raise ValueError("foodweb block size must be positive")
+    blocks_per_shard = int(math.ceil(foodwebs / float(block_size)))
+    maximum = len(variants) * experiments * blocks_per_shard
+    block_task_id = int(block_task_id)
+    if not 1 <= block_task_id <= maximum:
+        raise ValueError("block task id must be in 1..{}".format(maximum))
+    shard_index, block_index = divmod(block_task_id - 1, blocks_per_shard)
+    variant_index, experiment_index = divmod(shard_index, experiments)
+    return (
+        variants[variant_index], experiment_index + 1,
+        block_index, blocks_per_shard,
+    )
+
+
 def resolve_shard(args, config):
+    variants = tuple(config.get("model_variants", VARIANTS))
+    if not variants or not set(variants).issubset(VARIANTS):
+        raise ValueError("RUN_CONFIG contains unsupported model variants")
     task_id = args.task_id
     if task_id is None and os.environ.get("SLURM_ARRAY_TASK_ID"):
         task_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
     if task_id is not None:
         experiments = int(config["num_experiments"])
-        maximum = len(VARIANTS) * experiments
+        maximum = len(variants) * experiments
         if not 1 <= int(task_id) <= maximum:
             raise ValueError("task id must be in 1..{}".format(maximum))
-        variant = VARIANTS[(int(task_id) - 1) // experiments]
+        variant = variants[(int(task_id) - 1) // experiments]
         experiment_id = (int(task_id) - 1) % experiments + 1
         return variant, experiment_id
     if args.variant is None or args.experiment_id is None:
@@ -65,6 +100,15 @@ def main(argv=None):
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--result-root", type=Path, required=True)
     parser.add_argument("--task-id", type=int)
+    parser.add_argument(
+        "--manifest-row-id", type=int,
+        help="Run one 1-based manifest row; intended for fine-grained Slurm arrays.",
+    )
+    parser.add_argument(
+        "--block-task-id", type=int,
+        help="Run one compact variant/experiment/food-web block task.",
+    )
+    parser.add_argument("--foodweb-block-size", type=int, default=6)
     parser.add_argument("--variant", choices=VARIANTS)
     parser.add_argument("--experiment-id", type=int)
     parser.add_argument("--only-foodweb", action="append", default=[])
@@ -91,11 +135,41 @@ def main(argv=None):
             )
         )
     rows = read_manifest(args.manifest)
-    variant, experiment_id = resolve_shard(args, config)
-    rows = [
-        row for row in rows
-        if row["ModelVariant"] == variant and int(row["ExperimentID"]) == experiment_id
-    ]
+    selector_count = sum(value is not None for value in (
+        args.manifest_row_id, args.block_task_id, args.task_id,
+    ))
+    if selector_count > 1:
+        raise ValueError(
+            "manifest-row, block-task and shard task selectors are exclusive"
+        )
+    if args.manifest_row_id is not None:
+        if args.variant is not None or args.experiment_id is not None:
+            raise ValueError("--manifest-row-id is mutually exclusive with shard selectors")
+        rows = [select_manifest_row(rows, args.manifest_row_id)]
+        variant = rows[0]["ModelVariant"]
+        experiment_id = int(rows[0]["ExperimentID"])
+    elif args.block_task_id is not None:
+        if args.variant is not None or args.experiment_id is not None:
+            raise ValueError("--block-task-id is mutually exclusive with shard selectors")
+        variant, experiment_id, block_index, _ = resolve_block_task(
+            args.block_task_id, config, args.foodweb_block_size
+        )
+        rows = sorted(
+            (
+                row for row in rows
+                if row["ModelVariant"] == variant
+                and int(row["ExperimentID"]) == experiment_id
+            ),
+            key=lambda row: (int(row["FoodwebIndex"]), row["Foodweb"]),
+        )
+        start = block_index * int(args.foodweb_block_size)
+        rows = rows[start:start + int(args.foodweb_block_size)]
+    else:
+        variant, experiment_id = resolve_shard(args, config)
+        rows = [
+            row for row in rows
+            if row["ModelVariant"] == variant and int(row["ExperimentID"]) == experiment_id
+        ]
     if args.only_foodweb:
         selected = set(args.only_foodweb)
         rows = [row for row in rows if row["Foodweb"] in selected]
@@ -153,6 +227,8 @@ def main(argv=None):
                 "--edge-chunk-size", str(config["edge_chunk_size"]),
                 "--num-workers", str(args.num_workers or config.get("subgraph_workers", 1)),
             ]
+            if config.get("attribution_ready_artifacts", False):
+                command.extend(["--artifact-mode", "attribution_v2"])
             if args.require_cuda:
                 command.append("--require-cuda")
             if config.get("deterministic_algorithms", True):

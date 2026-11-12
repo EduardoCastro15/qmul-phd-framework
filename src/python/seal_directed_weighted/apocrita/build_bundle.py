@@ -16,11 +16,21 @@ PACKAGE_FILES = (
     "__init__.py", "README.md", "edge_schema.py", "build_weighted_mats.py",
     "run_artifacts.py", "split_bundles.py", "generate_manifest.py", "subgraphs.py",
     "models.py", "train_one.py", "run_campaign.py", "validate_run.py",
-    "summarize_descriptive.py", "summarize_resources.py", "tests/test_weighted_pipeline.py",
+    "summarize_descriptive.py", "summarize_resources.py",
+    "graph_artifacts_v2.py", "weighted_attribution.py", "attribution_artifacts.py",
+    "attribution_manifest_lock.py",
+    "generate_attribution_manifest.py", "generate_attribution_config.py",
+    "explain_weighted_attribution.py", "run_attribution_campaign.py",
+    "freeze_attribution_config.py", "validate_attribution_campaign.py",
+    "summarize_attributions.py", "tests/test_weighted_pipeline.py",
+    "tests/test_weighted_attribution.py", "tests/test_attribution_orchestration.py",
 )
 APOCRITA_FILES = (
     "build_bundle.py", "create_gpu_env.sh", "environment.apocrita.yml", "gpu_probe.py",
     "requirements-apocrita.txt", "seal_weighted_gpu_array.sbatch", "submit_gpu.sh",
+    "seal_node_ecc_attribution_array.sbatch",
+    "seal_node_ecc_attribution_postprocess.sbatch",
+    "submit_node_ecc_attribution.sh",
     "verify_bundle.py",
 )
 
@@ -89,12 +99,13 @@ def main():
             shutil.copy2(source, target)
         (root / "SOURCE_COMMIT.txt").write_text(commit + "\n", encoding="utf-8")
         (root / "BUNDLE_METADATA.json").write_text(json.dumps({
-            "schema": "seal-directed-weighted-apocrita-bundle-v1",
+            "schema": "seal-directed-weighted-apocrita-bundle-v2",
             "source_commit": commit,
             "source_branch": branch,
             "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "weighted_mat_files": len(mats),
             "variants": ["legacy_weak_node", "directed_node", "directed_scalar_gate", "directed_ecc"],
+            "attribution_variants": ["directed_node", "directed_ecc"],
         }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         entries = []
         for path in sorted(root.rglob("*")):

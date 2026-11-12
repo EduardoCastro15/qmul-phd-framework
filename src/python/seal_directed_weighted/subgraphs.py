@@ -12,6 +12,7 @@ import scipy.sparse as ssp
 @dataclass
 class DirectedSubgraph:
     graph_label: int
+    node_ids: np.ndarray
     node_labels: np.ndarray
     node_features: np.ndarray
     edge_index: np.ndarray
@@ -109,6 +110,7 @@ def extract_one(candidate, graph_label, adjacency, node_features, context_edge_i
     features = np.asarray(node_features, dtype=np.float32)[ordered]
     return DirectedSubgraph(
         graph_label=int(graph_label),
+        node_ids=np.asarray(ordered, dtype=np.int64),
         node_labels=labels,
         node_features=features,
         edge_index=local_edges,
@@ -148,6 +150,7 @@ def extract_dataset(adjacency, node_features, context_edge_index, context_edge_a
 def reverse_graph(graph):
     return DirectedSubgraph(
         graph_label=graph.graph_label,
+        node_ids=graph.node_ids.copy(),
         node_labels=graph.node_labels.copy(),
         node_features=graph.node_features.copy(),
         edge_index=graph.edge_index[:, ::-1].copy(),
