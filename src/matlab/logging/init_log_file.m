@@ -56,7 +56,7 @@ function header = build_header(use_backbone, inverse_backbone, version)
 
     if any(strcmpi(strtrim(char(string(version))), ...
             {'WLNM_dir_neg', 'WLNM_dir_neg_kfold', 'WLNM_dir_neg_focal_mass', ...
-             'WLNM_dir_neg_node_ecology'}))
+             'WLNM_dir_neg_node_ecology', 'WLNM_dir_neg_node_ecology_kfold'}))
         negative_sampling_cols = { ...
             'NegativeEligibilityMode', ...
             'NegativePositiveRatio', ...
@@ -221,6 +221,9 @@ function header = build_header(use_backbone, inverse_backbone, version)
     if is_node_ecology_wlnm(version)
         header = [header, node_ecology_cols()];
     end
+    if is_node_ecology_kfold_wlnm(version)
+        header = [header, node_ecology_kfold_cols()];
+    end
 end
 
 function validate_existing_wlnm_dir_neg_schema(log_file, version)
@@ -246,6 +249,9 @@ function validate_existing_wlnm_dir_neg_schema(log_file, version)
     if is_node_ecology_wlnm(version)
         required_cols = [required_cols, node_ecology_cols()];
     end
+    if is_node_ecology_kfold_wlnm(version)
+        required_cols = [required_cols, node_ecology_kfold_cols()];
+    end
     missing_cols = setdiff(required_cols, existing_cols, 'stable');
     if ~isempty(missing_cols)
         error('init_log_file:WLNMDirNegSchemaMismatch', ...
@@ -264,7 +270,15 @@ function tf = is_focal_mass_wlnm(version)
 end
 
 function tf = is_node_ecology_wlnm(version)
-    tf = strcmpi(strtrim(char(string(version))), 'WLNM_dir_neg_node_ecology');
+    key = strtrim(char(string(version)));
+    tf = any(strcmpi(key, { ...
+        'WLNM_dir_neg_node_ecology', ...
+        'WLNM_dir_neg_node_ecology_kfold'}));
+end
+
+function tf = is_node_ecology_kfold_wlnm(version)
+    tf = strcmpi(strtrim(char(string(version))), ...
+        'WLNM_dir_neg_node_ecology_kfold');
 end
 
 function tf = uses_normalized_gv_schema(version)
@@ -301,6 +315,16 @@ function cols = node_ecology_cols()
         'NegativeRoleSource', ...
         'NodeAlignmentProtocol', ...
         'TargetMaskingProtocol' ...
+    };
+end
+
+function cols = node_ecology_kfold_cols()
+    cols = { ...
+        'CvSplitSeed', ...
+        'CvPartitionHash', ...
+        'CvPartitionProtocol', ...
+        'NodeEcologyProtocolVersion', ...
+        'PRAUCProtocol' ...
     };
 end
 

@@ -224,11 +224,10 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     scores = double(scores);   % ensure numeric
 
     % ------------------------------------------------------------
-    % Compute ROC-AUC and PR-AUC
+    % Compute ROC-AUC and non-interpolated PR-AUC (average precision)
     % ------------------------------------------------------------
     [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
-    [~, ~, ~, pr_auc]  = perfcurve(test_label', scores', 1, ...
-        'XCrit', 'reca', 'YCrit', 'prec');
+    pr_auc = compute_pr_auc(test_label, scores);
 
     % ------------------------------------------------------------
     % Thresholded metrics
@@ -243,7 +242,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
             numel(threshold_sweep_range), threshold_sweep_range(1), threshold_sweep_range(end));
     end
     fprintf('ROC-AUC: %.4f\n', roc_auc);
-    fprintf('PR-AUC: %.4f\n', pr_auc);
+    fprintf('PR-AUC (average precision): %.4f\n', pr_auc);
 
     % ------------------------------------------------------------
     % Link-level outputs and threshold sweep rows

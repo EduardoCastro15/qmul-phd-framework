@@ -146,6 +146,7 @@ def validate(root: Path) -> None:
         "ClassificationThreshold": "0.50",
         "ThresholdMode": "fixed",
         "ThresholdSweep": "false",
+        "PRAUCProtocol": "average_precision_noninterpolated_v1",
         "NegativeEligibilityMode": "role_only",
         "NegativePositiveRatio": "2",
         "NegativeSamplingStrategy": "uniform_without_replacement",

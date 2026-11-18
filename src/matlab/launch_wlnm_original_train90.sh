@@ -27,7 +27,7 @@ template="sbatch_wlnm_original_array_50.sbatch"
 foodweb_csv="data/foodwebs_mat/foodweb_metrics_ecosystem.csv"
 slurm_log_dir="../../slurm_logs"
 source_commit="${WLNM_SOURCE_COMMIT:-$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)}"
-condition_id="original_legacy_uppertriangular_train90_thresh0p50"
+condition_id="original_legacy_uppertriangular_train90_thresh0p50_prauc_ap_v1"
 
 if [[ ! -f "$template" ]]; then
     echo "ERROR: Missing template: $template" >&2
@@ -48,7 +48,7 @@ fi
 mkdir -p "$slurm_log_dir"
 
 if [[ "$mode" == "smoke" ]]; then
-    output_root="data/result_smoke_wlnm_original_legacy_uppertriangular_train90_thresh0p50"
+    output_root="data/result_smoke_wlnm_original_legacy_uppertriangular_train90_thresh0p50_prauc_ap_v1"
     job_name="SMK_ORIG_LEGACY"
     num_experiments=1
     parallel_workers=1
@@ -66,7 +66,7 @@ if [[ "$mode" == "smoke" ]]; then
     array_concurrency=1
     selected_foodweb_indices="1"
 elif [[ "$mode" == "smoke-seven" ]]; then
-    output_root="data/result_smoke7_wlnm_original_legacy_uppertriangular_train90_thresh0p50"
+    output_root="data/result_smoke7_wlnm_original_legacy_uppertriangular_train90_thresh0p50_prauc_ap_v1"
     job_name="SMK7_ORIG_LEGACY"
     num_experiments=1
     parallel_workers=1
@@ -84,19 +84,19 @@ elif [[ "$mode" == "smoke-seven" ]]; then
     array_concurrency=7
     selected_foodweb_indices="98,117,154,156,180,190,206"
 else
-    output_root="data/result_wlnm_original_50x290_train90_thresh0p50_legacy_uppertriangular_checkconnfalse_adaptivefalse_Apocrita"
+    output_root="data/result_wlnm_original_100x290_train90_thresh0p50_legacy_uppertriangular_checkconnfalse_adaptivefalse_prauc_ap_v1_Apocrita"
     job_name="WLNM_ORIG_LEG_T90"
-    num_experiments=50
-    parallel_workers=50
+    num_experiments=100
+    parallel_workers=63
     array_concurrency="${WLNM_ARRAY_CONCURRENCY:-4}"
     if [[ ! "$array_concurrency" =~ ^[1-9][0-9]*$ ]]; then
         echo "ERROR: WLNM_ARRAY_CONCURRENCY must be a positive integer." >&2
         exit 64
     fi
-    resource_args=(--array="1-290%${array_concurrency}")
+    resource_args=(--array="1-290%${array_concurrency}" --ntasks=64)
     expected_prediction_csvs=290
     expected_terminal_logs=290
-    expected_rows_per_csv=50
+    expected_rows_per_csv=100
     expected_pool_limited_foodwebs=0
     selected_foodweb_indices="1-290"
 fi
@@ -123,6 +123,7 @@ mkdir "$output_root"
     echo "TrainRatio=0.90"
     echo "ClassificationThreshold=0.50"
     echo "ThresholdSweep=false"
+    echo "PRAUCProtocol=average_precision_noninterpolated_v1"
     echo "CheckConnectivity=false"
     echo "AdaptiveConnectivity=false"
     echo "BaseSeed=12345"

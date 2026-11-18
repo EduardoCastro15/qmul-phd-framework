@@ -11,6 +11,7 @@ function registry = get_version_registry()
     registry('wlnm_dir_neg')  = @run_wlnm_dir_neg;
     registry('wlnm_dir_neg_focal_mass') = @run_wlnm_dir_neg_focal_mass;
     registry('wlnm_dir_neg_node_ecology') = @run_wlnm_dir_neg_node_ecology;
+    registry('wlnm_dir_neg_node_ecology_kfold') = @run_wlnm_dir_neg_node_ecology_kfold;
     registry('wlnm_dir_neg_kfold') = @run_wlnm_dir_neg_kfold;
 
     % Examples to add later:

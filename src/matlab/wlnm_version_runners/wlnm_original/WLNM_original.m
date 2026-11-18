@@ -88,8 +88,8 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
     % Compute ROC-AUC
     [~, ~, ~, roc_auc] = perfcurve(test_label', scores', 1);
 
-    % Compute PR-AUC
-    [~, ~, ~, pr_auc] = perfcurve(test_label', scores', 1, 'XCrit', 'reca', 'YCrit', 'prec');
+    % Compute non-interpolated PR-AUC (average precision)
+    pr_auc = compute_pr_auc(test_label, scores);
 
     [primary_threshold, primary_precision, primary_recall, primary_f1_score] = ...
         compute_threshold_metrics(scores, test_label, opt.threshold_mode, opt.fixed_threshold);
@@ -101,7 +101,7 @@ function [roc_auc, pr_auc, best_threshold, best_precision, best_recall, best_f1_
             numel(threshold_sweep_range), threshold_sweep_range(1), threshold_sweep_range(end));
     end
     fprintf('ROC-AUC: %.4f\n', roc_auc);
-    fprintf('PR-AUC: %.4f\n', pr_auc);
+    fprintf('PR-AUC (average precision): %.4f\n', pr_auc);
 
     % === Augmented Output for TP, FP, FN analysis ===
     test_pairs = [test_pos; test_neg];

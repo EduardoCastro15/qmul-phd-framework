@@ -45,7 +45,7 @@ if [[ "$mode" == "smoke" ]]; then
     ratio_count=1
     array_spec="1-1%1"
     expected_rows=1
-    output_root="${result_base}/result_wlnm_dir_neg_node_ecology_smoke_${timestamp}"
+    output_root="${result_base}/result_wlnm_dir_neg_node_ecology_smoke_prauc_ap_v1_${timestamp}"
     resource_args=(--array="$array_spec" --ntasks=2 --partition=compute --mem-per-cpu=4G --time=02:00:00)
 else
     foodweb_count=290
@@ -57,7 +57,7 @@ else
     ratio_count=9
     array_spec="1-290%4"
     expected_rows=900
-    output_root="${result_base}/result_wlnm_dir_neg_node_ecology_full_${timestamp}"
+    output_root="${result_base}/result_wlnm_dir_neg_node_ecology_100x290_train10-90_prauc_ap_v1_Apocrita_${timestamp}"
     resource_args=(--array="$array_spec")
 fi
 
@@ -85,6 +85,7 @@ mkdir -p "$slurm_log_dir" "$output_root/completion_markers"
     echo "ClassificationThreshold=0.50"
     echo "ThresholdMode=fixed"
     echo "ThresholdSweep=false"
+    echo "PRAUCProtocol=average_precision_noninterpolated_v1"
     echo "NegativeEligibilityMode=role_only"
     echo "NegativePositiveRatio=2"
     echo "NegativeSamplingStrategy=uniform_without_replacement"
