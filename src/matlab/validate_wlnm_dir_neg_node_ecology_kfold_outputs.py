@@ -192,7 +192,6 @@ def validate_result_csv(path: Path, cvk: int, experiments: int) -> tuple[str, in
     )
     by_experiment: dict[int, list[dict[str, str]]] = defaultdict(list)
     model_seeds: set[int] = set()
-    positive_hashes: set[str] = set()
     for line, row in enumerate(rows, start=2):
         prefix = f"{path.name}:{line}"
         require(row["Version"] == VERSION, f"{prefix}: Version={row['Version']!r}")
@@ -236,8 +235,6 @@ def validate_result_csv(path: Path, cvk: int, experiments: int) -> tuple[str, in
         seed = as_int(row["Seed"])
         require(seed not in model_seeds, f"{prefix}: duplicate model seed")
         model_seeds.add(seed)
-        require(row["PositiveSplitHash"] not in positive_hashes, f"{prefix}: duplicate fold split")
-        positive_hashes.add(row["PositiveSplitHash"])
         by_experiment[experiment].append(row)
 
     require(set(by_experiment) == set(range(1, experiments + 1)), f"{path.name}: missing experiments")
@@ -248,7 +245,12 @@ def validate_result_csv(path: Path, cvk: int, experiments: int) -> tuple[str, in
         require(folds == set(range(1, cvk + 1)), f"{path.name}: repeat {experiment} incomplete folds")
         hashes = {row["CvPartitionHash"] for row in experiment_rows}
         seeds = {as_int(row["CvSplitSeed"]) for row in experiment_rows}
+        positive_hashes = {row["PositiveSplitHash"] for row in experiment_rows}
         require(len(hashes) == 1 and len(seeds) == 1, f"{path.name}: repeat {experiment} partition metadata mismatch")
+        require(
+            len(positive_hashes) == cvk,
+            f"{path.name}: repeat {experiment} contains duplicate fold splits",
+        )
         partition_hashes.update(hashes)
         partition_seeds.update(seeds)
     require(len(partition_hashes) == experiments, f"{path.name}: repeated partitions are not unique")
