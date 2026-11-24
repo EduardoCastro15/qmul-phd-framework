@@ -97,7 +97,8 @@ def parse_args(argv=None):
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--require-cuda", action="store_true")
     parser.add_argument("--deterministic", action="store_true")
-    parser.add_argument("--batch-size", type=int, default=50)
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--attribution-source-commit", default="unknown")
     return parser.parse_args(argv)
 
 
@@ -141,14 +142,24 @@ def main(argv=None):
         test_graphs = unpack_graphs(artifact, "test")
         expected_scores = np.asarray(artifact["test_scores"], dtype=np.float64)
     tolerance = float(config["score_parity_absolute_tolerance"])
+    attribution_forward_tolerance = float(
+        config["attribution_forward_absolute_tolerance"]
+    )
+    replay_batch_size = int(model_config["batch_size"])
+    if args.batch_size is not None and int(args.batch_size) != replay_batch_size:
+        raise ValueError(
+            "predictive replay batch size must match model_config: {} != {}".format(
+                args.batch_size, replay_batch_size
+            )
+        )
     parity = validate_forward_parity(
         model, test_graphs, expected_scores, model_config["label_dim"],
-        args.batch_size, device, tolerance,
+        replay_batch_size, device, tolerance,
     )
     edge_invariance = None
     if variant == "directed_node":
         permuted = prepared_scores(
-            model, test_graphs, model_config["label_dim"], args.batch_size,
+            model, test_graphs, model_config["label_dim"], replay_batch_size,
             device, permute_edges=True,
         )
         edge_invariance = float(np.max(np.abs(permuted - expected_scores)))
@@ -181,7 +192,10 @@ def main(argv=None):
                       if variant == "directed_ecc" else None),
         threshold=float(training["metrics"]["Threshold"]),
         internal_batch_size=int(config["internal_batch_size"]),
-        score_tolerance=tolerance,
+        attribution_forward_tolerance=attribution_forward_tolerance,
+        require_prediction_agreement=bool(
+            config["require_prediction_agreement"]
+        ),
         node_feature_families=[node_family(name) for name in node_names],
         edge_feature_families=[edge_family(index) for index in range(len(edge_names))],
         faithfulness_background_samples=int(config.get("faithfulness_background_samples", 0)),
@@ -196,7 +210,10 @@ def main(argv=None):
         "attribution_seed": int(training["metrics"]["Seed"]) + int(config["attribution_seed_offset"]),
         "training_bundle_success_sha256": file_sha256(args.training_run_dir / "_SUCCESS"),
         "checkpoint_sha256": checkpoint_hash, "graph_input_sha256": model_config["graph_input_sha256"],
-        "source_commit": model_config["source_commit"], "target": config["target"],
+        "source_commit": model_config["source_commit"],
+        "training_source_commit": model_config["source_commit"],
+        "attribution_source_commit": str(args.attribution_source_commit),
+        "target": config["target"],
         "node_feature_names": node_names,
         "node_feature_families": [node_family(name) for name in node_names],
         "edge_feature_names": edge_names,
@@ -208,6 +225,22 @@ def main(argv=None):
             config.get("faithfulness_background_samples", 0)
         ),
         "score_parity_max_abs_diff": parity,
+        "predictive_replay_batch_size": replay_batch_size,
+        "predictive_score_parity_absolute_tolerance": tolerance,
+        "attribution_forward_absolute_tolerance": attribution_forward_tolerance,
+        "require_prediction_agreement": bool(
+            config["require_prediction_agreement"]
+        ),
+        "predictive_threshold": float(training["metrics"]["Threshold"]),
+        "attribution_forward_score_drift": {
+            "maximum": float(np.max(arrays["candidate_score_abs_drift"])),
+            "median": float(np.median(arrays["candidate_score_abs_drift"])),
+            "p95": float(np.percentile(arrays["candidate_score_abs_drift"], 95)),
+            "p99": float(np.percentile(arrays["candidate_score_abs_drift"], 99)),
+            "prediction_disagreements": int(np.count_nonzero(
+                ~arrays["candidate_prediction_agreement"]
+            )),
+        },
         "directed_node_edge_invariance_max_abs_diff": edge_invariance,
         "historical_comparison": historical, "device": str(device),
         "python_version": platform.python_version(), "torch_version": torch.__version__,
@@ -218,6 +251,9 @@ def main(argv=None):
     write_attribution_bundle(args.output_dir, metadata, arrays, config_hash)
     print(json.dumps({"status": "ATTRIBUTION_OK", "variant": variant,
                       "candidates": len(arrays["candidate_pairs"]),
+                      "attribution_forward_max_abs_drift": float(np.max(
+                          arrays["candidate_score_abs_drift"]
+                      )),
                       "elapsed_seconds": time.time() - started}, indent=2, sort_keys=True))
 
 

@@ -21,14 +21,17 @@ PACKAGE_FILES = (
     "attribution_manifest_lock.py",
     "generate_attribution_manifest.py", "generate_attribution_config.py",
     "explain_weighted_attribution.py", "run_attribution_campaign.py",
+    "preflight_score_replay.py",
     "freeze_attribution_config.py", "validate_attribution_campaign.py",
-    "summarize_attributions.py", "tests/test_weighted_pipeline.py",
+    "summarize_attributions.py", "plot_attribution_beeswarm.py",
+    "tests/test_weighted_pipeline.py",
     "tests/test_weighted_attribution.py", "tests/test_attribution_orchestration.py",
 )
 APOCRITA_FILES = (
     "build_bundle.py", "create_gpu_env.sh", "environment.apocrita.yml", "gpu_probe.py",
     "requirements-apocrita.txt", "seal_weighted_gpu_array.sbatch", "submit_gpu.sh",
     "seal_node_ecc_attribution_array.sbatch",
+    "seal_node_ecc_score_preflight.sbatch",
     "seal_node_ecc_attribution_postprocess.sbatch",
     "submit_node_ecc_attribution.sh",
     "verify_bundle.py",
@@ -99,7 +102,7 @@ def main():
             shutil.copy2(source, target)
         (root / "SOURCE_COMMIT.txt").write_text(commit + "\n", encoding="utf-8")
         (root / "BUNDLE_METADATA.json").write_text(json.dumps({
-            "schema": "seal-directed-weighted-apocrita-bundle-v2",
+            "schema": "seal-directed-weighted-apocrita-bundle-v3",
             "source_commit": commit,
             "source_branch": branch,
             "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),

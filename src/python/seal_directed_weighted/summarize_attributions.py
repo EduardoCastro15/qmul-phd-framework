@@ -448,7 +448,7 @@ def main(argv=None):
     write_csv(args.output_dir / "node_beeswarm_sample.csv", node_sample.rows())
     write_csv(args.output_dir / "edge_beeswarm_sample.csv", edge_sample.rows())
     write_csv(args.output_dir / "drnl_beeswarm_sample.csv", drnl_sample.rows())
-    metadata = {"schema_version": "seal-directed-node-ecc-attribution-summary-v2",
+    metadata = {"schema_version": "seal-directed-node-ecc-attribution-summary-v3",
                 "runs": loaded_count, "foodwebs": len(observed_foodwebs),
                 "variants": sorted(observed_variants),
                 "aggregation": "candidate_to_experiment_to_foodweb_to_cohort_equal_foodweb_weight",

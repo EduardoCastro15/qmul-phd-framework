@@ -55,6 +55,7 @@ def main(argv=None):
     parser.add_argument("--python-executable", type=Path, default=Path(sys.executable))
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--require-cuda", action="store_true")
+    parser.add_argument("--attribution-source-commit", default="unknown")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -122,7 +123,9 @@ def main(argv=None):
             command = [str(args.python_executable), str(script),
                        "--training-run-dir", str(training_dir),
                        "--attribution-config", str(args.attribution_config.resolve()),
-                       "--output-dir", str(output_dir), "--device", args.device, "--deterministic"]
+                       "--output-dir", str(output_dir), "--device", args.device,
+                       "--attribution-source-commit", str(args.attribution_source_commit),
+                       "--deterministic"]
             if args.require_cuda: command.append("--require-cuda")
             if args.historical_result_root:
                 historical = run_directory(args.historical_result_root, variant, row["Foodweb"], experiment, row["Seed"])
