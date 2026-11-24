@@ -21,6 +21,7 @@ from weighted_attribution import (
     attribute_test_graphs,
     build_edge_background_pool,
     sample_edge_backgrounds,
+    validate_candidate_score_replay,
     validate_directed_node_edge_invariance,
     validate_explicit_forward_parity,
 )
@@ -38,6 +39,17 @@ def fixture_graph(candidate=(0, 1), graph_label=1, edge_shift=0.0):
 
 
 class WeightedAttributionTests(unittest.TestCase):
+    def test_candidate_score_replay_uses_bounded_drift_and_class_agreement(self):
+        drift, agreement = validate_candidate_score_replay(
+            0.8, 0.80005, 0.5, tolerance=1e-4
+        )
+        self.assertAlmostEqual(drift, 0.00005)
+        self.assertTrue(agreement)
+        with self.assertRaisesRegex(ValueError, "exceeds tolerance"):
+            validate_candidate_score_replay(0.8, 0.8002, 0.5, tolerance=1e-4)
+        with self.assertRaisesRegex(ValueError, "prediction changed"):
+            validate_candidate_score_replay(0.49999, 0.50001, 0.5, tolerance=1e-4)
+
     def test_forward_prepared_and_log_odds_are_parity_safe(self):
         graph = fixture_graph()
         model = DirectedClassifier(50, 6, "directed_ecc", 10, dropout=False)
@@ -112,6 +124,10 @@ class WeightedAttributionTests(unittest.TestCase):
             faithfulness_background_samples=1,
         )
         self.assertEqual(arrays["candidate_scores"].shape, (1,))
+        np.testing.assert_array_equal(arrays["candidate_scores"], expected)
+        self.assertEqual(arrays["candidate_attribution_scores"].shape, (1,))
+        self.assertEqual(arrays["candidate_score_abs_drift"].shape, (1,))
+        self.assertTrue(arrays["candidate_prediction_agreement"].all())
         self.assertEqual(arrays["node_expected_gradients"].shape[1], 44)
         self.assertEqual(arrays["drnl_integrated_gradients"].shape[1], 6)
         self.assertEqual(arrays["edge_expected_gradients"].shape[1], 17)
@@ -131,6 +147,9 @@ class WeightedAttributionTests(unittest.TestCase):
                 "training_bundle_success_sha256": "a" * 64,
                 "checkpoint_sha256": "b" * 64,
                 "background_training_graph_count": len(train_graphs),
+                "predictive_threshold": 0.5,
+                "attribution_forward_absolute_tolerance": 1e-4,
+                "require_prediction_agreement": True,
                 "node_feature_names": ["feature_{}".format(i) for i in range(44)],
                 "edge_feature_names": ["edge_{}".format(i) for i in range(17)],
             }

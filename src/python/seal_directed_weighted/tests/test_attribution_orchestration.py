@@ -17,6 +17,7 @@ if str(PACKAGE) not in sys.path:
 from attribution_artifacts import validate_attribution_bundle, write_attribution_bundle
 from attribution_manifest_lock import validate_manifest_lock
 from generate_attribution_manifest import build_manifest
+from generate_attribution_config import write_attribution_config
 from run_artifacts import configuration_hash
 from run_attribution_campaign import resolve_shard
 from run_campaign import resolve_block_task, select_manifest_row
@@ -37,7 +38,10 @@ def attribution_arrays(variant="directed_node", faithfulness=True, edges_overrid
         "candidate_pairs": np.asarray([[0, 1]], dtype=np.int64),
         "candidate_labels": np.asarray([1], dtype=np.int8),
         "candidate_scores": np.asarray([0.8]),
-        "candidate_log_odds": np.asarray([1.0]),
+        "candidate_attribution_scores": np.asarray([0.8]),
+        "candidate_score_abs_drift": np.asarray([0.0]),
+        "candidate_prediction_agreement": np.asarray([True]),
+        "candidate_log_odds": np.asarray([np.log(4.0)]),
         "candidate_confusion": np.asarray([3], dtype=np.int8),
         "node_offsets": np.asarray([0, 2]),
         "node_ids": np.asarray([0, 1]),
@@ -95,6 +99,18 @@ def attribution_arrays(variant="directed_node", faithfulness=True, edges_overrid
 
 
 class AttributionOrchestrationTests(unittest.TestCase):
+    def test_v3_config_freezes_distinct_predictive_and_attribution_tolerances(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ATTRIBUTION_CONFIG.json"
+            config, _ = write_attribution_config(path, setting=32)
+            self.assertEqual(
+                config["schema_version"],
+                "seal-directed-node-ecc-attribution-config-v3",
+            )
+            self.assertEqual(config["score_parity_absolute_tolerance"], 1e-7)
+            self.assertEqual(config["attribution_forward_absolute_tolerance"], 1e-4)
+            self.assertTrue(config["require_prediction_agreement"])
+
     def test_manifest_filters_two_variants_and_freezes_new_source_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -283,6 +299,9 @@ class AttributionOrchestrationTests(unittest.TestCase):
                     "training_bundle_success_sha256": "a" * 64,
                     "checkpoint_sha256": "b" * 64,
                     "background_training_graph_count": 1,
+                    "predictive_threshold": 0.5,
+                    "attribution_forward_absolute_tolerance": 1e-4,
+                    "require_prediction_agreement": True,
                     "faithfulness_background_samples": 2,
                 }
                 write_attribution_bundle(
@@ -298,6 +317,9 @@ class AttributionOrchestrationTests(unittest.TestCase):
                 "training_bundle_success_sha256": "a" * 64,
                 "checkpoint_sha256": "b" * 64,
                 "background_training_graph_count": 1,
+                "predictive_threshold": 0.5,
+                "attribution_forward_absolute_tolerance": 1e-4,
+                "require_prediction_agreement": True,
                 "faithfulness_background_samples": 2,
             }
             write_attribution_bundle(
@@ -306,6 +328,37 @@ class AttributionOrchestrationTests(unittest.TestCase):
                 "c" * 64,
             )
             validate_attribution_bundle(bundle, "c" * 64)
+
+    def test_v3_bundle_rejects_excessive_or_class_changing_score_drift(self):
+        metadata = {
+            "ModelVariant": "directed_node",
+            "training_bundle_success_sha256": "a" * 64,
+            "checkpoint_sha256": "b" * 64,
+            "background_training_graph_count": 1,
+            "predictive_threshold": 0.5,
+            "attribution_forward_absolute_tolerance": 1e-4,
+            "require_prediction_agreement": True,
+            "faithfulness_background_samples": 2,
+        }
+        for attribution_score, message in ((0.8002, "drift"), (0.49999, "changed")):
+            with self.subTest(attribution_score=attribution_score), tempfile.TemporaryDirectory() as temporary:
+                arrays = attribution_arrays("directed_node")
+                if attribution_score < 0.5:
+                    arrays["candidate_scores"] = np.asarray([0.50001])
+                arrays["candidate_attribution_scores"] = np.asarray([attribution_score])
+                arrays["candidate_score_abs_drift"] = np.abs(
+                    arrays["candidate_scores"] - arrays["candidate_attribution_scores"]
+                )
+                arrays["candidate_prediction_agreement"] = np.asarray([
+                    bool((arrays["candidate_scores"][0] > 0.5) == (attribution_score > 0.5))
+                ])
+                arrays["candidate_log_odds"] = np.asarray([
+                    np.log(attribution_score / (1.0 - attribution_score))
+                ])
+                bundle = Path(temporary) / "bundle"
+                write_attribution_bundle(bundle, metadata, arrays, "c" * 64)
+                with self.assertRaisesRegex(ValueError, message):
+                    validate_attribution_bundle(bundle, "c" * 64)
 
     def test_drnl_width_alignment_pads_all_role_views(self):
         def run(width):

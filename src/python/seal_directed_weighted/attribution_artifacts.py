@@ -14,7 +14,7 @@ import numpy as np
 from run_artifacts import canonical_json_bytes, file_sha256, safe_stem
 
 
-ATTRIBUTION_SCHEMA = "seal-directed-node-ecc-attribution-v2"
+ATTRIBUTION_SCHEMA = "seal-directed-node-ecc-attribution-v3"
 VARIANTS = ("directed_node", "directed_ecc")
 
 
@@ -102,7 +102,9 @@ def validate_attribution_bundle(bundle_dir, expected_config_hash=None,
             if file_sha256(bundle_dir / filename) != digest:
                 raise ValueError("{} checksum mismatch".format(filename))
     required = {
-        "candidate_pairs", "candidate_labels", "candidate_scores", "candidate_log_odds",
+        "candidate_pairs", "candidate_labels", "candidate_scores",
+        "candidate_attribution_scores", "candidate_score_abs_drift",
+        "candidate_prediction_agreement", "candidate_log_odds",
         "candidate_confusion", "node_offsets", "node_ids", "node_roles",
         "node_feature_values", "node_expected_gradients",
         "node_expected_gradients_abs_proportion", "node_background_train_indices",
@@ -126,13 +128,59 @@ def validate_attribution_bundle(bundle_dir, expected_config_hash=None,
         if len({tuple(pair) for pair in candidates.tolist()}) != count:
             raise ValueError("candidate pairs are not unique")
         _one_per_candidate(arrays, (
-            "candidate_labels", "candidate_scores", "candidate_log_odds", "candidate_confusion",
+            "candidate_labels", "candidate_scores", "candidate_attribution_scores",
+            "candidate_score_abs_drift", "candidate_prediction_agreement",
+            "candidate_log_odds", "candidate_confusion",
             "node_completeness_absolute", "node_completeness_relative",
             "node_output_difference", "node_attribution_sum", "drnl_completeness_absolute",
             "drnl_completeness_relative", "drnl_output_difference", "drnl_attribution_sum",
             "edge_baseline_seed", "edge_completeness_absolute", "edge_completeness_relative",
             "edge_output_difference", "edge_attribution_sum",
         ), count)
+        predictive_scores = np.asarray(arrays["candidate_scores"], dtype=np.float64)
+        attribution_scores = np.asarray(
+            arrays["candidate_attribution_scores"], dtype=np.float64
+        )
+        score_drifts = np.asarray(
+            arrays["candidate_score_abs_drift"], dtype=np.float64
+        )
+        prediction_agreement = np.asarray(
+            arrays["candidate_prediction_agreement"], dtype=np.bool_
+        )
+        log_odds = np.asarray(arrays["candidate_log_odds"], dtype=np.float64)
+        if not np.allclose(
+            score_drifts,
+            np.abs(predictive_scores - attribution_scores),
+            rtol=0.0,
+            atol=1e-15,
+        ):
+            raise ValueError("candidate score drift does not match stored scores")
+        drift_tolerance = float(
+            metadata.get("attribution_forward_absolute_tolerance", -1.0)
+        )
+        if drift_tolerance < 0 or np.any(score_drifts > drift_tolerance):
+            raise ValueError("candidate score drift exceeds attribution tolerance")
+        threshold = float(metadata.get("predictive_threshold", np.nan))
+        if not np.isfinite(threshold):
+            raise ValueError("missing finite predictive threshold")
+        expected_agreement = (
+            (predictive_scores > threshold) == (attribution_scores > threshold)
+        )
+        if not np.array_equal(prediction_agreement, expected_agreement):
+            raise ValueError("candidate prediction agreement is inconsistent")
+        if bool(metadata.get("require_prediction_agreement", True)) and not np.all(
+            prediction_agreement
+        ):
+            raise ValueError("attribution forward changed a candidate prediction")
+        sigmoid_log_odds = np.empty_like(log_odds)
+        positive = log_odds >= 0
+        sigmoid_log_odds[positive] = 1.0 / (1.0 + np.exp(-log_odds[positive]))
+        exp_values = np.exp(log_odds[~positive])
+        sigmoid_log_odds[~positive] = exp_values / (1.0 + exp_values)
+        if not np.allclose(
+            sigmoid_log_odds, attribution_scores, rtol=0.0, atol=1e-6
+        ):
+            raise ValueError("candidate log-odds disagree with attribution scores")
         node_offsets = np.asarray(arrays["node_offsets"], dtype=np.int64)
         if node_offsets.shape != (count + 1,) or node_offsets[0] != 0 or np.any(np.diff(node_offsets) < 2):
             raise ValueError("invalid node_offsets")
@@ -178,7 +226,8 @@ def validate_attribution_bundle(bundle_dir, expected_config_hash=None,
             raise ValueError("directed_node must not contain edge attributions")
         if variant == "directed_ecc" and edges == 0 and np.any(np.diff(edge_offsets) != 0):
             raise ValueError("ECC edge offsets disagree")
-        excluded = {"candidate_pairs", "candidate_confusion", "node_offsets", "node_ids",
+        excluded = {"candidate_pairs", "candidate_confusion",
+                    "candidate_prediction_agreement", "node_offsets", "node_ids",
                     "node_roles", "drnl_labels", "node_background_train_indices", "edge_offsets",
                     "edge_index", "edge_role_pairs", "edge_baseline_fallback_tiers",
                     "edge_baseline_seed", "edge_pool_sha256"}

@@ -9,7 +9,6 @@ baseline Integrated Gradients path, and ECC edge covariates use complete
 from __future__ import annotations
 
 import hashlib
-import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -425,6 +424,46 @@ def _confusion_code(label, score, threshold):
     return CONFUSION_CODES["FP" if prediction else "TN"]
 
 
+def validate_candidate_score_replay(
+    predictive_score,
+    attribution_score,
+    threshold,
+    tolerance=1e-4,
+    require_prediction_agreement=True,
+    candidate_index=None,
+):
+    """Validate and describe the bounded batch-vs-single forward drift."""
+    predictive_score = float(predictive_score)
+    attribution_score = float(attribution_score)
+    threshold = float(threshold)
+    label = "candidate {}".format(candidate_index) if candidate_index is not None else "candidate"
+    if not np.isfinite(predictive_score) or not np.isfinite(attribution_score):
+        raise ValueError("non-finite predictive or attribution score for {}".format(label))
+    drift = abs(predictive_score - attribution_score)
+    if drift > float(tolerance):
+        raise ValueError(
+            "attribution-forward score drift exceeds tolerance for {}: "
+            "predictive={:.12g} attribution={:.12g} drift={:.12g} tolerance={:.12g}".format(
+                label,
+                predictive_score,
+                attribution_score,
+                drift,
+                float(tolerance),
+            )
+        )
+    agreement = (
+        (predictive_score > threshold) == (attribution_score > threshold)
+    )
+    if bool(require_prediction_agreement) and not agreement:
+        raise ValueError(
+            "attribution-forward prediction changed for {} at threshold {}: "
+            "predictive={:.12g} attribution={:.12g}".format(
+                label, threshold, predictive_score, attribution_score
+            )
+        )
+    return drift, agreement
+
+
 def _diag_array(diagnostics, key):
     return np.asarray([item[key] for item in diagnostics], dtype=np.float64)
 
@@ -502,7 +541,8 @@ def attribute_test_graphs(
     edge_samples=None,
     threshold=0.5,
     internal_batch_size=32,
-    score_tolerance=1e-7,
+    attribution_forward_tolerance=1e-4,
+    require_prediction_agreement=True,
     node_feature_families=None,
     edge_feature_families=None,
     faithfulness_background_samples=0,
@@ -547,7 +587,8 @@ def attribute_test_graphs(
         )
 
     node_offsets, edge_offsets = [0], [0]
-    candidate_pairs, labels, scores, log_odds, confusion = [], [], [], [], []
+    candidate_pairs, labels, scores, attribution_scores = [], [], [], []
+    score_drifts, prediction_agreements, log_odds, confusion = [], [], [], []
     all_node_ids, all_node_features, all_node_roles, all_drnl_labels = [], [], [], []
     node_values, node_normalized, node_background_indices = [], [], []
     drnl_values, drnl_normalized, drnl_active = [], [], []
@@ -567,20 +608,21 @@ def attribute_test_graphs(
         edge_attributes = torch.as_tensor(
             np.asarray(graph.edge_attr, dtype=np.float32), device=device
         )
-        score, current_log_odds = _prediction(
+        attribution_score, current_log_odds = _prediction(
             classifier, graph, drnl, node_attributes, edge_attributes
         )
-        if scores_expected is not None and not math.isclose(
-            score,
-            float(scores_expected[candidate_index]),
-            rel_tol=0.0,
-            abs_tol=float(score_tolerance),
-        ):
-            raise ValueError(
-                "checkpoint score mismatch for candidate {}: {:.12g} vs {:.12g}".format(
-                    candidate_index, scores_expected[candidate_index], score
-                )
-            )
+        stored_score = (
+            float(scores_expected[candidate_index])
+            if scores_expected is not None else attribution_score
+        )
+        score_drift, prediction_agreement = validate_candidate_score_replay(
+            stored_score,
+            attribution_score,
+            threshold,
+            attribution_forward_tolerance,
+            require_prediction_agreement,
+            candidate_index,
+        )
 
         node_seed = int(attribution_seed) + NODE_RNG_OFFSET + 1_000_003 * candidate_index
         node_rng = np.random.default_rng(node_seed)
@@ -672,13 +714,13 @@ def attribute_test_graphs(
             fallback_tiers = np.empty(0, dtype=np.int8)
             edge_np = np.empty((0, classifier.edge_dim), dtype=np.float32)
 
-        stored_score = (
-            float(scores_expected[candidate_index]) if scores_expected is not None else score
-        )
         candidate_pairs.append(_candidate_pair(graph))
         graph_label = _graph_label(graph)
         labels.append(graph_label)
         scores.append(stored_score)
+        attribution_scores.append(attribution_score)
+        score_drifts.append(score_drift)
+        prediction_agreements.append(prediction_agreement)
         log_odds.append(current_log_odds)
         confusion.append(_confusion_code(graph_label, stored_score, threshold))
         graph_node_ids = getattr(graph, "node_ids", None)
@@ -721,6 +763,13 @@ def attribute_test_graphs(
         "candidate_pairs": np.asarray(candidate_pairs, dtype=np.int64).reshape(-1, 2),
         "candidate_labels": np.asarray(labels, dtype=np.int8),
         "candidate_scores": np.asarray(scores, dtype=np.float64),
+        "candidate_attribution_scores": np.asarray(
+            attribution_scores, dtype=np.float64
+        ),
+        "candidate_score_abs_drift": np.asarray(score_drifts, dtype=np.float64),
+        "candidate_prediction_agreement": np.asarray(
+            prediction_agreements, dtype=np.bool_
+        ),
         "candidate_log_odds": np.asarray(log_odds, dtype=np.float64),
         "candidate_confusion": np.asarray(confusion, dtype=np.int8),
         "node_offsets": np.asarray(node_offsets, dtype=np.int64),

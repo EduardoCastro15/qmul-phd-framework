@@ -51,7 +51,12 @@ elif [[ "${TASK_SELECTION:-shard}" == "row" ]]; then
 else
   COMMON+=(--task-id "${SLURM_ARRAY_TASK_ID}")
 fi
-if [[ -n "${ONLY_FOODWEB:-}" ]]; then COMMON+=(--only-foodweb "${ONLY_FOODWEB}"); fi
+if [[ -n "${ONLY_FOODWEBS_CSV:-}" ]]; then
+  IFS=',' read -r -a ONLY_FOODWEBS <<< "${ONLY_FOODWEBS_CSV}"
+  for foodweb in "${ONLY_FOODWEBS[@]}"; do COMMON+=(--only-foodweb "${foodweb}"); done
+elif [[ -n "${ONLY_FOODWEB:-}" ]]; then
+  COMMON+=(--only-foodweb "${ONLY_FOODWEB}")
+fi
 
 if [[ "${PIPELINE_STAGE}" == "training" ]]; then
   "${PYTHON_BIN}" "${WEIGHTED_DIR}/run_campaign.py" \
@@ -68,6 +73,7 @@ elif [[ "${PIPELINE_STAGE}" == "attribution" ]]; then
     --training-result-root "${TRAINING_RESULT_ROOT}"
     --result-root "${ATTRIBUTION_RESULT_ROOT}"
     --python-executable "${PYTHON_BIN}"
+    --attribution-source-commit "${ATTRIBUTION_SOURCE_COMMIT:?Set ATTRIBUTION_SOURCE_COMMIT}"
     --device cuda --require-cuda --resume
   )
   if [[ "${TASK_SELECTION:-shard}" == "block" ]]; then
@@ -83,7 +89,12 @@ elif [[ "${PIPELINE_STAGE}" == "attribution" ]]; then
   if [[ -n "${HISTORICAL_RUN_ROOT:-}" ]]; then
     COMMAND+=(--historical-result-root "${HISTORICAL_RUN_ROOT}")
   fi
-  if [[ -n "${ONLY_FOODWEB:-}" ]]; then COMMAND+=(--only-foodweb "${ONLY_FOODWEB}"); fi
+  if [[ -n "${ONLY_FOODWEBS_CSV:-}" ]]; then
+    IFS=',' read -r -a ONLY_FOODWEBS <<< "${ONLY_FOODWEBS_CSV}"
+    for foodweb in "${ONLY_FOODWEBS[@]}"; do COMMAND+=(--only-foodweb "${foodweb}"); done
+  elif [[ -n "${ONLY_FOODWEB:-}" ]]; then
+    COMMAND+=(--only-foodweb "${ONLY_FOODWEB}")
+  fi
   "${COMMAND[@]}"
 else
   echo "Unknown PIPELINE_STAGE=${PIPELINE_STAGE}" >&2; exit 2

@@ -2,12 +2,12 @@
 set -euo pipefail
 
 MODE="${1:-}"
-if [[ ! "${MODE}" =~ ^(init|train-smoke|train-experiment1|train-campaign|attr-smoke|calibration|freeze|attr-experiment1|attr-campaign|validate|summarize)$ ]]; then
-  echo "Usage: $0 init|train-smoke|train-experiment1|train-campaign|attr-smoke|calibration [32|64|128|256]|freeze|attr-experiment1|attr-campaign|validate|summarize" >&2
+if [[ ! "${MODE}" =~ ^(init|train-smoke|train-experiment1|train-campaign|attr-smoke|preflight|calibration|freeze|attr-experiment1|attr-campaign|validate|summarize)$ ]]; then
+  echo "Usage: $0 init|train-smoke|train-experiment1|train-campaign|attr-smoke|preflight|calibration [32|64|128|256]|freeze|attr-experiment1|attr-campaign|validate|summarize" >&2
   exit 2
 fi
 : "${REPO_ROOT:?Set REPO_ROOT to the deployed checkout}"
-: "${RUN_ROOT:?Set RUN_ROOT to a new persistent SEAL_directed_node_ecc_attribution_v2 root}"
+: "${RUN_ROOT:?Set RUN_ROOT to a new persistent SEAL_directed_node_ecc_attribution_v3 root}"
 : "${HISTORICAL_RUN_ROOT:?Set HISTORICAL_RUN_ROOT to the completed four-variant campaign}"
 : "${SEAL_ENV_PREFIX:?Set SEAL_ENV_PREFIX}"
 : "${SCRATCH_ROOT:?Set SCRATCH_ROOT under /gpfs/scratch/$USER}"
@@ -19,7 +19,13 @@ MANIFEST_PATH="${MANIFEST_DIR}/manifest.csv"
 RUN_CONFIG_PATH="${MANIFEST_DIR}/RUN_CONFIG.json"
 MANIFEST_LOCK_PATH="${MANIFEST_DIR}/MANIFEST_LOCK.json"
 SCRIPT="${WEIGHTED_DIR}/apocrita/seal_node_ecc_attribution_array.sbatch"
+PREFLIGHT_SCRIPT="${WEIGHTED_DIR}/apocrita/seal_node_ecc_score_preflight.sbatch"
 POSTPROCESS_SCRIPT="${WEIGHTED_DIR}/apocrita/seal_node_ecc_attribution_postprocess.sbatch"
+if [[ -z "${TRAINING_RESULT_ROOT:-}" && -f "${RUN_ROOT}/TRAINING_RESULT_ROOT.txt" ]]; then
+  TRAINING_RESULT_ROOT="$(tr -d '\r\n' < "${RUN_ROOT}/TRAINING_RESULT_ROOT.txt")"
+else
+  TRAINING_RESULT_ROOT="${TRAINING_RESULT_ROOT:-${RUN_ROOT}}"
+fi
 test -x "${PYTHON_BIN}" || { echo "Missing Python executable: ${PYTHON_BIN}" >&2; exit 2; }
 if "${PYTHON_BIN}" -c \
   'from pathlib import Path; import sys; raise SystemExit(Path(sys.argv[1]).resolve() != Path(sys.argv[2]).resolve())' \
@@ -34,9 +40,9 @@ mkdir -p "${RUN_ROOT}/slurm"
     exit 2
   }
 if [[ -f "${REPO_ROOT}/SOURCE_COMMIT.txt" ]]; then
-  SOURCE_COMMIT="$(tr -d '[:space:]' < "${REPO_ROOT}/SOURCE_COMMIT.txt")"
+  ATTRIBUTION_SOURCE_COMMIT="$(tr -d '[:space:]' < "${REPO_ROOT}/SOURCE_COMMIT.txt")"
 else
-  SOURCE_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+  ATTRIBUTION_SOURCE_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 fi
 if [[ "${MODE}" == "init" && ! -f "${REPO_ROOT}/DEPLOYMENT_MANIFEST.sha256" ]]; then
   if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain -- \
@@ -48,11 +54,27 @@ fi
 
 if [[ "${MODE}" == "init" ]]; then
   test ! -e "${MANIFEST_DIR}" || { echo "Manifest already exists: ${MANIFEST_DIR}" >&2; exit 2; }
-  "${PYTHON_BIN}" "${WEIGHTED_DIR}/generate_attribution_manifest.py" \
-    --source-manifest "${HISTORICAL_RUN_ROOT}/manifest/manifest.csv" \
-    --source-config "${HISTORICAL_RUN_ROOT}/manifest/RUN_CONFIG.json" \
-    --output-dir "${MANIFEST_DIR}" --expected-foodwebs 290 --expected-experiments 10 \
-    --source-commit "${SOURCE_COMMIT}"
+  if [[ "$(realpath -m "${TRAINING_RESULT_ROOT}")" != "$(realpath -m "${RUN_ROOT}")" ]]; then
+    for name in manifest.csv RUN_CONFIG.json MANIFEST_LOCK.json; do
+      test -f "${TRAINING_RESULT_ROOT}/manifest/${name}" || {
+        echo "Missing training manifest artifact: ${TRAINING_RESULT_ROOT}/manifest/${name}" >&2
+        exit 2
+      }
+    done
+    mkdir -p "${MANIFEST_DIR}"
+    cp "${TRAINING_RESULT_ROOT}/manifest/manifest.csv" "${MANIFEST_PATH}"
+    cp "${TRAINING_RESULT_ROOT}/manifest/RUN_CONFIG.json" "${RUN_CONFIG_PATH}"
+    cp "${TRAINING_RESULT_ROOT}/manifest/MANIFEST_LOCK.json" "${MANIFEST_LOCK_PATH}"
+    "${PYTHON_BIN}" "${WEIGHTED_DIR}/attribution_manifest_lock.py" \
+      --manifest "${MANIFEST_PATH}" --config "${RUN_CONFIG_PATH}" \
+      --lock "${MANIFEST_LOCK_PATH}"
+  else
+    "${PYTHON_BIN}" "${WEIGHTED_DIR}/generate_attribution_manifest.py" \
+      --source-manifest "${HISTORICAL_RUN_ROOT}/manifest/manifest.csv" \
+      --source-config "${HISTORICAL_RUN_ROOT}/manifest/RUN_CONFIG.json" \
+      --output-dir "${MANIFEST_DIR}" --expected-foodwebs 290 --expected-experiments 10 \
+      --source-commit "${ATTRIBUTION_SOURCE_COMMIT}"
+  fi
   for setting in 32 64 128 256; do
     "${PYTHON_BIN}" "${WEIGHTED_DIR}/generate_attribution_config.py" \
       --output "${RUN_ROOT}/calibration/config_${setting}/ATTRIBUTION_CONFIG.json" \
@@ -64,7 +86,8 @@ if [[ "${MODE}" == "init" ]]; then
   if [[ -f "${SEAL_ENV_PREFIX}/pip-freeze.txt" ]]; then
     cp "${SEAL_ENV_PREFIX}/pip-freeze.txt" "${RUN_ROOT}/environment/"
   fi
-  printf '%s\n' "${SOURCE_COMMIT}" > "${RUN_ROOT}/SOURCE_COMMIT.txt"
+  printf '%s\n' "${ATTRIBUTION_SOURCE_COMMIT}" > "${RUN_ROOT}/ATTRIBUTION_SOURCE_COMMIT.txt"
+  printf '%s\n' "$(realpath -m "${TRAINING_RESULT_ROOT}")" > "${RUN_ROOT}/TRAINING_RESULT_ROOT.txt"
   if [[ -f "${REPO_ROOT}/DEPLOYMENT_MANIFEST.sha256" ]]; then
     cp "${REPO_ROOT}/DEPLOYMENT_MANIFEST.sha256" "${RUN_ROOT}/"
     [[ ! -f "${REPO_ROOT}/BUNDLE_METADATA.json" ]] || cp "${REPO_ROOT}/BUNDLE_METADATA.json" "${RUN_ROOT}/"
@@ -79,13 +102,37 @@ if [[ "${MODE}" == "init" ]]; then
   exit 0
 fi
 
-for path in "${MANIFEST_PATH}" "${RUN_CONFIG_PATH}" "${MANIFEST_LOCK_PATH}" "${SCRIPT}" "${POSTPROCESS_SCRIPT}"; do
+for path in "${MANIFEST_PATH}" "${RUN_CONFIG_PATH}" "${MANIFEST_LOCK_PATH}" "${SCRIPT}" "${PREFLIGHT_SCRIPT}" "${POSTPROCESS_SCRIPT}"; do
   test -f "${path}" || { echo "Missing ${path}; run init first." >&2; exit 2; }
 done
 "${PYTHON_BIN}" "${WEIGHTED_DIR}/attribution_manifest_lock.py" \
   --manifest "${MANIFEST_PATH}" --config "${RUN_CONFIG_PATH}" \
   --lock "${MANIFEST_LOCK_PATH}"
+if [[ "${MODE}" == "preflight" ]]; then
+  test ! -e "${RUN_ROOT}/preflight/score_replay" || {
+    echo "Immutable preflight output already exists: ${RUN_ROOT}/preflight/score_replay" >&2
+    exit 2
+  }
+  export REPO_ROOT RUN_ROOT TRAINING_RESULT_ROOT SEAL_ENV_PREFIX ATTRIBUTION_SOURCE_COMMIT
+  PREFLIGHT_SUBMIT=(--parsable \
+    --account="${SEAL_GPU_ACCOUNT:-pilot_sae_gpu}" \
+    --partition="${SEAL_GPU_PARTITION:-sae}" \
+    --constraint="${SEAL_GPU_CONSTRAINT:-ampere}" \
+    --time="${SEAL_GPU_TIME:-24:00:00}" \
+    --job-name="seal-v3-preflight" --export=ALL \
+    --output="${RUN_ROOT}/slurm/%x.o%j" \
+    --error="${RUN_ROOT}/slurm/%x.e%j")
+  if [[ "${SUBMIT_HELD:-1}" == "1" ]]; then PREFLIGHT_SUBMIT+=(--hold); fi
+  PREFLIGHT_JOB_ID="$(sbatch "${PREFLIGHT_SUBMIT[@]}" "${PREFLIGHT_SCRIPT}")"
+  printf '%s\n' "${PREFLIGHT_JOB_ID}" > "${RUN_ROOT}/slurm/preflight_job_id.txt"
+  echo "[INFO] Submitted preflight job ${PREFLIGHT_JOB_ID} in HOLD=${SUBMIT_HELD:-1}"
+  echo "[INFO] Inspect, then release with: scontrol release ${PREFLIGHT_JOB_ID}"
+  exit 0
+fi
 if [[ "${MODE}" == "freeze" ]]; then
+  test -f "${RUN_ROOT}/preflight/score_replay/SCORE_REPLAY_PREFLIGHT_OK" || {
+    echo "Missing successful score-replay preflight." >&2; exit 2;
+  }
   "${PYTHON_BIN}" "${WEIGHTED_DIR}/freeze_attribution_config.py" \
     --manifest "${MANIFEST_PATH}" --output-dir "${MANIFEST_DIR}" \
     --calibration-root "32=${RUN_ROOT}/calibration/results_32" \
@@ -107,13 +154,13 @@ if [[ "${MODE}" == "validate" || "${MODE}" == "summarize" ]]; then
       'import json,sys; assert json.load(open(sys.argv[1]))["status"] == "VALIDATION_OK"' \
       "${VALIDATION_REPORT}"
   fi
-  export REPO_ROOT RUN_ROOT SEAL_ENV_PREFIX POSTPROCESS_STAGE="${MODE}"
+  export REPO_ROOT RUN_ROOT TRAINING_RESULT_ROOT SEAL_ENV_PREFIX POSTPROCESS_STAGE="${MODE}"
   POST_SUBMIT=(--parsable \
     --partition="${SEAL_POSTPROCESS_PARTITION:-highmem}" \
     --time="${SEAL_POSTPROCESS_TIME:-24:00:00}" \
     --cpus-per-task="${SEAL_POSTPROCESS_CPUS:-4}" \
     --mem="${SEAL_POSTPROCESS_MEMORY:-128G}" \
-    --job-name="seal-v2-${MODE}" --export=ALL \
+    --job-name="seal-v3-${MODE}" --export=ALL \
     --output="${RUN_ROOT}/slurm/%x.o%j" \
     --error="${RUN_ROOT}/slurm/%x.e%j")
   if [[ "${SUBMIT_HELD:-1}" == "1" ]]; then POST_SUBMIT+=(--hold); fi
@@ -123,10 +170,10 @@ if [[ "${MODE}" == "validate" || "${MODE}" == "summarize" ]]; then
   echo "[INFO] Inspect, then release with: scontrol release ${POST_JOB_ID}"
   exit 0
 fi
-export REPO_ROOT SEAL_ENV_PREFIX SCRATCH_ROOT HISTORICAL_RUN_ROOT SOURCE_COMMIT
-export MANIFEST_PATH RUN_CONFIG_PATH TRAINING_RESULT_ROOT="${RUN_ROOT}"
+export REPO_ROOT SEAL_ENV_PREFIX SCRATCH_ROOT HISTORICAL_RUN_ROOT
+export MANIFEST_PATH RUN_CONFIG_PATH TRAINING_RESULT_ROOT ATTRIBUTION_SOURCE_COMMIT
 export SOURCE_COMMIT="$("${PYTHON_BIN}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_commit"])' "${RUN_CONFIG_PATH}")"
-unset ONLY_FOODWEB ATTRIBUTION_CONFIG_PATH ATTRIBUTION_RESULT_ROOT
+unset ONLY_FOODWEB ONLY_FOODWEBS_CSV ATTRIBUTION_CONFIG_PATH ATTRIBUTION_RESULT_ROOT
 
 CONFIG_FOODWEBS="$("${PYTHON_BIN}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["num_foodwebs"])' "${RUN_CONFIG_PATH}")"
 CONFIG_EXPERIMENTS="$("${PYTHON_BIN}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["num_experiments"])' "${RUN_CONFIG_PATH}")"
@@ -156,31 +203,34 @@ TASK_SELECTION="shard"
 ARRAY=""; NAME=""; ATTRIBUTION_CONFIG_PATH=""; ATTRIBUTION_RESULT_ROOT="${RUN_ROOT}"
 case "${MODE}" in
   train-smoke)
-    ARRAY="1,${SMOKE_ECC_TASK}%1"; NAME="seal-v2-train-smoke"; ONLY_FOODWEB="${SMOKE_FOODWEB:-SF1M2_tax_mass}" ;;
+    ARRAY="1,${SMOKE_ECC_TASK}%1"; NAME="seal-v3-train-smoke"; ONLY_FOODWEB="${SMOKE_FOODWEB:-SF1M2_tax_mass}" ;;
   train-experiment1)
-    TASK_SELECTION="block"; ARRAY="${NODE_EXP1_RANGE},${ECC_EXP1_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v2-train-exp1" ;;
+    TASK_SELECTION="block"; ARRAY="${NODE_EXP1_RANGE},${ECC_EXP1_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v3-train-exp1" ;;
   train-campaign)
     "${PYTHON_BIN}" -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"] == "CALIBRATION_OK"' "${MANIFEST_DIR}/CALIBRATION_REPORT.json"
-    TASK_SELECTION="block"; ARRAY="${NODE_CAMPAIGN_RANGE},${ECC_CAMPAIGN_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v2-train-full" ;;
+    TASK_SELECTION="block"; ARRAY="${NODE_CAMPAIGN_RANGE},${ECC_CAMPAIGN_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v3-train-full" ;;
   attr-smoke)
-    PIPELINE_STAGE="attribution"; ARRAY="1,${SMOKE_ECC_TASK}%1"; NAME="seal-v2-attr-smoke"
-    ONLY_FOODWEB="${SMOKE_FOODWEB:-SF1M2_tax_mass}"
+    PIPELINE_STAGE="attribution"; ARRAY="1,${SMOKE_ECC_TASK}%1"; NAME="seal-v3-attr-smoke"
+    ONLY_FOODWEBS_CSV="${SMOKE_FOODWEBS_CSV:-SF1M2_tax_mass,Beaver_lake_tax_mass}"
     ATTRIBUTION_CONFIG_PATH="${RUN_ROOT}/calibration/config_32/ATTRIBUTION_CONFIG.json"
     ATTRIBUTION_RESULT_ROOT="${RUN_ROOT}/smoke" ;;
   calibration)
     SETTING="${2:-}"; [[ "${SETTING}" =~ ^(32|64|128|256)$ ]] || { echo "calibration requires 32|64|128|256" >&2; exit 2; }
+    test -f "${RUN_ROOT}/preflight/score_replay/SCORE_REPLAY_PREFLIGHT_OK" || {
+      echo "Missing successful score-replay preflight." >&2; exit 2;
+    }
     PIPELINE_STAGE="attribution"; TASK_SELECTION="block"
-    ARRAY="${NODE_EXP1_RANGE},${ECC_EXP1_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v2-cal-${SETTING}"
+    ARRAY="${NODE_EXP1_RANGE},${ECC_EXP1_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v3-cal-${SETTING}"
     ATTRIBUTION_CONFIG_PATH="${RUN_ROOT}/calibration/config_${SETTING}/ATTRIBUTION_CONFIG.json"
     ATTRIBUTION_RESULT_ROOT="${RUN_ROOT}/calibration/results_${SETTING}" ;;
   attr-experiment1)
     PIPELINE_STAGE="attribution"; TASK_SELECTION="block"
-    ARRAY="${NODE_EXP1_RANGE},${ECC_EXP1_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v2-attr-exp1"
+    ARRAY="${NODE_EXP1_RANGE},${ECC_EXP1_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v3-attr-exp1"
     ATTRIBUTION_CONFIG_PATH="${MANIFEST_DIR}/ATTRIBUTION_CONFIG.json" ;;
   attr-campaign)
     "${PYTHON_BIN}" -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"] == "CALIBRATION_OK"' "${MANIFEST_DIR}/CALIBRATION_REPORT.json"
     PIPELINE_STAGE="attribution"; TASK_SELECTION="block"
-    ARRAY="${NODE_CAMPAIGN_RANGE},${ECC_CAMPAIGN_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v2-attr-full"
+    ARRAY="${NODE_CAMPAIGN_RANGE},${ECC_CAMPAIGN_RANGE}%${SEAL_MAX_CONCURRENT:-2}"; NAME="seal-v3-attr-full"
     ATTRIBUTION_CONFIG_PATH="${MANIFEST_DIR}/ATTRIBUTION_CONFIG.json" ;;
 esac
 if [[ "${PIPELINE_STAGE}" == "attribution" ]]; then
@@ -189,7 +239,8 @@ if [[ "${PIPELINE_STAGE}" == "attribution" ]]; then
     exit 2
   }
 fi
-export PIPELINE_STAGE TASK_SELECTION FOODWEB_BLOCK_SIZE ONLY_FOODWEB ATTRIBUTION_CONFIG_PATH ATTRIBUTION_RESULT_ROOT
+export PIPELINE_STAGE TASK_SELECTION FOODWEB_BLOCK_SIZE ONLY_FOODWEB ONLY_FOODWEBS_CSV
+export ATTRIBUTION_CONFIG_PATH ATTRIBUTION_RESULT_ROOT
 SETTING="${SETTING:-}"
 mkdir -p "${ATTRIBUTION_RESULT_ROOT}/slurm"
 if [[ "${MODE}" == "train-smoke" || "${MODE}" == "attr-smoke" ]]; then
@@ -219,6 +270,7 @@ printf '%s\n' "${JOB_ID}" > "${ATTRIBUTION_RESULT_ROOT}/slurm/${MODE}${SETTING:+
   printf 'blocks_per_shard=%s\n' "${BLOCKS_PER_SHARD}"
   printf 'array=%s\n' "${ARRAY}"
   printf 'source_commit=%s\n' "${SOURCE_COMMIT}"
+  printf 'attribution_source_commit=%s\n' "${ATTRIBUTION_SOURCE_COMMIT}"
   printf 'training_result_root=%s\n' "${TRAINING_RESULT_ROOT}"
   printf 'attribution_result_root=%s\n' "${ATTRIBUTION_RESULT_ROOT}"
   printf 'attribution_config=%s\n' "${ATTRIBUTION_CONFIG_PATH:-none}"

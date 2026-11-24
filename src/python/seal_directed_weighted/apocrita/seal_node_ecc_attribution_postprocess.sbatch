@@ -9,6 +9,7 @@
 set -euo pipefail
 : "${REPO_ROOT:?Set REPO_ROOT}"
 : "${RUN_ROOT:?Set RUN_ROOT}"
+: "${TRAINING_RESULT_ROOT:=${RUN_ROOT}}"
 : "${SEAL_ENV_PREFIX:?Set SEAL_ENV_PREFIX}"
 : "${POSTPROCESS_STAGE:?Set POSTPROCESS_STAGE to validate or summarize}"
 
@@ -29,6 +30,7 @@ if [[ "${POSTPROCESS_STAGE}" == "validate" ]]; then
     --run-config "${RUN_CONFIG_PATH}"
     --attribution-config "${ATTRIBUTION_CONFIG_PATH}"
     --result-root "${RUN_ROOT}"
+    --training-result-root "${TRAINING_RESULT_ROOT}"
     --require-cuda --write-report
   )
   for job_file in \

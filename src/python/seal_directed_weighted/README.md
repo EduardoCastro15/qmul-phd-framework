@@ -112,34 +112,35 @@ Create and verify the deployment bundle with `apocrita/build_bundle.py`, then:
 Submissions are held by default. Inspect the manifest, resources and array
 mapping before using `scontrol release`.
 
-## Attribution v2 on Apocrita
+## Attribution v3 on Apocrita
 
 The attribution campaign has its own immutable result root and reuses the
 historical split bundles without editing the 11,600 original runs.  Set these
 variables in a login shell after deploying the source bundle:
 
 ```bash
-export REPO_ROOT=/data/home/$USER/PhD/Stage2/Code/seal-directed-node-ecc-attribution-v2
-export RUN_ROOT=/data/home/$USER/PhD/Stage2/Results/SEAL_directed_node_ecc_attribution_v2/production/run_YYYYMMDD
+export REPO_ROOT=/data/home/$USER/PhD/Stage2/Code/seal-directed-node-ecc-attribution-v3
+export RUN_ROOT=/data/home/$USER/PhD/Stage2/Results/SEAL_directed_node_ecc_attribution_v3/production/run_YYYYMMDD
+export TRAINING_RESULT_ROOT=/data/home/$USER/PhD/Stage2/Results/SEAL_directed_node_ecc_attribution_v2/production/seal_node_ecc_attribution_v2_290x10_e4b3d19a55a7_20261113
 export HISTORICAL_RUN_ROOT=/data/home/$USER/PhD/Stage2/Results/SEAL_directed_weighted/production/seal_weighted_10x290x4_fb60fd147be3_20261024
 export SEAL_ENV_PREFIX=/gpfs/scratch/$USER/SEAL_directed/envs/seal-directed-py312-cu126
-export SCRATCH_ROOT=/gpfs/scratch/$USER/SEAL_directed_node_ecc_attribution_v2
+export SCRATCH_ROOT=/gpfs/scratch/$USER/SEAL_directed_node_ecc_attribution_v3
 
 LAUNCHER="$REPO_ROOT/src/python/seal_directed_weighted/apocrita/submit_node_ecc_attribution.sh"
 ```
 
 The launcher refuses to run when `RUN_ROOT` resolves to the historical result
-root.
+root. When `TRAINING_RESULT_ROOT` differs from `RUN_ROOT`, it copies and
+validates the frozen manifest without editing existing training bundles.
 
 Run the stages in order. Every submitted job starts in `HOLD` unless
 `SUBMIT_HELD=0` is set explicitly:
 
 ```bash
 "$LAUNCHER" init
-"$LAUNCHER" train-smoke
 "$LAUNCHER" attr-smoke
+"$LAUNCHER" preflight
 
-"$LAUNCHER" train-experiment1
 "$LAUNCHER" calibration 32
 "$LAUNCHER" calibration 64
 "$LAUNCHER" calibration 128
@@ -166,6 +167,13 @@ be smaller than six under the cluster's 1,000-index array limit; increase
 `SEAL_GPU_TIME` if the slowest six-web attribution blocks need more than the
 default 24 hours.
 
+The v3 preflight preserves the frozen batched predictive scores and requires
+checkpoint replay within `1e-7`. Candidate-local attribution forwards are
+stored separately and must remain within `1e-4` of the predictive score
+without changing any thresholded prediction. This tolerance is immutable and
+is never widened automatically. Partial v2 calibration bundles are rejected
+by the v3 artifact schema.
+
 The final validator requires all 2,900 bundles for each model, exact candidate
 coverage, checkpoint and forward parity, CUDA provenance, finite
 attributions, and an explicit historical-score comparison. Summaries are
@@ -178,6 +186,11 @@ post-processing on a compute node rather than a login node: `validate` and
 `summarize` submit separate held high-memory jobs. Candidate matrices are
 retained for one model variant at a time and can still require several GB for
 the complete campaign.
+
+After downloading the summary directory, generate the deterministic PNG, PDF
+and SVG with `plot_attribution_beeswarm.py --summary-dir ... --output-dir ...`.
+The visualization is SHAP-like but reports Expected/Integrated Gradients, not
+exact SHAP values.
 
 ## Descriptive analysis
 

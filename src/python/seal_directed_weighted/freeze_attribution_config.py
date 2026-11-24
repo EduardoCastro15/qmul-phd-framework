@@ -155,7 +155,7 @@ def main(argv=None):
                for variant in summaries for channel in summaries[variant]):
             qualifying.append(setting)
     status = "CALIBRATION_OK" if qualifying else "CALIBRATION_FAILED"
-    report = {"schema_version": "seal-directed-node-ecc-attribution-calibration-v2",
+    report = {"schema_version": "seal-directed-node-ecc-attribution-calibration-v3",
               "status": status, "foodwebs": args.expected_foodwebs, "reference": 256,
               "selected_common_setting": min(qualifying) if qualifying else None,
               "summaries": summaries,
@@ -170,7 +170,7 @@ def main(argv=None):
         faithfulness_background_samples=0,
     )
     atomic_json(args.output_dir / "ATTRIBUTION_CONFIG_LOCK.json", {
-        "schema_version": "seal-directed-node-ecc-attribution-config-lock-v2",
+        "schema_version": "seal-directed-node-ecc-attribution-config-lock-v3",
         "selected_common_setting": min(qualifying),
         "attribution_config_hash": digest,
         "attribution_config_sha256": file_sha256(

@@ -16,8 +16,8 @@ CALIBRATION_SETTINGS = (32, 64, 128, 256)
 ATTRIBUTION_VARIANTS = ("directed_node", "directed_ecc")
 
 DEFAULT_ATTRIBUTION_CONFIG = {
-    "schema_version": "seal-directed-node-ecc-attribution-config-v2",
-    "version": "SEAL_directed_node_ecc_attribution_v2",
+    "schema_version": "seal-directed-node-ecc-attribution-config-v3",
+    "version": "SEAL_directed_node_ecc_attribution_v3",
     "model_variants": list(ATTRIBUTION_VARIANTS),
     "target": "log_p_positive_minus_log_p_negative",
     "coverage": "all_test_candidates_exactly_once",
@@ -49,6 +49,8 @@ DEFAULT_ATTRIBUTION_CONFIG = {
     "internal_batch_size": 32,
     "attribution_seed_offset": 1000000,
     "score_parity_absolute_tolerance": 1e-7,
+    "attribution_forward_absolute_tolerance": 1e-4,
+    "require_prediction_agreement": True,
     "captum_version": "0.9.0",
     "signed_attribution": True,
     "normalized_absolute_attribution": "within_candidate_and_channel",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed validation of all 5,800 training and attribution v2 bundles."""
+"""Fail-closed validation of all 5,800 training and attribution v3 bundles."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ def main(argv=None):
     parser.add_argument("--run-config", type=Path, required=True)
     parser.add_argument("--attribution-config", type=Path, required=True)
     parser.add_argument("--result-root", type=Path, required=True)
+    parser.add_argument("--training-result-root", type=Path)
     parser.add_argument("--training-job-id", action="append", default=[])
     parser.add_argument("--attribution-job-id", action="append", default=[])
     parser.add_argument("--require-cuda", action="store_true")
@@ -30,6 +31,7 @@ def main(argv=None):
     parser.add_argument("--expected-foodwebs", type=int, default=290)
     parser.add_argument("--expected-experiments", type=int, default=10)
     args = parser.parse_args(argv)
+    training_result_root = args.training_result_root or args.result_root
     validate_manifest_lock(args.manifest, args.run_config)
     with open(args.run_config, encoding="utf-8") as handle: run_config = json.load(handle)
     with open(args.attribution_config, encoding="utf-8") as handle: attr_config = json.load(handle)
@@ -48,11 +50,12 @@ def main(argv=None):
     if run_config.get("expected_runs") != expected: errors.append("RUN_CONFIG expected_runs mismatch")
     counts, candidate_count, environments, completeness = Counter(), 0, set(), {
         "node": [], "drnl": [], "edge": []}
+    score_drifts, attribution_commits = [], set()
     historical = Counter()
     faithfulness = {"node_top": [], "node_bottom": [], "edge_top": [], "edge_bottom": []}
     for index, row in enumerate(rows, 1):
         variant = row["ModelVariant"]
-        training_dir = run_directory(args.result_root, variant, row["Foodweb"], row["ExperimentID"], row["Seed"])
+        training_dir = run_directory(training_result_root, variant, row["Foodweb"], row["ExperimentID"], row["Seed"])
         attr_dir = attribution_directory(args.result_root, variant, row["Foodweb"], row["ExperimentID"], row["Seed"])
         try:
             training = validate_run_bundle(training_dir, run_hash)
@@ -71,6 +74,10 @@ def main(argv=None):
                 raise ValueError("attribution was not run on CUDA")
             environments.add((metadata.get("python_version"), metadata.get("torch_version"),
                               metadata.get("captum_version")))
+            attribution_commit = metadata.get("attribution_source_commit")
+            if not attribution_commit or attribution_commit == "unknown":
+                raise ValueError("attribution source commit is unavailable")
+            attribution_commits.add(attribution_commit)
             comparison = metadata.get("historical_comparison", {})
             if not comparison.get("available", False):
                 historical["unavailable"] += 1
@@ -83,9 +90,21 @@ def main(argv=None):
                     raise ValueError("candidate order differs from training bundle")
                 if not np.array_equal(attr["candidate_labels"], train["test_labels"]):
                     raise ValueError("candidate labels differ from training bundle")
-                if not np.allclose(attr["candidate_scores"], train["test_scores"], rtol=0,
-                                   atol=float(attr_config["score_parity_absolute_tolerance"])):
+                if not np.array_equal(attr["candidate_scores"], train["test_scores"]):
                     raise ValueError("attribution score parity failed")
+                local_drift = np.asarray(
+                    attr["candidate_score_abs_drift"], dtype=np.float64
+                )
+                if np.any(
+                    local_drift
+                    > float(attr_config["attribution_forward_absolute_tolerance"])
+                ):
+                    raise ValueError("attribution-forward score drift gate failed")
+                if bool(attr_config["require_prediction_agreement"]) and not np.all(
+                    attr["candidate_prediction_agreement"]
+                ):
+                    raise ValueError("attribution-forward prediction agreement failed")
+                score_drifts.extend(local_drift.tolist())
                 if not np.array_equal(attr["node_offsets"], train["test_node_offsets"]):
                     raise ValueError("node offsets differ from training bundle")
                 if not np.array_equal(attr["node_ids"], train["test_node_ids"]):
@@ -119,6 +138,10 @@ def main(argv=None):
             errors.append("{} {} exp {}: {}".format(variant, row["Foodweb"], row["ExperimentID"], error))
         if index % 250 == 0: print("[PROGRESS] {}/{}".format(index, len(rows)))
     if len(environments) > 1: errors.append("multiple software environments detected")
+    if len(attribution_commits) != 1:
+        errors.append("expected one attribution source commit; found {}".format(
+            len(attribution_commits)
+        ))
     expected_per_variant = args.expected_foodwebs * args.expected_experiments
     for variant in ("directed_node", "directed_ecc"):
         if counts[variant] != expected_per_variant:
@@ -154,6 +177,14 @@ def main(argv=None):
         print("[INVALID] {} problem(s)".format(len(errors)))
         for error in errors[:100]: print("[ERROR] {}".format(error))
         raise SystemExit(1)
+    drift_report = {
+        "maximum": float(np.max(score_drifts)),
+        "median": float(np.median(score_drifts)),
+        "p95": float(np.percentile(score_drifts, 95)),
+        "p99": float(np.percentile(score_drifts, 99)),
+        "tolerance": float(attr_config["attribution_forward_absolute_tolerance"]),
+        "prediction_disagreements": 0,
+    }
     report = {"status": "VALIDATION_OK", "expected_training_bundles": expected,
               "validated_training_bundles": sum(counts.values()),
               "expected_attribution_bundles": expected,
@@ -162,6 +193,8 @@ def main(argv=None):
               "all_test_candidates_explained_exactly_once": True,
               "historical_score_replay": dict(historical), "run_config_hash": run_hash,
               "attribution_config_hash": attr_hash, "software_environments": [list(v) for v in environments],
+              "attribution_source_commit": next(iter(attribution_commits)),
+              "attribution_forward_score_drift": drift_report,
               "completeness": convergence, "faithfulness": faithfulness_report,
               "nonfinite_attributions": 0}
     if args.write_report:
