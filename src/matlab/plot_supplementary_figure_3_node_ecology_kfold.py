@@ -19,7 +19,7 @@ from matplotlib.patches import Rectangle
 
 
 VERSION = "WLNM_dir_neg_node_ecology_kfold"
-EXPECTED_EXPERIMENTS = 20
+EXPECTED_EXPERIMENTS = 100
 EXPECTED_FOODWEBS = 290
 CVK_ORDER = [3, 5, 10]
 METRIC_SPECS = [
@@ -72,7 +72,7 @@ def resolve_result_root(repo_root: Path) -> Path:
 
     candidates = []
     data_root = repo_root / "src/matlab/data"
-    for path in sorted(data_root.glob("result_wlnm_dir_neg_node_ecology_kfold_20x290_*")):
+    for path in sorted(data_root.glob("result_wlnm_dir_neg_node_ecology_kfold_100x290_*")):
         try:
             manifest = parse_manifest(path / "RUN_MANIFEST.txt")
         except FileNotFoundError:
@@ -96,7 +96,11 @@ def validate_full_manifest(root: Path) -> dict[str, str]:
         "RepeatedFoldPartitions": "true",
         "NumExperimentsPerCvK": str(EXPECTED_EXPERIMENTS),
         "FoodWebs": str(EXPECTED_FOODWEBS),
-        "ExpectedModels": "104400",
+        "ExpectedModels": "522000",
+        "ExpectedDataRowsCvK3": "300",
+        "ExpectedDataRowsCvK5": "500",
+        "ExpectedDataRowsCvK10": "1000",
+        "PRAUCProtocol": "average_precision_noninterpolated_v1",
         "ClassificationThreshold": "0.50",
         "ComputeEcologicalMetrics": "false",
     }
@@ -198,7 +202,10 @@ def aggregate_complete_raw_runs(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.Dat
     )
     counts = repeat_means.groupby(["Foodweb", "CvK"]).size()
     if not counts.eq(EXPECTED_EXPERIMENTS).all():
-        raise ValueError(f"Expected 20 complete repeats per web/CvK; observed {counts.value_counts().to_dict()}")
+        raise ValueError(
+            f"Expected {EXPECTED_EXPERIMENTS} complete repeats per web/CvK; "
+            f"observed {counts.value_counts().to_dict()}"
+        )
     unique_partitions = repeat_means.groupby(["Foodweb", "CvK"])["CvPartitionHash"].nunique()
     if not unique_partitions.eq(EXPECTED_EXPERIMENTS).all():
         raise ValueError("Every repeat must use a distinct fold partition")
@@ -361,12 +368,15 @@ def main() -> None:
     output_dir = result_root / "figures_raw_unfiltered"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_stem = output_dir / (
-        "supplementary_figure_3_node_ecology_kfold_20repeats_"
+        "supplementary_figure_3_node_ecology_kfold_100repeats_"
         "cvK3-5-10_raw_unfiltered"
     )
     print(f"[INFO] Result root: {result_root}")
     print("[INFO] No Tukey filtering or outlier removal is applied.")
-    print("[INFO] Fold means -> 20-repeat means -> 290 food-web boxplots.")
+    print(
+        f"[INFO] Fold means -> {EXPECTED_EXPERIMENTS}-repeat means "
+        "-> 290 food-web boxplots."
+    )
     write_summaries(repeat_means, web_means, output_stem)
     plot_figure(web_means, output_stem)
 
